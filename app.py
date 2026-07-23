@@ -34,24 +34,37 @@ def registrar_acao():
 
 
 # ---------------------------------------------------------------------
-# [MÓDULO RESTRITO] CAIXA DE FERRAMENTAS (FUNÇÕES DE CONEXÃO E CÁLCULO)
+# CARREGAMENTO AUTOMÁTICO E ARMAZENAMENTO PERSISTENTE (SESSION STATE)
 # ---------------------------------------------------------------------
 
 @st.cache_data(ttl=86400)
-def API_buscar_todas_leagues():
-    """Consome a API para listar todas as ligas cadastradas"""
+def api_requisitar_ligas_background():
+    """Busca as ligas direto da API de forma segura com timeout"""
     try:
         url = f"{BASE_URL}/leagues"
-        response = requests.get(url, headers=HEADERS, timeout=12)
+        response = requests.get(url, headers=HEADERS, timeout=15)
         if response.status_code == 200:
             return response.json().get("response", [])
         return []
     except:
         return []
 
+# Inicializa o armazenamento das ligas assim que a página carrega pela primeira vez
+if "dados_api_leagues" not in st.session_state or not st.session_state["dados_api_leagues"]:
+    with st.spinner("Inicializando MyPredicts e sincronizando campeonatos mundiais..."):
+        dados_obtidos = api_requisitar_ligas_background()
+        if dados_obtidos:
+            st.session_state["dados_api_leagues"] = dados_obtidos
+        else:
+            st.session_state["dados_api_leagues"] = []
+
+
+# ---------------------------------------------------------------------
+# [MÓDULO RESTRITO] CAIXA DE FERRAMENTAS (FUNÇÕES DE CONEXÃO E CÁLCULO)
+# ---------------------------------------------------------------------
+
 @st.cache_data(ttl=86400)
 def API_buscar_teams_por_league(league_id, ano_temporada):
-    """Consome a API para listar todos os clubes de uma liga e temporada"""
     try:
         url = f"{BASE_URL}/teams"
         parametros = {"league": league_id, "season": ano_temporada}
@@ -65,7 +78,6 @@ def API_buscar_teams_por_league(league_id, ano_temporada):
         return {}
 
 def API_buscar_confrontos_diretos(team_a_id, team_b_id):
-    """Consome a API para obter o histórico real H2H entre os dois times"""
     try:
         url = f"{BASE_URL}/fixtures/headtohead"
         parametros = {"h2h": f"{team_a_id}-{team_b_id}"}
@@ -76,9 +88,7 @@ def API_buscar_confrontos_diretos(team_a_id, team_b_id):
     except:
         return []
 
-# Espaço reservado para inclusão de novas fórmulas matemáticas futuramente
 def calcular_percentual_vitorias(historico_partidas, id_time_alvo):
-    """Exemplo de cálculo estatístico interno usando dados reais obtidos do H2H"""
     if not historico_partidas:
         return 0.0
     vitorias = 0
@@ -91,12 +101,12 @@ def calcular_percentual_vitorias(historico_partidas, id_time_alvo):
 
 
 # ---------------------------------------------------------------------
-# [MÓDULO 2] ENTRADAS PRINCIPAIS DO APP (SELEÇÃO EM CASCATA NO TOPO)
+# [MÓDULO 2] ENTRADAS PRINCIPAIS DO APP (SELETORES E BOTÃO NO TOPO)
 # ---------------------------------------------------------------------
 st.title("📊 MyPredicts")
 
-# Baixa as ligas disponíveis diretamente da API Football
-dados_api_leagues = API_buscar_todas_leagues()
+# Recupera as ligas armazenadas automaticamente no primeiro carregamento
+dados_api_leagues = st.session_state["dados_api_leagues"]
 
 if dados_api_leagues:
     dict_leagues = {item["league"]["name"]: item for item in dados_api_leagues}
@@ -142,7 +152,7 @@ if dados_api_leagues:
         st.warning("Nenhum clube retornado pela API para esta temporada.")
         botao_gerar = False
 else:
-    st.error("Falha ao estabelecer conexão inicial com a API Football. Verifique sua API Key ou limite de requisições.")
+    st.error("Não foi possível carregar as ligas automaticamente na inicialização. Verifique os logs ou sua chave de acesso.")
     botao_gerar = False
 
 
@@ -159,20 +169,18 @@ st.subheader("📈 Análise de Desempenho e Predições")
 
 if botao_gerar:
     if id_time_a != id_time_b:
-        # Incrementa o contador de uso diário
         registrar_acao()
         
         with st.spinner("Buscando dados históricos e confrontos diretos em tempo real..."):
-            # Faz a requisição de Head to Head real na API Football
             dados_confrontos = API_buscar_confrontos_diretos(id_time_a, id_time_b)
             
         if dados_confrontos:
             st.success(f"Análise gerada para {nome_time_a} vs {nome_time_b}!")
             
-            # Executa cálculo da caixa de ferramentas usando os dados baixados
+            # Executa cálculo armazenado na caixa de ferramentas
             win_rate_a = calcular_percentual_vitorias(dados_confrontos, id_time_a)
             
-            # Exibição dos resultados reais na tela
+            # Exibição física dos resultados
             st.metric(label=f"Taxa de Vitória histórica do {nome_time_a} neste confronto", value=f"{win_rate_a}%")
             st.write(f"Total de partidas avaliadas no histórico recente: {len(dados_confrontos)}")
         else:
