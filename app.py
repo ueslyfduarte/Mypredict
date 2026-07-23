@@ -2,9 +2,6 @@ import streamlit as st
 import requests
 from datetime import datetime
 
-
-
-
 # ---------------------------------------------------------------------
 # [MÓDULO 1] ACESSO DA API E CONFIGURAÇÕES GLOBAIS
 # ---------------------------------------------------------------------
@@ -18,10 +15,7 @@ else:
     st.error("⚠️ ERRO CRÍTICO: Configure a tag 'MINHA_API_KEY' no painel do Streamlit.")
     st.stop()
 
-BASE_URL = "https://v3.football.api-sports.io"
-
-
-
+BASE_URL = "https://api-sports.io"
 
 # ---------------------------------------------------------------------
 # [MÓDULO 2] INICIALIZAÇÃO DA MEMÓRIA DO APP (SESSION STATE)
@@ -39,12 +33,9 @@ if "time_fora" not in st.session_state:
 if "requisicoes_feitas" not in st.session_state:
     st.session_state.requisicoes_feitas = 0
 
+# Corrigido: Defina aqui o limite real do seu plano (ex: 100 para o plano gratuito)
 if "limite_diario" not in st.session_state:
-    st.session_state.limite_diario = 
-
-
-
-
+    st.session_state.limite_diario = 100  
 
 # ---------------------------------------------------------------------
 # [MÓDULO 4] MONITOR DE CONSUMO DA API (TOPO DA PÁGINA)
@@ -58,29 +49,26 @@ with col_req1:
 with col_req2:
     st.metric(label="🚨 Limite do Seu Plano", value=st.session_state.limite_diario)
 
-st.write("")
-st.write("")
 st.divider()
-st.write("")
-st.write("")
 
+# ---------------------------------------------------------------------
+# [MÓDULO 5] VALIDAÇÃO E DISPARO DA REQUISIÇÃO
+# ---------------------------------------------------------------------
+# ATENÇÃO: Certifique-se de que as variáveis abaixo (id_liga_atual, id_casa, etc.) 
+# já foram criadas pelas suas caixas de seleção (st.selectbox/st.selectbox) antes deste bloco.
 
-
-
-
-        
-        if st.session_state.requisicoes_feitas >= st.session_state.limite_diario:
-            st.error("❌ Limite diário de requisições atingido! Volte amanhã para coletar mais dados.")
-        else:
-            if st.button("🚀 Carregar e Armazenar Dados do Confronto", type="primary"):
-                with st.spinner(f"Buscando dados de {temporada_selecionada} na API-Football..."):
-                    st.session_state.time_casa = time_casa
-                    st.session_state.time_fora = time_fora
-                    
-                    extrair_e_armazenar_dados_confronto(
-                        id_liga=id_liga_atual, 
-                        id_casa=id_casa, 
-                        id_fora=id_fora, 
-                        ano_temporada=ano_api
-                    )
-                st.rerun()
+if st.session_state.requisicoes_feitas >= st.session_state.limite_diario:
+    st.error("❌ Limite diário de requisições atingido! Volte amanhã para coletar mais dados.")
+else:
+    if st.button("🚀 Carregar e Armazenar Dados do Confronto", type="primary"):
+        with st.spinner(f"Buscando dados de {temporada_selecionada} na API-Football..."):
+            st.session_state.time_casa = time_casa
+            st.session_state.time_fora = time_fora
+            
+            extrair_e_armazenar_dados_confronto(
+                id_liga=id_liga_atual, 
+                id_casa=id_casa, 
+                id_fora=id_fora, 
+                ano_temporada=ano_api
+            )
+        st.rerun()
