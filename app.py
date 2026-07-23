@@ -18,7 +18,7 @@ else:
     st.error("⚠️ ERRO CRÍTICO: Configure a tag 'MINHA_API_KEY' no painel do Streamlit.")
     st.stop()
 
-BASE_URL = "https://v3.football.api-sports.io"
+BASE_URL = "https://api-sports.io"
 
 
 
@@ -42,9 +42,12 @@ if "requisicoes_feitas" not in st.session_state:
 if "limite_diario" not in st.session_state:
     st.session_state.limite_diario = 100
 
-# Memória para armazenar as ligas e não estourar os créditos da API à toa
 if "cache_ligas" not in st.session_state:
     st.session_state.cache_ligas = []
+
+# Memória para salvar os times carregados da liga atual e evitar requisições repetidas
+if "cache_times" not in st.session_state:
+    st.session_state.cache_times = []
 
 if "banco_dados_partida" not in st.session_state:
     st.session_state.banco_dados_partida = {
@@ -62,7 +65,6 @@ if "banco_dados_partida" not in st.session_state:
 # ---------------------------------------------------------------------
 
 def puxar_todas_ligas():
-    # Se já tivermos as ligas salvas na memória do app, não gasta requisição nova
     if st.session_state.cache_ligas:
         return st.session_state.cache_ligas
         
@@ -71,7 +73,7 @@ def puxar_todas_ligas():
         response = requests.get(url, headers=HEADERS)
         dados = response.json().get("response", [])
         if response.status_code == 200 and dados:
-            st.session_state.cache_ligas = dados  # Guarda no cache
+            st.session_state.cache_ligas = dados
             return dados
         return []
     except:
@@ -83,7 +85,11 @@ def puxar_times_da_liga(id_liga, ano_temporada):
     params = {"league": id_liga, "season": ano_temporada}
     try:
         response = requests.get(url, headers=HEADERS, params=params)
-        return response.json().get("response", []) if response.status_code == 200 else []
+        dados = response.json().get("response", [])
+        if response.status_code == 200:
+            st.session_state.cache_times = dados
+            return dados
+        return []
     except:
         return []
 
@@ -141,6 +147,7 @@ st.write("")
 # ---------------------------------------------------------------------
 
 st.header("🎯 Configuração da Partida")
+st.write("*(Dica: Clique nos campos abaixo e digite para pesquisar ligas ou times)*")
 st.write("")
 
 ano_atual = datetime.now().year
@@ -165,59 +172,67 @@ for l in lista_ligas:
         opcoes_ligas[nome_exibicao] = l['league']['id']
 
 liga_escolhida = st.selectbox(
-    "Selecione a Liga ou Copa:",
+    "Pesquise e Selecione a Liga ou Copa:",
     options=[""] + sorted(list(opcoes_ligas.keys())),
     index=0
 )
 
 if liga_escolhida != "":
-    # CORREÇÃO: Pegamos o ID de forma explícita antes de avançar para evitar escopos perdidos
     id_liga_atual = opcoes_ligas[liga_escolhida]
     
     st.write("")
-    st.write("")
-    st.divider()
-    st.write("")
-    st.write("")
-    
-    st.subheader("👥 Seleção dos Times")
-    st.write("")
-    
-    lista_times = puxar_times_da_liga(id_liga=id_liga_atual, ano_temporada=ano_api)
-    opcoes_times = {t['team']['name']: t['team']['id'] for t in lista_times}
-    nomes_times = sorted(list(opcoes_times.keys()))
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        time_casa = st.selectbox("Mandante (Casa):", options=[""] + nomes_times, index=0)
-        
-    with col2:
-        nomes_fora = [t for t in nomes_times if t != time_casa] if time_casa else nomes_times
-        time_fora = st.selectbox("Visitante (Fora):", options=[""] + nomes_fora, index=0)
-        
-    if time_casa != "" and time_fora != "":
-        id_casa = opcoes_times[time_casa]
-        id_fora = opcoes_times[time_fora]
-        
+    # BOTÃO 1: Dispara o início da busca pelos times pertencentes à liga
+    if st.button("🔍 Buscar Times da Liga", type="secondary"):
+        with st.spinner("Buscando clubes participantes..."):
+            puxar_times_da_liga(id_liga=id_liga_atual, ano_temporada=ano_api)
+            
+    # Se os times já foram buscados e armazenados no cache, exibe o painel de seleção
+    if st.session_state.cache_times:
         st.write("")
         st.write("")
         st.divider()
         st.write("")
         st.write("")
         
-        if st.session_state.requisicoes_feitas >= st.session_state.limite_diario:
-            st.error("❌ Limite diário de requisições atingido! Volte amanhã para coletar mais dados.")
-        else:
-            if st.button("🚀 Carregar e Armazenar Dados do Confronto", type="primary"):
-                with st.spinner(f"Buscando dados de {temporada_selecionada} na API-Football..."):
-                    st.session_state.time_casa = time_casa
-                    st.session_state.time_fora = time_fora
-                    
-                    extrair_e_armazenar_dados_confronto(
-                        id_liga=id_liga_atual, 
-                        id_casa=id_casa, 
-                        id_fora=id_fora, 
-                        ano_temporada=ano_api
-                    )
-                st.rerun()
+        st.subheader("👥 Seleção dos Times")
+        st.write("")
+        
+        opcoes_times = {t['team']['name']: t['team']['id'] for t in st.session_state.cache_times}
+        nomes_times = sorted(list(opcoes_times.keys()))
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            time_casa = st.selectbox("Pesquise o Mandante (Casa):", options=[""] + nomes_times, index=0)
+            
+        with col2:
+            nomes_fora = [t for t in nomes_times if t != time_casa] if time_casa else nomes_times
+            time_fora = st.selectbox("Pesquise o Visitante (Fora):", options=[""] + nomes_fora, index=0)
+            
+        if time_casa != "" and time_fora != "":
+            id_casa = opcoes_times[time_casa]
+            id_fora = opcoes_times[time_fora]
+            
+            st.write("")
+            st.write("")
+            st.divider()
+            st.write("")
+            st.write("")
+            
+            if st.session_state.requisicoes_feitas >= st.session_state.limite_diario:
+                st.error("❌ Limite diário de requisições atingido! Volte amanhã para coletar mais dados.")
+            else:
+                # BOTÃO 2: O botão principal que dispara a coleta pesada das estatísticas analíticas
+                if st.button("🚀 Carregar e Armazenar Dados do Confronto", type="primary"):
+                    with st.spinner(f"Buscando dados de {temporada_selecionada} na API-Football..."):
+                        st.session_state.time_casa = time_casa
+                        st.session_state.time_fora = time_fora
+                        
+                        extrair_e_armazenar_dados_confronto(
+                            id_liga=id_liga_atual, 
+                            id_casa=id_casa, 
+                            id_fora=id_fora, 
+                            ano_temporada=ano_api
+                        )
+                    st.rerun()
+
