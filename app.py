@@ -66,22 +66,15 @@ def buscar_teams_por_league_api(league_id, ano_temporada):
 # ---------------------------------------------------------------------
 # [MÓDULO RESTRITO] CAIXA DE FERRAMENTAS (CÁLCULOS ESCONDIDOS)
 # ---------------------------------------------------------------------
-# Este espaço é puramente lógico. Não gera elementos visuais no app.
-# Armazene aqui todas as fórmulas que serão invocadas ao longo do código.
-
 def calcular_media_gols(gols_marcados, partidas_jogadas):
-    """Exemplo de cálculo: Retorna a média de gols do time"""
     if partidas_jogadas > 0:
         return round(gols_marcados / partidas_jogadas, 2)
     return 0.0
 
 def calcular_probabilidade_btts(jogos_ambas_marcam, total_jogos):
-    """Exemplo de cálculo: Retorna a porcentagem de Ambas Marcam (BTTS)"""
     if total_jogos > 0:
         return round((jogos_ambas_marcam / total_jogos) * 100, 1)
     return 0.0
-
-# 💻 Adicione suas novas funções matemáticas e de cruzamento de dados logo abaixo...
 
 
 # ---------------------------------------------------------------------
@@ -95,7 +88,7 @@ if dados_ligas:
     dict_leagues = {item["league"]["name"]: item for item in dados_ligas}
     lista_nomes_ligas = sorted(list(dict_leagues.keys()))
     
-    # 1. SELEÇÃO DA LIGA (Formato rolar ou pesquisar)
+    # 1. SELEÇÃO DA LIGA
     nome_liga_selecionada = st.selectbox(
         "Selecione a Liga:",
         options=lista_nomes_ligas,
@@ -105,7 +98,7 @@ if dados_ligas:
     objeto_liga = dict_leagues[nome_liga_selecionada]
     id_liga_selecionada = objeto_liga["league"]["id"]
     
-    # FILTRO RESTRETO: Filtra dinamicamente APENAS a Temporada Atual e a Passada
+    # FILTRO RESTRITO: Temporada Atual e Passada
     lista_seasons = objeto_liga["seasons"]
     opcoes_temporadas = {}
     for s in lista_seasons:
@@ -116,10 +109,10 @@ if dados_ligas:
         rotulo = f"{data_inicio.year}/{data_fim.year}" if data_inicio.year != data_fim.year else f"{ano_base}"
         opcoes_temporadas[rotulo] = ano_base
 
-    # Organiza em ordem decrescente e captura os dois primeiros índices (Atual e Passada)
+    # Captura estritamente as duas últimas temporadas válidas
     lista_rotulos_ordenados = sorted(list(opcoes_temporadas.keys()), reverse=True)[:2]
     
-    # 2. SELEÇÃO DA TEMPORADA (Apenas as duas últimas válidas do campeonato)
+    # 2. SELEÇÃO DA TEMPORADA
     temporada_rotulo_selecionado = st.selectbox(
         "Selecione a Temporada (Atual ou Passada):",
         options=lista_rotulos_ordenados,
@@ -127,8 +120,7 @@ if dados_ligas:
     )
     ano_temporada_real = opcoes_temporadas[temporada_rotulo_selecionado]
     
-    # 3. SELEÇÃO DO TIME (Formato rolar ou pesquisar)
-    # Todos os dados de elenco e dados estruturais do time são baixados aqui automaticamente
+    # 3. SELEÇÃO DO TIME
     dict_times = buscar_teams_por_league_api(league_id=id_liga_selecionada, ano_temporada=ano_temporada_real)
     
     if dict_times:
@@ -145,7 +137,7 @@ else:
     st.warning("Conectando aos servidores da API Football...")
 
 
-# ESPAÇAMENTO LIMPO APENAS ENTRE MÓDULOS PRINCIPAIS
+# ESPAÇAMENTO LIMPO ENTRE MÓDULOS PRINCIPAIS
 st.write("")
 st.write("")
 st.divider()
@@ -156,19 +148,13 @@ st.write("")
 # ---------------------------------------------------------------------
 # [MÓDULO 3] CORPO DO APP: INTERFACE EXPOSITIVA E EXECUÇÃO DE DADOS
 # ---------------------------------------------------------------------
-# A partir daqui você desenvolve seus gráficos, tabelas e chamadas de tela.
-
 st.subheader("📈 Análise de Desempenho e Predições")
 
 if id_time_selecionado:
-    st.info(f"Dados prontos para processamento. Clube: {nome_time_selecionado} | ID: {id_time_selecionado}")
-    
-    # Exemplo prático de como você chamará sua caixa de ferramentas futuramente:
-    # media_gols = calcular_media_gols(gols_marcados=45, partidas_jogadas=20)
-    # st.write(f"Média do time: {media_gols}")
+    st.info(f"Dados prontos para o MyPredicts. Clube: {nome_time_selecionado} | ID: {id_time_selecionado}")
 
 
-# ESPAÇAMENTO LIMPO APENAS ENTRE MÓDULOS PRINCIPAIS
+# ESPAÇAMENTO LIMPO ENTRE MÓDULOS PRINCIPAIS
 st.write("")
 st.write("")
 st.divider()
@@ -190,4 +176,3 @@ with col2:
     restantes = max(0, limite_free - st.session_state["contador_acoes"])
     st.metric(label="Créditos Restantes Garantidos", value=restantes)
 
-    )
