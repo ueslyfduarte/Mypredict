@@ -17,28 +17,9 @@ else:
 
 BASE_URL = "https://api-sports.io"
 
-# ---------------------------------------------------------------------
-# [MÓDULO 2] INICIALIZAÇÃO DA MEMÓRIA DO APP (SESSION STATE)
-# ---------------------------------------------------------------------
-
-if "liga_selecionada" not in st.session_state:
-    st.session_state.liga_selecionada = None
-
-if "time_casa" not in st.session_state:
-    st.session_state.time_casa = None
-
-if "time_fora" not in st.session_state:
-    st.session_state.time_fora = None
-
-if "requisicoes_feitas" not in st.session_state:
-    st.session_state.requisicoes_feitas = 0
-
-# Corrigido: Defina aqui o limite real do seu plano (ex: 100 para o plano gratuito)
-if "limite_diario" not in st.session_state:
-    st.session_state.limite_diario = 100  
 
 # ---------------------------------------------------------------------
-# [MÓDULO 4] MONITOR DE CONSUMO DA API (TOPO DA PÁGINA)
+# [MÓDULO 2] MONITOR DE CONSUMO DA API (TOPO DA PÁGINA)
 # ---------------------------------------------------------------------
 
 col_req1, col_req2 = st.columns(2)
@@ -51,24 +32,4 @@ with col_req2:
 
 st.divider()
 
-# ---------------------------------------------------------------------
-# [MÓDULO 5] VALIDAÇÃO E DISPARO DA REQUISIÇÃO
-# ---------------------------------------------------------------------
-# ATENÇÃO: Certifique-se de que as variáveis abaixo (id_liga_atual, id_casa, etc.) 
-# já foram criadas pelas suas caixas de seleção (st.selectbox/st.selectbox) antes deste bloco.
-
-if st.session_state.requisicoes_feitas >= st.session_state.limite_diario:
-    st.error("❌ Limite diário de requisições atingido! Volte amanhã para coletar mais dados.")
-else:
-    if st.button("🚀 Carregar e Armazenar Dados do Confronto", type="primary"):
-        with st.spinner(f"Buscando dados de {temporada_selecionada} na API-Football..."):
-            st.session_state.time_casa = time_casa
-            st.session_state.time_fora = time_fora
-            
-            extrair_e_armazenar_dados_confronto(
-                id_liga=id_liga_atual, 
-                id_casa=id_casa, 
-                id_fora=id_fora, 
-                ano_temporada=ano_api
-            )
         st.rerun()
