@@ -27,9 +27,6 @@ BASE_URL = "https://api-sports.io"
 # [MÓDULO 2] INICIALIZAÇÃO DA MEMÓRIA DO APP (SESSION STATE)
 # ---------------------------------------------------------------------
 
-if "liga_selecionada" not in st.session_state:
-    st.session_state.liga_selecionada = ""
-
 if "time_casa" not in st.session_state:
     st.session_state.time_casa = None
 
@@ -41,9 +38,6 @@ if "requisicoes_feitas" not in st.session_state:
 
 if "limite_diario" not in st.session_state:
     st.session_state.limite_diario = 100
-
-if "cache_ligas" not in st.session_state:
-    st.session_state.cache_ligas = []
 
 if "cache_times" not in st.session_state:
     st.session_state.cache_times = []
@@ -64,26 +58,11 @@ if "banco_dados_partida" not in st.session_state:
 # ---------------------------------------------------------------------
 
 def puxar_todas_ligas():
-    if st.session_state.cache_ligas:
-        return st.session_state.cache_ligas
-        
     url = f"{BASE_URL}/leagues"
     try:
         response = requests.get(url, headers=HEADERS)
-        dados_json = response.json()
-        
-        # Se a API retornou alguma mensagem de erro interna
-        if dados_json.get("errors"):
-            st.error(f"❌ Erro retornado pela API-Football: {dados_json['errors']}")
-            return []
-            
-        dados = dados_json.get("response", [])
-        if response.status_code == 200 and dados:
-            st.session_state.cache_ligas = dados
-            return dados
-        return []
-    except Exception as e:
-        st.error(f"❌ Falha de conexão com o servidor: {e}")
+        return response.json().get("response", []) if response.status_code == 200 else []
+    except:
         return []
 
 
@@ -154,15 +133,6 @@ st.write("")
 # ---------------------------------------------------------------------
 
 st.header("🎯 Configuração da Partida")
-st.write("*(Clique nos campos abaixo e digite para pesquisar)*")
-st.write("")
-
-# Botão de emergência para limpar travamentos na memória do navegador
-if st.button("🔄 Forçar Atualização/Limpar Memória"):
-    st.session_state.cache_ligas = []
-    st.session_state.cache_times = []
-    st.rerun()
-
 st.write("")
 
 ano_atual = datetime.now().year
@@ -188,29 +158,18 @@ for l in lista_ligas:
 
 lista_nomes_ligas = sorted(list(opcoes_ligas.keys()))
 
-if not lista_nomes_ligas and lista_ligas:
-    st.warning(f"⚠️ Nenhuma liga processada para o ano {ano_api}. Tente clicar no botão 'Forçar Atualização' acima.")
-
-default_index = 0
-if st.session_state.liga_selecionada in lista_nomes_ligas:
-    default_index = lista_nomes_ligas.index(st.session_state.liga_selecionada) + 1
-
 liga_escolhida = st.selectbox(
     "Pesquise e Selecione a Liga ou Copa:",
     options=[""] + lista_nomes_ligas,
-    index=default_index
+    index=0
 )
-
-if liga_escolhida != st.session_state.liga_selecionada:
-    st.session_state.liga_selecionada = liga_escolhida
-    st.session_state.cache_times = []
 
 if liga_escolhida != "":
     id_liga_atual = opcoes_ligas[liga_escolhida]
     
     st.write("")
     if st.button("🔍 Buscar Times da Liga", type="secondary"):
-        with st.spinner("Buscando clubes participantes na API..."):
+        with st.spinner("Buscando clubes..."):
             puxar_times_da_liga(id_liga=id_liga_atual, ano_temporada=ano_api)
             st.rerun()
             
@@ -250,16 +209,13 @@ if liga_escolhida != "":
                 st.error("❌ Limite diário de requisições atingido!")
             else:
                 if st.button("🚀 Carregar e Armazenar Dados do Confronto", type="primary"):
-                    with st.spinner(f"Buscando dados na API-Football..."):
+                    with st.spinner("Buscando dados analíticos..."):
                         st.session_state.time_casa = time_casa
                         st.session_state.time_fora = time_fora
-                        
                         extrair_e_armazenar_dados_confronto(
                             id_liga=id_liga_atual, 
                             id_casa=id_casa, 
                             id_fora=id_fora, 
                             ano_temporada=ano_api
                         )
-                    st.success(f"Dados de {time_casa} x {time_fora} guardados com sucesso!")
-
-
+                    st.success("Dados salvos com sucesso!")
