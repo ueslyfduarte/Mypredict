@@ -1,48 +1,37 @@
-import streamlit as st
+import streamlit as str
 import requests
+import pandas as pd
 
-st.title("Análise Preditiva - Teste de Conexão")
+# 1. Configuração inicial da página
+st.set_page_config(page_title="Dashboard de Futebol", layout="wide")
+st.title("⚽ Estatísticas de Futebol em Tempo Real")
 
-# 1. Puxa a chave salva no painel de Secrets do Streamlit Cloud
-if "API_KEY" in st.secrets:
-    api_key = st.secrets["API_KEY"]
-else:
-    st.error("A variável 'API_KEY' não foi encontrada nos Secrets do site!")
-    st.stop()
-
-# 2. URL original envelopada dentro do Proxy para mascarar o IP do Streamlit
-url_original = "https://api-sports.io"
-url = f"https://allorigins.win{url_original}"
+# 2. Configurações da API (Exemplo com API-Football via RapidAPI)
+API_URL = "https://rapidapi.com" # Substitua pelo endpoint desejado
+API_KEY = st.secrets["API_KEY"] # Forma segura de guardar sua chave no Streamlit Cloud
 
 headers = {
-    'x-apisports-key': api_key
+    "X-RapidAPI-Key": API_KEY,
+    "X-RapidAPI-Host": "://rapidapi.com"
 }
 
-# 3. Botão para realizar o teste de validação na tela
-if st.button("Verificar Conexão Agora"):
-    with st.spinner("Conectando de forma segura através do Proxy..."):
-        try:
-            # Faz a requisição através da ponte do proxy
-            response = requests.get(url, headers=headers, timeout=20)
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                # Se houver algum erro de digitação na chave, a API nos avisa aqui
-                if data.get("errors"):
-                    st.error("O servidor respondeu, mas a sua CHAVE está inválida ou incorreta:")
-                    st.json(data["errors"])
-                else:
-                    st.success("Sua conexão e sua chave estão 100% corretas! 🎉")
-                    
-                    # Exibe os limites do seu plano na tela
-                    status = data["response"]
-                    st.write(f"**Seu Plano:** {status['subscription']['plan']}")
-                    st.write(f"**Requisições Hoje:** {status['requests']['current']} / {status['requests']['limit_day']}")
-            else:
-                st.error(f"O Proxy retornou o código de erro: {response.status_code}")
-                st.code(response.text[:300])
-                
-        except Exception as e:
-            st.error(f"Não foi possível alcançar o servidor: {e}")
+# 3. Função para buscar dados com cache (Evita estourar o limite de requisições)
+@st.cache_data(ttl=3600) # Guarda os dados por 1 hora
+def buscar_dados_futebol(url, headers):
+    try:
+        resposta = requests.get(url, headers=headers)
+        resposta.raise_for_status()
+        return resposta.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Erro ao conectar na API: {e}")
+        return None
+
+# 4. Execução e exibição dos dados
+dados = buscar_dados_futebol(API_URL, headers)
+
+if dados:
+    st.success("Dados carregados com sucesso!")
+    # Transforme o JSON em DataFrame para exibir tabelas limpas
+    df = pd.DataFrame(dados.get("response", []))
+    st.dataframe(df)
 
