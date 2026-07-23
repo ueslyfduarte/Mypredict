@@ -8,6 +8,16 @@ st.set_page_config(page_title="MyPredicts", layout="wide")
 # ---------------------------------------------------------------------
 # [MÓDULO 1] ACESSO DA API E CONFIGURAÇÕES GLOBAIS
 # ---------------------------------------------------------------------
+
+# Inicialização global das variáveis para evitar erros de compilação
+id_liga_selecionada = None
+nome_liga_selecionada = None
+ano_temporada_real = None
+temporada_rotulo_selecionado = None
+id_time_selecionado = None
+nome_time_selecionado = None
+dict_times = {}
+
 if "MINHA_API_KEY" in st.secrets:
     HEADERS = {
         'x-apisports-key': st.secrets["MINHA_API_KEY"],
@@ -32,7 +42,7 @@ if st.session_state["data_contador"] != hoje_str:
     st.session_state["contador_acoes"] = 0
 
 def registrar_acao():
-    """Chame esta função sempre que realizar um cálculo final ou comando pago"""
+    """Incrementa o contador a cada ação para controle do plano Free"""
     st.session_state["contador_acoes"] += 1
 
 
@@ -64,7 +74,7 @@ def buscar_teams_por_league_api(league_id, ano_temporada):
 
 
 # ---------------------------------------------------------------------
-# [MÓDULO RESTRITO] CAIXA DE FERRAMENTAS (CÁLCULOS ESCONDIDOS)
+# [MÓDULO RESTRITO] CAIXA DE FERRAMENTAS (CÁLCULOS ESCONDIDOS - APENAS LÓGICA)
 # ---------------------------------------------------------------------
 def calcular_media_gols(gols_marcados, partidas_jogadas):
     if partidas_jogadas > 0:
@@ -76,9 +86,11 @@ def calcular_probabilidade_btts(jogos_ambas_marcam, total_jogos):
         return round((jogos_ambas_marcam / total_jogos) * 100, 1)
     return 0.0
 
+# Escreva seus próximos cálculos matemáticos puramente como funções aqui embaixo...
+
 
 # ---------------------------------------------------------------------
-# [MÓDULO 2] ENTRADAS PRINCIPAIS DO APP (BEM NO TOPO)
+# [MÓDULO 2] ENTRADAS PRINCIPAIS DO APP (BEM NO TOPO DO DESIGN)
 # ---------------------------------------------------------------------
 st.title("📊 MyPredicts")
 
@@ -88,7 +100,7 @@ if dados_ligas:
     dict_leagues = {item["league"]["name"]: item for item in dados_ligas}
     lista_nomes_ligas = sorted(list(dict_leagues.keys()))
     
-    # 1. SELEÇÃO DA LIGA
+    # 1. Seleção da Liga (Formato rolar ou pesquisar)
     nome_liga_selecionada = st.selectbox(
         "Selecione a Liga:",
         options=lista_nomes_ligas,
@@ -98,7 +110,7 @@ if dados_ligas:
     objeto_liga = dict_leagues[nome_liga_selecionada]
     id_liga_selecionada = objeto_liga["league"]["id"]
     
-    # FILTRO RESTRITO: Temporada Atual e Passada
+    # Filtro Dinâmico: Filtra apenas a Temporada Atual e a Passada
     lista_seasons = objeto_liga["seasons"]
     opcoes_temporadas = {}
     for s in lista_seasons:
@@ -109,10 +121,10 @@ if dados_ligas:
         rotulo = f"{data_inicio.year}/{data_fim.year}" if data_inicio.year != data_fim.year else f"{ano_base}"
         opcoes_temporadas[rotulo] = ano_base
 
-    # Captura estritamente as duas últimas temporadas válidas
+    # Organiza e seleciona estritamente as duas últimas (Atual e Passada)
     lista_rotulos_ordenados = sorted(list(opcoes_temporadas.keys()), reverse=True)[:2]
     
-    # 2. SELEÇÃO DA TEMPORADA
+    # 2. Seleção da Temporada (Filtro restrito)
     temporada_rotulo_selecionado = st.selectbox(
         "Selecione a Temporada (Atual ou Passada):",
         options=lista_rotulos_ordenados,
@@ -120,7 +132,7 @@ if dados_ligas:
     )
     ano_temporada_real = opcoes_temporadas[temporada_rotulo_selecionado]
     
-    # 3. SELEÇÃO DO TIME
+    # 3. Seleção do Time (Formato rolar ou pesquisar)
     dict_times = buscar_teams_por_league_api(league_id=id_liga_selecionada, ano_temporada=ano_temporada_real)
     
     if dict_times:
@@ -132,12 +144,11 @@ if dados_ligas:
         id_time_selecionado = dict_times[nome_time_selecionado]
     else:
         st.warning("Nenhum clube listado nesta liga para o período selecionado.")
-        id_time_selecionado = None
 else:
     st.warning("Conectando aos servidores da API Football...")
 
 
-# ESPAÇAMENTO LIMPO ENTRE MÓDULOS PRINCIPAIS
+# ESPAÇAMENTO LIMPO APENAS ENTRE MÓDULOS PRINCIPAIS
 st.write("")
 st.write("")
 st.divider()
@@ -146,15 +157,19 @@ st.write("")
 
 
 # ---------------------------------------------------------------------
-# [MÓDULO 3] CORPO DO APP: INTERFACE EXPOSITIVA E EXECUÇÃO DE DADOS
+# [MÓDULO 3] CORPO DO APP: INTERFACE EXPOSITIVA E LEITURA DOS DADOS
 # ---------------------------------------------------------------------
 st.subheader("📈 Análise de Desempenho e Predições")
 
 if id_time_selecionado:
     st.info(f"Dados prontos para o MyPredicts. Clube: {nome_time_selecionado} | ID: {id_time_selecionado}")
+    
+    # Espaço livre abaixo para você chamar seus gráficos e tabelas usando as defs da caixa de ferramentas
+else:
+    st.info("Aguardando a seleção completa de uma Liga e de um Time no topo da tela.")
 
 
-# ESPAÇAMENTO LIMPO ENTRE MÓDULOS PRINCIPAIS
+# ESPAÇAMENTO LIMPO APENAS ENTRE MÓDULOS PRINCIPAIS
 st.write("")
 st.write("")
 st.divider()
@@ -175,4 +190,3 @@ with col2:
     limite_free = 100
     restantes = max(0, limite_free - st.session_state["contador_acoes"])
     st.metric(label="Créditos Restantes Garantidos", value=restantes)
-
