@@ -18,7 +18,7 @@ else:
     st.error("⚠️ ERRO CRÍTICO: Configure a tag 'MINHA_API_KEY' no painel do Streamlit.")
     st.stop()
 
-BASE_URL = "https://api-sports.io"
+BASE_URL = "https://v3.football.api-sports.io"
 
 
 
@@ -42,6 +42,10 @@ if "requisicoes_feitas" not in st.session_state:
 if "limite_diario" not in st.session_state:
     st.session_state.limite_diario = 100
 
+# Memória para armazenar as ligas e não estourar os créditos da API à toa
+if "cache_ligas" not in st.session_state:
+    st.session_state.cache_ligas = []
+
 if "banco_dados_partida" not in st.session_state:
     st.session_state.banco_dados_partida = {
         "info_liga": {},
@@ -58,10 +62,18 @@ if "banco_dados_partida" not in st.session_state:
 # ---------------------------------------------------------------------
 
 def puxar_todas_ligas():
+    # Se já tivermos as ligas salvas na memória do app, não gasta requisição nova
+    if st.session_state.cache_ligas:
+        return st.session_state.cache_ligas
+        
     url = f"{BASE_URL}/leagues"
     try:
         response = requests.get(url, headers=HEADERS)
-        return response.json().get("response", []) if response.status_code == 200 else []
+        dados = response.json().get("response", [])
+        if response.status_code == 200 and dados:
+            st.session_state.cache_ligas = dados  # Guarda no cache
+            return dados
+        return []
     except:
         return []
 
@@ -159,6 +171,9 @@ liga_escolhida = st.selectbox(
 )
 
 if liga_escolhida != "":
+    # CORREÇÃO: Pegamos o ID de forma explícita antes de avançar para evitar escopos perdidos
+    id_liga_atual = opcoes_ligas[liga_escolhida]
+    
     st.write("")
     st.write("")
     st.divider()
@@ -182,6 +197,9 @@ if liga_escolhida != "":
         time_fora = st.selectbox("Visitante (Fora):", options=[""] + nomes_fora, index=0)
         
     if time_casa != "" and time_fora != "":
+        id_casa = opcoes_times[time_casa]
+        id_fora = opcoes_times[time_fora]
+        
         st.write("")
         st.write("")
         st.divider()
@@ -203,4 +221,3 @@ if liga_escolhida != "":
                         ano_temporada=ano_api
                     )
                 st.rerun()
-
