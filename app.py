@@ -150,7 +150,8 @@ st.write("*(Clique nos campos abaixo e digite para pesquisar)*")
 st.write("")
 
 ano_atual = datetime.now().year
-lista_anos = [str(ano) for _ano in range(ano_atual, ano_atual - 6, -1)]
+# CORREÇÃO DA VARIÁVEL: Removido o sublinhado para alinhar com o loop do Python
+lista_anos = [str(ano) for ano in range(ano_atual, ano_atual - 6, -1)]
 
 temporada_selecionada = st.selectbox(
     "Selecione a Temporada/Ano:",
@@ -170,7 +171,6 @@ for l in lista_ligas:
         nome_exibicao = f"{l['league']['name']} ({l['country']['name']})"
         opcoes_ligas[nome_exibicao] = l['league']['id']
 
-# Adiciona um índice padrão seguro para quando a página recarregar
 lista_nomes_ligas = sorted(list(opcoes_ligas.keys()))
 default_index = 0
 if st.session_state.liga_selecionada in lista_nomes_ligas:
@@ -182,7 +182,6 @@ liga_escolhida = st.selectbox(
     index=default_index
 )
 
-# Caso mude de liga na tela, resgata e reseta o cache de times antigo
 if liga_escolhida != st.session_state.liga_selecionada:
     st.session_state.liga_selecionada = liga_escolhida
     st.session_state.cache_times = []
@@ -191,7 +190,6 @@ if liga_escolhida != "":
     id_liga_atual = opcoes_ligas[liga_escolhida]
     
     st.write("")
-    # O botão de buscar times agora sempre ficará fixado e visível aqui
     if st.button("🔍 Buscar Times da Liga", type="secondary"):
         with st.spinner("Buscando clubes participantes na API..."):
             puxar_times_da_liga(id_liga=id_liga_atual, ano_temporada=ano_api)
@@ -244,5 +242,6 @@ if liga_escolhida != "":
                             ano_temporada=ano_api
                         )
                     st.success(f"Dados de {time_casa} x {time_fora} guardados com sucesso!")
+
 
 
