@@ -1,21 +1,61 @@
 import streamlit as st
 import requests
+from datetime import datetime
 
-# ==========================================
-# CONFIGURAÇÃO DE ACESSO DA API (PRODUÇÃO)
-# ==========================================
-# Este bloco valida sua credencial em segundo plano de forma silenciosa.
+
+
+
+# ---------------------------------------------------------------------
+# [MÓDULO 1] ACESSO DA API E CONFIGURAÇÕES GLOBAIS
+# ---------------------------------------------------------------------
+
 if "MINHA_API_KEY" in st.secrets:
-    API_KEY = st.secrets["MINHA_API_KEY"]
     HEADERS = {
-        'x-apisports-key': API_KEY,
+        'x-apisports-key': st.secrets["MINHA_API_KEY"],
         'x-rapidapi-host': 'v3.football.api-sports.io'
     }
 else:
     st.error("⚠️ ERRO CRÍTICO: Configure a tag 'MINHA_API_KEY' no painel do Streamlit.")
-    st.stop()  # Interrompe o app caso você esqueça de configurar no site
+    st.stop()
 
- (Sua configuração de chaves HEADERS e BASE_URL aqui...)
+BASE_URL = "https://api-sports.io"
+
+
+
+
+# ---------------------------------------------------------------------
+# [MÓDULO 2] INICIALIZAÇÃO DA MEMÓRIA DO APP (SESSION STATE)
+# ---------------------------------------------------------------------
+
+if "liga_selecionada" not in st.session_state:
+    st.session_state.liga_selecionada = None
+
+if "time_casa" not in st.session_state:
+    st.session_state.time_casa = None
+
+if "time_fora" not in st.session_state:
+    st.session_state.time_fora = None
+
+if "requisicoes_feitas" not in st.session_state:
+    st.session_state.requisicoes_feitas = 0
+
+if "limite_diario" not in st.session_state:
+    st.session_state.limite_diario = 100
+
+if "banco_dados_partida" not in st.session_state:
+    st.session_state.banco_dados_partida = {
+        "info_liga": {},
+        "dados_time_casa": {},
+        "dados_time_fora": {},
+        "historico_confrontos": {}
+    }
+
+
+
+
+# ---------------------------------------------------------------------
+# [MÓDULO 3] FUNÇÕES MODULARES (ENGENHARIA DE DADOS OCULTA)
+# ---------------------------------------------------------------------
 
 def puxar_todas_ligas():
     url = f"{BASE_URL}/leagues"
@@ -24,77 +64,143 @@ def puxar_todas_ligas():
         return response.json().get("response", []) if response.status_code == 200 else []
     except:
         return []
-# ==========================================
-# DESENVOLVA SEU APLICATIVO ABAIXO
-# ==========================================
-# A partir daqui a tela está 100% em branco e pronta para o seu layout.
+
+
+def puxar_times_da_liga(id_liga, ano_temporada):
+    url = f"{BASE_URL}/teams"
+    params = {"league": id_liga, "season": ano_temporada}
+    try:
+        response = requests.get(url, headers=HEADERS, params=params)
+        return response.json().get("response", []) if response.status_code == 200 else []
+    except:
+        return []
+
+
+def extrair_e_armazenar_dados_confronto(id_liga, id_casa, id_fora, ano_temporada):
+    url_stats_casa = f"{BASE_URL}/teams/statistics"
+    res_casa = requests.get(url_stats_casa, headers=HEADERS, params={"league": id_liga, "season": ano_temporada, "team": id_casa})
+    
+    url_stats_fora = f"{BASE_URL}/teams/statistics"
+    res_fora = requests.get(url_stats_fora, headers=HEADERS, params={"league": id_liga, "season": ano_temporada, "team": id_fora})
+    
+    url_h2h = f"{BASE_URL}/fixtures/headtohead"
+    res_h2h = requests.get(url_h2h, headers=HEADERS, params={"h2h": f"{id_casa}-{id_fora}", "last": 10})
+
+    limit = res_casa.headers.get("x-ratelimit-requests-limit")
+    remaining = res_casa.headers.get("x-ratelimit-requests-remaining")
+    
+    if limit and remaining:
+        st.session_state.limite_diario = int(limit)
+        st.session_state.requisicoes_feitas = int(limit) - int(remaining)
+    else:
+        st.session_state.requisicoes_feitas += 3
+
+    st.session_state.banco_dados_partida["info_liga"] = {"id_liga": id_liga, "temporada": ano_temporada}
+    st.session_state.banco_dados_partida["dados_time_casa"] = res_casa.json().get("response", {}) if res_casa.status_code == 200 else {}
+    st.session_state.banco_dados_partida["dados_time_fora"] = res_fora.json().get("response", {}) if res_fora.status_code == 200 else {}
+    st.session_state.banco_dados_partida["historico_confrontos"] = res_h2h.json().get("response", []) if res_h2h.status_code == 200 else []
 
 
 
 
-# =====================================================================
-# INTERFACE DE ENTRADA (SELEÇÃO EM CASCATA)
-# =====================================================================
+# ---------------------------------------------------------------------
+# [MÓDULO 4] MONITOR DE CONSUMO DA API (TOPO DA PÁGINA)
+# ---------------------------------------------------------------------
+
+col_req1, col_req2 = st.columns(2)
+
+with col_req1:
+    st.metric(label="📊 Requisições Gastas Hoje", value=st.session_state.requisicoes_feitas)
+
+with col_req2:
+    st.metric(label="🚨 Limite do Seu Plano", value=st.session_state.limite_diario)
+
+st.write("")
+st.write("")
+st.divider()
+st.write("")
+st.write("")
+
+
+
+
+# ---------------------------------------------------------------------
+# [MÓDULO 5] INTERFACE DE ENTRADA EXCLUSIVA (SELEÇÃO EM CASCATA)
+# ---------------------------------------------------------------------
+
 st.header("🎯 Configuração da Partida")
+st.write("")
 
-# 1. Carrega todas as ligas disponíveis na API para o primeiro menu
+ano_atual = datetime.now().year
+lista_anos = [str(ano) for ano in range(ano_atual, ano_atual - 6, -1)]
+
+temporada_selecionada = st.selectbox(
+    "Selecione a Temporada/Ano:",
+    options=lista_anos,
+    index=0
+)
+ano_api = int(temporada_selecionada)
+
+st.write("")
+
 lista_ligas = puxar_todas_ligas()
+opcoes_ligas = {}
 
-# Cria uma lista amigável de nomes para o usuário ler: "Nome da Liga (País)"
-opcoes_ligas = {f"{l['league']['name']} ({l['country']['name']})": l['league']['id'] for l in lista_ligas}
+for l in lista_ligas:
+    anos_disponiveis = [int(seasons['year']) for seasons in l['seasons']]
+    if ano_api in anos_disponiveis:
+        nome_exibicao = f"{l['league']['name']} ({l['country']['name']})"
+        opcoes_ligas[nome_exibicao] = l['league']['id']
 
 liga_escolhida = st.selectbox(
     "Selecione a Liga ou Copa:",
-    options=[""] + list(opcoes_ligas.keys()),
+    options=[""] + sorted(list(opcoes_ligas.keys())),
     index=0
 )
 
-# Se o usuário escolheu uma liga válida, libera o próximo passo
 if liga_escolhida != "":
-    id_liga_atual = opcoes_ligas[liga_escolhida]
-    
+    st.write("")
+    st.write("")
     st.divider()
-    st.subheader("👥 Seleção dos Times")
+    st.write("")
+    st.write("")
     
-    # 2. Busca os times da liga selecionada em segundo plano
-    # Nota: Ajuste o ano da temporada conforme a necessidade do seu plano da API
-    lista_times = puxar_times_da_liga(id_liga=id_liga_atual, ano_temporada=2026)
+    st.subheader("👥 Seleção dos Times")
+    st.write("")
+    
+    lista_times = puxar_times_da_liga(id_liga=id_liga_atual, ano_temporada=ano_api)
     opcoes_times = {t['team']['name']: t['team']['id'] for t in lista_times}
     nomes_times = sorted(list(opcoes_times.keys()))
     
-    # Cria duas colunas lado a lado para selecionar o confronto
     col1, col2 = st.columns(2)
     
     with col1:
         time_casa = st.selectbox("Mandante (Casa):", options=[""] + nomes_times, index=0)
         
     with col2:
-        # Filtra para não deixar selecionar o mesmo time no menu de visitante
         nomes_fora = [t for t in nomes_times if t != time_casa] if time_casa else nomes_times
         time_fora = st.selectbox("Visitante (Fora):", options=[""] + nomes_fora, index=0)
         
-    # 3. Validação final: Se ambos os times forem preenchidos, libera o gatilho de extração
     if time_casa != "" and time_fora != "":
-        id_casa = opcoes_times[time_casa]
-        id_fora = opcoes_times[time_fora]
-        
+        st.write("")
+        st.write("")
         st.divider()
+        st.write("")
+        st.write("")
         
-        # Botão principal que executa a busca pesada de dados na API
-        if st.button("🚀 Carregar e Armazenar Dados do Confronto", type="primary"):
-            with st.spinner("Buscando estatísticas e histórico H2H na API-Football..."):
-                
-                # Salva os nomes na memória para uso posterior
-                st.session_state.time_casa = time_casa
-                st.session_state.time_fora = time_fora
-                
-                # Dispara a função que alimenta o banco_dados_partida em segundo plano
-                extrair_e_armazenar_dados_confronto(
-                    id_liga=id_liga_atual, 
-                    id_casa=id_casa, 
-                    id_fora=id_fora, 
-                    ano_temporada=2026
-                )
-                
-            st.success(f"Dados de {time_casa} x {time_fora} armazenados com sucesso na memória!")
+        if st.session_state.requisicoes_feitas >= st.session_state.limite_diario:
+            st.error("❌ Limite diário de requisições atingido! Volte amanhã para coletar mais dados.")
+        else:
+            if st.button("🚀 Carregar e Armazenar Dados do Confronto", type="primary"):
+                with st.spinner(f"Buscando dados de {temporada_selecionada} na API-Football..."):
+                    st.session_state.time_casa = time_casa
+                    st.session_state.time_fora = time_fora
+                    
+                    extrair_e_armazenar_dados_confronto(
+                        id_liga=id_liga_atual, 
+                        id_casa=id_casa, 
+                        id_fora=id_fora, 
+                        ano_temporada=ano_api
+                    )
+                st.rerun()
 
