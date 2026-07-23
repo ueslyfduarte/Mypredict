@@ -1,46 +1,109 @@
 import streamlit as st
 
-# Configuração do tema inicial (deixa o app limpo e profissional)
+# Configuração da página para celular e PC
 st.set_page_config(page_title="MyPredict", page_icon="⚽", layout="wide")
 
-# --- MENU LATERAL (Branco/Neutro por padrão, reservado para monitoramento) ---
-st.sidebar.title("🚨 Monitoramento")
-st.sidebar.write("Os jogos favoritados para acompanhar 1 hora antes aparecerão aqui.")
+# =========================================================================
+# 📦 BANCO DE DADOS FIXO (Gasta ZERO créditos de API)
+# =========================================================================
+DADOS_LIGAS = {
+    "Campeonato Brasileiro": ["Flamengo", "Palmeiras", "São Paulo", "Atlético-MG", "Botafogo", "Corinthians", "Grêmio", "Internacional"],
+    "Premier League": ["Manchester City", "Arsenal", "Liverpool", "Chelsea", "Manchester United", "Tottenham", "Aston Villa", "Newcastle"]
+}
 
-# --- ÁREA CENTRAL ---
+# =========================================================================
+# 🎛️ MENU LATERAL (Sua lista de monitoramento diário)
+# =========================================================================
+st.sidebar.title("🚨 Monitoramento Diário")
+st.sidebar.write("Jogos aprovados para checar a escalação 1 hora antes:")
 
-# Mensagem de Boas-Vindas em Verde (Cor de Sucesso)
-st.success("👋 Bem-vindo ao MyPredict! Sua estação inteligente de análise e predição esportiva.")
+# Criando um espaço na memória para guardar os jogos favoritados
+if "jogos_monitorados" not in st.session_state:
+    st.session_state.jogos_monitorados = []
 
-# Título Principal do App
-st.title("⚽ MyPredict - Analytics")
+# Exibe os jogos que você salvou na barra lateral
+if st.session_state.jogos_monitorados:
+    for jogo in st.session_state.jogos_monitorados:
+        st.sidebar.info(f"⏳ {jogo}")
+else:
+    st.sidebar.caption("Nenhum jogo monitorado ainda.")
 
-# --- CONTEÚDO DOS CANTOS (Organizado em 3 Colunas) ---
-# Criamos 3 colunas na tela para distribuir as informações sobre futebol
-col1, col2, col3 = st.columns(3)
+# =========================================================================
+# 🏛️ PAINEL CENTRAL (Área de Trabalho)
+# =========================================================================
+st.success("👋 Bem-vindo ao MyPredict! Sua estação inteligente de análise esportiva.")
+st.title("⚽ MyPredict - Análise Pré-Jogo")
 
-with col1:
-    # Caixa Azul Informática (Fácil de ler)
-    st.info("📈 **Estatísticas Avançadas**\n\nCruzamos dados históricos de gols, posse de bola e finalizações para criar modelos matemáticos precisos.")
+# --- BLOCO 1: ESCOLA DO CENÁRIO (Sem gastar créditos) ---
+st.subheader("🔍 Configurar Cenário da Partida")
 
-with col2:
-    # Caixa Branca/Cinza Padrão
-    st.markdown("### 🏆 Ligas Cobertas\nPronto para analisar os principais campeonatos do mundo, incluindo Brasileirão, Premier League e Champions League.")
+# Escolha da Liga
+liga_selecionada = st.selectbox("Selecione a Liga / Campeonato:", list(DADOS_LIGAS.keys()))
 
-with col3:
-    # Outra Caixa Azul Informativa
-    st.info("🧠 **Fator Psicológico**\n\nFique de olho! Nosso sistema monitora notícias de última hora e desfalques que mudam o rumo do jogo.")
+# Listar os times baseados na liga escolhida
+times_disponiveis = DADOS_LIGAS[liga_selecionada]
 
-# Deixamos um espaço respiratório em branco
+# Colunas para escolher os times lado a lado no celular
+col_casa, col_fora = st.columns(2)
+
+with col_casa:
+    time_casa = st.selectbox("🏠 Time da Casa (Mandante):", times_disponiveis, index=0)
+
+with col_fora:
+    # Coloca o segundo time da lista por padrão para não dar erro de duplicado
+    time_fora = st.selectbox("🚀 Time de Fora (Visitante):", times_disponiveis, index=1)
+
+# Botão central para disparar as análises do seu método
 st.write("")
-st.write("")
+botao_analisar = st.button("🚀 Gerar Relatório MyPredict", type="primary")
 
-# --- ÁREA DE PESQUISA (Layout Inicial) ---
-st.subheader("🔍 Iniciar Nova Análise")
+# --- EXECUÇÃO DA ANÁLISE ---
+if botao_analisar:
+    if time_casa == time_fora:
+        st.error("Erro: O time da casa não pode ser igual ao time de fora!")
+    else:
+        st.divider()
+        st.header(f"📊 Relatório: {time_casa} vs {time_fora}")
+        st.caption(f"Competição: {liga_selecionada}")
 
-# Caixa de seleção ou digitação para o usuário
-time_pesquisado = st.text_input("Digite o nome do time que você deseja avaliar:", placeholder="Ex: Flamengo, Real Madrid, Palmeiras...")
+        # --- BLOCO 2 & 3: ANÁLISE INICIAL (MÉTRICAS DE POSIÇÃO) ---
+        st.subheader("📈 Análise de Posição e Momento")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown(f"### 🏠 {time_casa} (Dados de Casa)")
+            st.write("📌 **Posição Geral Atual:** 4º Lugar *(Dado fictício da API)*")
+            st.write("🔥 **Posição de Momento (Últimos 5 jogos em Casa):** 2º Lugar")
+            
+        with c2:
+            st.markdown(f"### 🚀 {time_fora} (Dados de Fora)")
+            st.write("📌 **Posição Geral Atual:** 9º Lugar *(Dado fictício da API)*")
+            st.write("🔥 **Posição de Momento (Últimos 5 jogos Fora):** 18º Lugar")
 
-# Exibe uma mensagem amigável caso você digite algo
-if time_pesquisado:
-    st.write(f"Buscando informações para: **{time_pesquisado}**... (A conexão com as APIs será configurada no próximo passo)")
+        st.divider()
+
+        # --- SEU MÉTODO SECRETO (IM, IOVR, IFP) ---
+        st.subheader("🧠 Métricas Estratégicas do Seu Método")
+        
+        m1, m2, m3 = st.columns(3)
+        with m1:
+            st.metric(label="📊 Índice IM", value="Aguardando Fórmula", delta="Pendente")
+        with m2:
+            st.metric(label="🎯 Índice IOVR", value="Aguardando Fórmula", delta="Pendente")
+        with m3:
+            st.metric(label="🧠 Índice IFP", value="Aguardando Fórmula", delta="Pendente")
+
+        st.divider()
+
+        # --- BLOCO DE AÇÃO: MONITORAMENTO ---
+        st.subheader("🎲 Tomada de Decisão")
+        st.write("Encontrou valor com base nas métricas acima? Adicione para monitorar as escalações mais tarde.")
+        
+        nome_confronto = f"{time_casa} x {time_fora} ({liga_selecionada})"
+        
+        # Cria o botão de salvar
+        if st.button("➕ Adicionar ao Monitoramento Diário"):
+            if nome_confronto not in st.session_state.jogos_monitorados:
+                st.session_state.jogos_monitorados.append(nome_confronto)
+                st.toast("Jogo adicionado à barra lateral! Rerodando...")
+                st.rerun()
