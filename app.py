@@ -15,7 +15,15 @@ else:
     st.error("⚠️ ERRO CRÍTICO: Configure a tag 'MINHA_API_KEY' no painel do Streamlit.")
     st.stop()  # Interrompe o app caso você esqueça de configurar no site
 
+ (Sua configuração de chaves HEADERS e BASE_URL aqui...)
 
+def puxar_todas_ligas():
+    url = f"{BASE_URL}/leagues"
+    try:
+        response = requests.get(url, headers=HEADERS)
+        return response.json().get("response", []) if response.status_code == 200 else []
+    except:
+        return []
 # ==========================================
 # DESENVOLVA SEU APLICATIVO ABAIXO
 # ==========================================
