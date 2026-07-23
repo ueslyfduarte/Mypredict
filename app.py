@@ -1,42 +1,41 @@
 import streamlit as st
 import requests
 
-st.title("Teste de Conexão: API-Football")
+st.title("Teste de Conexão Corrigido: API-Football")
 
-# Busca a chave cadastrada direto no painel do Streamlit Web
+# Busca a chave cadastrada na plataforma web do Streamlit
 if "API_KEY" in st.secrets:
     api_key = st.secrets["API_KEY"]
 else:
-    st.error("A variável 'API_KEY' não foi encontrada nos Secrets do Streamlit!")
+    st.error("A variável 'API_KEY' não foi encontrada nos Secrets!")
     st.stop()
 
-# Configuração oficial da API-Football
+# URL oficial e cabeçalho correto para quem usa a API direta da API-Sports
 url = "https://api-sports.io"
 headers = {
-    'x-rapidapi-host': "v3.football.api-sports.io",
-    'x-rapidapi-key': api_key
+    'x-apisports-key': api_key  # Mudança crucial aqui!
 }
 
-if st.button("Testar Conexão com API-Football"):
-    with st.spinner("Consultando status da conta..."):
+if st.button("Testar Conexão Oficial"):
+    with st.spinner("Autenticando..."):
         try:
+            # Faz a requisição GET simples e gratuita de status
             response = requests.get(url, headers=headers)
             data = response.json()
             
-            # Valida se a requisição deu certo e se não há mensagens de erro da API
+            # Valida se o servidor respondeu 200 e se não há erros na estrutura do JSON
             if response.status_code == 200 and not data.get("errors"):
-                st.success("Conexão com a API-Football validada com sucesso! 🎉")
+                st.success("Conexão validada! Sua API_Football está funcionando. 🎉")
                 
-                # Exibe dados de consumo do seu plano
-                conta = data["response"]["account"]
-                requisicoes = data["response"]["requests"]
-                
-                st.write(f"**Usuário:** {conta['firstname']} {conta['lastname']}")
-                st.write(f"**E-mail:** {conta['email']}")
-                st.metric(label="Requisições Usadas Hoje", value=f"{requisicoes['current']} / {requisicoes['limit_day']}")
+                # Exibe informações do plano direto na tela do app
+                status_resposta = data["response"]
+                st.write(f"**Plano Atual:** {status_resposta['subscription']['plan']}")
+                st.write(f"**Requisições do Dia:** {status_resposta['requests']['current']} / {status_resposta['requests']['limit_day']}")
             else:
-                st.error("A API retornou um erro de autenticação. Verifique sua chave nos Secrets.")
+                st.error("A API rejeitou a credencial. Verifique se o código colado no site está correto.")
                 st.json(data.get("errors", data))
                 
         except Exception as e:
+            st.error(f"Erro de conexão com o servidor: {e}")
+
             st.error(f"Erro de rede ou conexão: {e}")
