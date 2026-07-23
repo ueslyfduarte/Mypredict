@@ -70,12 +70,20 @@ def puxar_todas_ligas():
     url = f"{BASE_URL}/leagues"
     try:
         response = requests.get(url, headers=HEADERS)
-        dados = response.json().get("response", [])
+        dados_json = response.json()
+        
+        # Se a API retornou alguma mensagem de erro interna
+        if dados_json.get("errors"):
+            st.error(f"❌ Erro retornado pela API-Football: {dados_json['errors']}")
+            return []
+            
+        dados = dados_json.get("response", [])
         if response.status_code == 200 and dados:
             st.session_state.cache_ligas = dados
             return dados
         return []
-    except:
+    except Exception as e:
+        st.error(f"❌ Falha de conexão com o servidor: {e}")
         return []
 
 
@@ -149,8 +157,15 @@ st.header("🎯 Configuração da Partida")
 st.write("*(Clique nos campos abaixo e digite para pesquisar)*")
 st.write("")
 
+# Botão de emergência para limpar travamentos na memória do navegador
+if st.button("🔄 Forçar Atualização/Limpar Memória"):
+    st.session_state.cache_ligas = []
+    st.session_state.cache_times = []
+    st.rerun()
+
+st.write("")
+
 ano_atual = datetime.now().year
-# CORREÇÃO DA VARIÁVEL: Removido o sublinhado para alinhar com o loop do Python
 lista_anos = [str(ano) for ano in range(ano_atual, ano_atual - 6, -1)]
 
 temporada_selecionada = st.selectbox(
@@ -172,6 +187,10 @@ for l in lista_ligas:
         opcoes_ligas[nome_exibicao] = l['league']['id']
 
 lista_nomes_ligas = sorted(list(opcoes_ligas.keys()))
+
+if not lista_nomes_ligas and lista_ligas:
+    st.warning(f"⚠️ Nenhuma liga processada para o ano {ano_api}. Tente clicar no botão 'Forçar Atualização' acima.")
+
 default_index = 0
 if st.session_state.liga_selecionada in lista_nomes_ligas:
     default_index = lista_nomes_ligas.index(st.session_state.liga_selecionada) + 1
@@ -228,7 +247,7 @@ if liga_escolhida != "":
             st.write("")
             
             if st.session_state.requisicoes_feitas >= st.session_state.limite_diario:
-                st.error("❌ Limite diário de requisições atingido! Volte amanhã.")
+                st.error("❌ Limite diário de requisições atingido!")
             else:
                 if st.button("🚀 Carregar e Armazenar Dados do Confronto", type="primary"):
                     with st.spinner(f"Buscando dados na API-Football..."):
@@ -242,6 +261,5 @@ if liga_escolhida != "":
                             ano_temporada=ano_api
                         )
                     st.success(f"Dados de {time_casa} x {time_fora} guardados com sucesso!")
-
 
 
