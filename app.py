@@ -53,9 +53,30 @@ with col_fora:
     # Coloca o segundo time da lista por padrão para não dar erro de duplicado
     time_fora = st.selectbox("🚀 Time de Fora (Visitante):", times_disponiveis, index=1)
 
-# Botão central para disparar as análises do seu método
-st.write("")
-botao_analisar = st.button("🚀 Gerar Relatório MyPredict", type="primary")
+# --- BOTÃO DESIGN PREMIUM E MODERNO ---
+st.markdown("""
+    <style>
+    div.stButton > button:first-child {
+        background-color: #007bff; /* Azul moderno */
+        color: white;
+        font-size: 20px; /* Texto maior */
+        font-weight: bold;
+        padding: 14px 30px; /* Botão mais robusto e alto */
+        border-radius: 25px; /* Bordas bem arredondadas estilo pílula */
+        border: none;
+        box-shadow: 0px 4px 10px rgba(0, 123, 255, 0.3); /* Sombra suave para dar efeito 3D */
+        width: 100%; /* Ocupa toda a largura da tela do celular, facilitando o clique */
+        transition: all 0.3s ease;
+    }
+    div.stButton > button:first-child:hover {
+        background-color: #0056b3; /* Cor muda ao passar o dedo/mouse */
+        transform: scale(1.02); /* Leve efeito de clique */
+    }
+    </style>
+""", unsafe_allowed_html=True)
+
+botao_analisar = st.button("🚀 Gerar Relatório MyPredict")
+
 
 # --- EXECUÇÃO DA ANÁLISE ---
 if botao_analisar:
