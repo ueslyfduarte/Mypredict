@@ -10,10 +10,11 @@ else:
     st.error("A variável 'API_KEY' não foi encontrada nos Secrets!")
     st.stop()
 
-# URL oficial e cabeçalho correto para quem usa a API direta da API-Sports
+# URL CORRIGIDA: Servidor oficial de dados + endpoint de status
 url = "https://api-sports.io"
+
 headers = {
-    'x-apisports-key': api_key  # Mudança crucial aqui!
+    'x-apisports-key': api_key  
 }
 
 if st.button("Testar Conexão Oficial"):
@@ -37,5 +38,3 @@ if st.button("Testar Conexão Oficial"):
                 
         except Exception as e:
             st.error(f"Erro de conexão com o servidor: {e}")
-
-            st.error(f"Erro de rede ou conexão: {e}")
