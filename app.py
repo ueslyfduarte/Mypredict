@@ -1,5 +1,5 @@
 import streamlit as st
-import requests
+import cloudscraper
 
 st.title("Teste de Conexão Corrigido: API-Football")
 
@@ -13,27 +13,26 @@ else:
 # URL oficial e segura de status
 url = "https://api-sports.io"
 
-# Adicionado User-Agent para evitar que o servidor rejeite a conexão do Python
 headers = {
-    'x-apisports-key': api_key,
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36'
+    'x-apisports-key': api_key
 }
 
 if st.button("Testar Conexão Oficial"):
-    with st.spinner("Autenticando..."):
+    with st.spinner("Burlando proteção Cloudflare e Autenticando..."):
         try:
-            # Faz a requisição de status
-            response = requests.get(url, headers=headers)
+            # Inicializa o scraper que simula perfeitamente um navegador real
+            scraper = cloudscraper.create_scraper()
             
-            # Mostra o erro real se o servidor não retornar sucesso antes de tentar ler o JSON
+            # Faz a requisição usando o scraper no lugar do requests
+            response = scraper.get(url, headers=headers)
+            
             if response.status_code != 200:
                 st.error(f"O servidor retornou um código de erro: {response.status_code}")
                 st.text("Texto retornado pelo servidor:")
-                st.code(response.text[:500]) # Exibe o começo do erro para sabermos o que é
+                st.code(response.text[:500])
             else:
                 data = response.json()
                 
-                # Valida se não há erros na estrutura interna do JSON da API
                 if not data.get("errors"):
                     st.success("Conexão validada! Sua API_Football está funcionando. 🎉")
                     
