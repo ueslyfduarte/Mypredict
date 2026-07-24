@@ -32,7 +32,7 @@ aba_a, aba_b, aba_c, aba_d, aba_e = st.tabs([
 ])
 
 # ==========================================
-# TESTE A: Obter IDs Reais (Item 11.a e Item 4)
+# TESTE A: Obter IDs Reais (Item 11.a e Item 4) - CORRIGIDO COM SEASON
 # ==========================================
 with aba_a:
     st.header("Etapa A: Buscar Partidas")
@@ -40,8 +40,10 @@ with aba_a:
     
     data_teste = st.text_input("Data do Teste (YYYY-MM-DD):", value=data_hoje)
     liga_teste = st.text_input("ID da Liga (Premier League padrão = 39):", value="39")
+    ano_season_a = st.text_input("Ano da Temporada (Ex: 2026):", value="2026", key="season_a")
     
-    url_a = f"{base_url}/fixtures?date={data_teste}&league={liga_teste}"
+    # ADICIONADO &season= À URL CONFORME EXIGIDO PELA API
+    url_a = f"{base_url}/fixtures?date={data_teste}&league={liga_teste}&season={ano_season_a}"
     st.info(f"🔗 **URL Utilizada:** {url_a}")
     
     if st.button("Executar Etapa A"):
@@ -57,15 +59,17 @@ with aba_a:
                 if "errors" in data and data["errors"]:
                     st.error("❌ Erro retornado pela API. Verifique o JSON acima.")
                 elif "response" in data and len(data["response"]) == 0:
-                    st.warning("⚠️ Resposta vazia ('response': []). Sem partidas nesta data.")
+                    st.warning("⚠️ Resposta vazia ('response': []). Sem partidas nesta data e temporada específicas.")
                 else:
-                    jogo = data["response"][0]
                     st.success("✅ Partida localizada com sucesso!")
+                    # Como response é uma lista [], pegamos o primeiro item [0]
+                    jogo = data["response"][0] 
                     st.write(f"• **ID da Partida (fixture id):** `{jogo['fixture']['id']}`")
                     st.write(f"• **ID Time Casa (home id):** `{jogo['teams']['home']['id']}` — {jogo['teams']['home']['name']}")
                     st.write(f"• **ID Time Fora (away id):** `{jogo['teams']['away']['id']}` — {jogo['teams']['away']['name']}")
             except Exception as e:
                 st.error(f"Falha de execução: {e}")
+
 
 # ==========================================
 # TESTE B: Estatísticas Detalhadas (Item 11.b e Item 5)
