@@ -2,30 +2,21 @@ import streamlit as st
 import requests
 from datetime import datetime
 
-# Configuração visual nativa do Streamlit
+# Configuração da página
 st.set_page_config(page_title="MyPredicts", layout="wide")
 
 # ---------------------------------------------------------------------
-# [MÓDULO 1] ACESSO DA API E CONFIGURAÇÕES GLOBAIS
+# [MÓDULO 1] CONFIGURAÇÕES DA API
 # ---------------------------------------------------------------------
 if "MINHA_API_KEY" in st.secrets:
-    HEADERS = {
-        'x-apisports-key': st.secrets["MINHA_API_KEY"]
-    }
+    HEADERS = {'x-apisports-key': st.secrets["MINHA_API_KEY"]}
 else:
-    st.error("⚠️ ERRO CRÍTICO: Configure a tag 'MINHA_API_KEY' no painel do Streamlit.")
+    st.error("⚠️ Configure a tag 'MINHA_API_KEY' no painel do Streamlit.")
     st.stop()
 
 BASE_URL = "https://api-sports.io"
 
-# CONTADOR DIÁRIO DE CONTROLE
-hoje_str = datetime.today().strftime('%Y-%m-%d')
-if "data_contador" not in st.session_state:
-    st.session_state["data_contador"] = hoje_str
-    st.session_state["contador_acoes"] = 0
-
-if st.session_state["data_contador"] != hoje_str:
-    st.session_state["data_contador"] = hoje_str
+if "contador_acoes" not in st.session_state:
     st.session_state["contador_acoes"] = 0
 
 def registrar_acao():
@@ -33,174 +24,178 @@ def registrar_acao():
 
 
 # ---------------------------------------------------------------------
-# [MÓDULO RESTRITO] CAIXA DE FERRAMENTAS (FUNÇÕES DE CONEXÃO E CÁLCULO)
+# [MÓDULO RESTRITO] CAIXA DE FERRAMENTAS (REQUISIÇÕES REAIS)
 # ---------------------------------------------------------------------
 
+# IDs oficiais das suas Top 8 Ligas na API Football
+TOP_8_IDS = [71, 39, 140, 135, 78, 61, 2, 13]
+
 @st.cache_data(ttl=86400)
-def api_requisitar_todas_leagues():
-    """Busca todas as ligas disponíveis diretamente da API Football"""
+def api_buscar_top_8_dinamico():
+    """Gasta exatamente 1 requisição para trazer os dados reais e atualizados das Top 8"""
+    try:
+        # Transforma a lista de IDs em uma string separada por vírgulas: '71,39,140...'
+        ids_string = ",".join(map(str, TOP_8_IDS))
+        url = f"{BASE_URL}/leagues"
+        response = requests.get(url, headers=HEADERS, params={"ids": ids_string}, timeout=12)
+        if response.status_code == 200:
+            return response.json().get("response", [])
+        return []
+    except:
+        return []
+
+@st.cache_data(ttl=86400)
+def api_buscar_uma_liga_por_nome(nome_pesquisa):
+    """Busca cirurgicamente apenas uma liga caso queira sair das Top 8"""
     try:
         url = f"{BASE_URL}/leagues"
-        response = requests.get(url, headers=HEADERS, timeout=15)
+        response = requests.get(url, headers=HEADERS, params={"search": nome_pesquisa}, timeout=10)
         if response.status_code == 200:
             return response.json().get("response", [])
-        else:
-            st.error(f"Erro de resposta do servidor da API: Código {response.status_code}")
-            return []
-    except Exception as e:
-        st.error(f"Falha física de conexão com a API: {e}")
+        return []
+    except:
         return []
 
 @st.cache_data(ttl=86400)
-def API_buscar_teams_por_league(league_id, ano_temporada):
+def api_buscar_times_por_liga(id_liga, ano_temporada):
     try:
         url = f"{BASE_URL}/teams"
-        parametros = {"league": league_id, "season": ano_temporada}
-        response = requests.get(url, headers=HEADERS, params=parametros, timeout=15)
+        response = requests.get(url, headers=HEADERS, params={"league": id_liga, "season": ano_temporada}, timeout=10)
         if response.status_code == 200:
             dados = response.json().get("response", [])
-            mapeamento = {item["team"]["name"]: item["team"]["id"] for item in dados}
-            return dict(sorted(mapeamento.items()))
+            return dict(sorted({item["team"]["name"]: item["team"]["id"] for item in dados}.items()))
         return {}
     except:
         return {}
 
-def API_buscar_confrontos_diretos(team_a_id, team_b_id):
+@st.cache_data(ttl=3600)
+def api_buscar_h2h(id_time_a, id_time_b):
     try:
         url = f"{BASE_URL}/fixtures/headtohead"
-        parametros = {"h2h": f"{team_a_id}-{team_b_id}"}
-        response = requests.get(url, headers=HEADERS, params=parametros, timeout=15)
+        response = requests.get(url, headers=HEADERS, params={"h2h": f"{id_time_a}-{id_time_b}"}, timeout=12)
         if response.status_code == 200:
             return response.json().get("response", [])
         return []
     except:
         return []
 
-def calcular_percentual_vitorias(historico_partidas, id_time_alvo):
-    if not historico_partidas:
-        return 0.0
-    vitorias = 0
-    for partida in historico_partidas:
-        if partida["teams"]["home"]["id"] == id_time_alvo and partida["teams"]["home"]["winner"]:
-            vitorias += 1
-        elif partida["teams"]["away"]["id"] == id_time_alvo and partida["teams"]["away"]["winner"]:
-            vitorias += 1
-    return round((vitorias / len(historico_partidas)) * 100, 1)
-
 
 # ---------------------------------------------------------------------
-# [MÓDULO 2] ENTRADAS PRINCIPAIS DO APP (SELETORES E BOTÃO NO TOPO)
+# [MÓDULO 2] ENTRADAS DO APLICATIVO (TOPO DO DESIGN)
 # ---------------------------------------------------------------------
 st.title("📊 MyPredicts")
 
-# Faz a chamada real e obrigatória logo na inicialização da página
-dados_api_leagues = api_requisitar_todas_leagues()
+modo_liga = st.radio("Origem da Competição:", options=["🏆 Escolher das Top 8 (Gasta 1 req)", "🔍 Pesquisar Outra Liga (Sob Demanda)"], horizontal=True)
 
-if dados_api_leagues:
-    dict_leagues = {f"{item['league']['name']} ({item['country']['name']})": item for item in dados_api_leagues}
-    lista_nomes_ligas = sorted(list(dict_leagues.keys()))
+dados_da_liga_escolhida = None
+
+if modo_liga == "🏆 Escolher das Top 8 (Gasta 1 req)":
+    # Faz a chamada leve focada apenas nos 8 IDs
+    lista_top_8 = api_buscar_top_8_dinamico()
+    if lista_top_8:
+        dict_top_8 = {f"{item['league']['name']} ({item['country']['name']})": item for item in lista_top_8}
+        liga_selecionada = st.selectbox("Selecione a Liga Principal:", options=sorted(list(dict_top_8.keys())))
+        dados_da_liga_escolhida = dict_top_8[liga_selecionada]
+    else:
+        st.error("Não foi possível conectar à API para puxar as Top 8. Verifique sua chave ou o limite por minuto.")
+else:
+    termo_busca = st.text_input("Digite o nome exato ou parte da liga (Ex: Copa do Brasil, Championship...):", value="")
+    if termo_busca:
+        lista_busca = api_buscar_uma_liga_por_nome(termo_busca)
+        if lista_busca:
+            dict_busca = {f"{item['league']['name']} ({item['country']['name']})": item for item in lista_busca}
+            liga_selecionada = st.selectbox("Selecione a competição encontrada:", options=sorted(list(dict_busca.keys())))
+            dados_da_liga_escolhida = dict_busca[liga_selecionada]
+        else:
+            st.warning("Nenhuma liga encontrada com este nome na API.")
+
+# Se tivermos os dados reais da liga (seja do Top 8 ou da busca)
+if dados_da_liga_escolhida:
+    id_liga_final = dados_da_liga_escolhida["league"]["id"]
     
-    # 1. SELETOR DE LIGA
-    nome_liga_selecionada = st.selectbox("Selecione a Liga:", options=lista_nomes_ligas)
-    objeto_liga = dict_leagues[nome_liga_selecionada]
-    id_liga_selecionada = objeto_liga["league"]["id"]
-    
-    # Processamento de temporadas (Atual e Passada)
-    lista_seasons = objeto_liga.get("seasons", [])
-    opcoes_temporadas = {}
+    # Monta as temporadas reais daquela liga específica (Trata Brasil vs Europa perfeitamente)
+    lista_seasons = dados_da_liga_escolhida.get("seasons", [])
+    opcoes_seasons = {}
     for s in lista_seasons:
-        ano_base = s["year"]
+        year = s["year"]
         try:
-            data_inicio = datetime.strptime(s["start"], "%Y-%m-%d")
-            data_fim = datetime.strptime(s["end"], "%Y-%m-%d")
-            rotulo = f"{data_inicio.year}/{data_fim.year}" if data_inicio.year != data_fim.year else f"{ano_base}"
+            start_date = datetime.strptime(s["start"], "%Y-%m-%d")
+            end_date = datetime.strptime(s["end"], "%Y-%m-%d")
+            rotulo = f"{start_date.year}/{end_date.year}" if start_date.year != end_date.year else f"{year}"
         except:
-            rotulo = f"{ano_base}"
-        opcoes_temporadas[rotulo] = ano_base
-
-    lista_rotulos_ordenados = sorted(list(opcoes_temporadas.keys()), reverse=True)[:2]
+            rotulo = f"{year}"
+        opcoes_seasons[rotulo] = year
+        
+    # Pega apenas as duas últimas cadastradas (Atual e Passada)
+    rotulos_ordenados = sorted(list(opcoes_seasons.keys()), reverse=True)[:2]
     
-    # 2. SELETOR DE TEMPORADA
-    temporada_rotulo_selecionado = st.selectbox("Selecione a Temporada (Atual ou Passada):", options=lista_rotulos_ordenados)
-    ano_temporada_real = opcoes_temporadas[temporada_rotulo_selecionado]
+    rotulo_temporada = st.selectbox("Selecione a Temporada (Atual ou Passada):", options=rotulos_ordenados)
+    ano_temporada = opcoes_seasons[rotulo_temporada]
     
-    # 3. SELETOR DOS CLUBES EM CASCATA REAL
-    dict_times = API_buscar_teams_por_league(league_id=id_liga_selecionada, ano_temporada=ano_temporada_real)
+    # Busca os clubes reais da competição baseados no ID e no ano correto
+    dict_times = api_buscar_times_por_liga(id_liga_final, ano_temporada)
     
     if dict_times:
-        col_a, col_b = st.columns(2)
-        with col_a:
-            nome_time_a = st.selectbox("Selecione o Time A (Mandante):", options=list(dict_times.keys()), key="time_a")
-            id_time_a = dict_times[nome_time_a]
-        with col_b:
-            nome_time_b = st.selectbox("Selecione o Time B (Visitante):", options=list(dict_times.keys()), key="time_b")
-            id_time_b = dict_times[nome_time_b]
+        col1, col2 = st.columns(2)
+        with col1:
+            time_a = st.selectbox("Time A (Mandante):", options=list(dict_times.keys()), key="ta")
+            id_a = dict_times[time_a]
+        with col2:
+            time_b = st.selectbox("Time B (Visitante):", options=list(dict_times.keys()), key="tb")
+            id_b = dict_times[time_b]
             
         st.write("")
         botao_gerar = st.button("🔥 Gerar MyPredict", use_container_width=True)
     else:
-        st.warning("Nenhum clube retornado pela API para esta temporada.")
+        st.warning("Nenhum clube retornado pela API. Sua chave pode ter estourado o limite de 10 requisições por minuto. Aguarde um instante.")
         botao_gerar = False
 else:
-    st.info("Aguardando carregamento inicial das ligas... Se este aviso persistir, certifique-se de que sua chave inserida no painel do Streamlit está ativa e sem espaços vazios.")
     botao_gerar = False
 
 
-# ESPAÇAMENTO LIMPO ENTRE MÓDULOS PRINCIPAIS
+# Espaçamento limpo entre módulos
 st.write("")
 st.divider()
 st.write("")
 
 
 # ---------------------------------------------------------------------
-# [MÓDULO 3] CORPO DO APP: INTERFACE EXPOSITIVA E PROCESSAMENTO DO BOTÃO
+# [MÓDULO 3] EXIBIÇÃO E PROCESSAMENTO DOS DADOS (CORPO)
 # ---------------------------------------------------------------------
 st.subheader("📈 Análise de Desempenho e Predições")
 
 if botao_gerar:
-    if id_time_a != id_time_b:
+    if id_a != id_b:
         registrar_acao()
         
-        with st.spinner(f"Buscando histórico real H2H entre {nome_time_a} e {nome_time_b}..."):
-            dados_confrontos = API_buscar_confrontos_diretos(id_time_a, id_time_b)
+        with st.spinner("Analisando histórico de confrontos diretos em tempo real..."):
+            confrontos = api_buscar_h2h(id_a, id_b)
             
-        if dados_confrontos:
-            st.success(f"Análise gerada para {nome_time_a} vs {nome_time_b}!")
+        if confrontos:
+            st.success(f"Confronto analisado: {time_a} vs {time_b}")
+            st.write(f"Total de jogos recentes encontrados na API: **{len(confrontos)}**")
             
-            win_rate_a = calcular_percentual_vitorias(dados_confrontos, id_time_a)
-            win_rate_b = calcular_percentual_vitorias(dados_confrontos, id_time_b)
-            
-            c1, c2 = st.columns(2)
-            with c1:
-                st.metric(label=f"Vitórias do {nome_time_a} no H2H", value=f"{win_rate_a}%")
-            with c2:
-                st.metric(label=f"Vitórias do {nome_time_b} no H2H", value=f"{win_rate_b}%")
-                
-            st.write(f"Total de partidas computadas no histórico da API: {len(dados_confrontos)}")
+            ultimo_jogo = confrontos[0]  # Pega o confronto mais recente da lista
+            data_jogo = ultimo_jogo["fixture"]["date"][:10]
+            placar_home = ultimo_jogo["goals"]["home"]
+            placar_away = ultimo_jogo["goals"]["away"]
+            st.info(f"Último confronto registrado ({data_jogo}): {ultimo_jogo['teams']['home']['name']} {placar_home} x {placar_away} {ultimo_jogo['teams']['away']['name']}")
         else:
-            st.warning("Nenhum confronto direto recente registrado na API para estes dois clubes nesta competição.")
+            st.warning("Nenhum histórico de confronto direto recente encontrado para estes dois clubes nesta liga.")
     else:
-        st.error("Por favor, selecione dois clubes diferentes para realizar a comparação.")
+        st.error("Por favor, selecione dois clubes diferentes para realizar a análise.")
 else:
-    st.info("Aguardando a definição do confronto e o clique em 'Gerar MyPredict' para iniciar o download de estatísticas.")
+    st.info("Defina a liga, os times e clique em 'Gerar MyPredict'.")
 
 
-# ESPAÇAMENTO LIMPO ENTRE MÓDULOS PRINCIPAIS
+# Espaçamento limpo entre módulos
 st.write("")
 st.divider()
 st.write("")
 
 
 # ---------------------------------------------------------------------
-# [MÓDULO 4] MONITORAMENTO DIÁRIO DE CONSUMO (CONTA FREE)
+# [MÓDULO 4] MONITORAMENTO DIÁRIO
 # ---------------------------------------------------------------------
 st.subheader("📊 Painel de Controle de Requisições")
-
-col1, col2 = st.columns(2)
-with col1:
-    st.metric(label="Ações Efetuadas Hoje", value=st.session_state["contador_acoes"])
-
-with col2:
-    limite_free = 100
-    restantes = max(0, limite_free - st.session_state["contador_acoes"])
-    st.metric(label="Créditos Restantes Garantidos", value=restantes)
+st.metric(label="Ações Efetuadas Hoje", value=st.session_state["contador_acoes"])
