@@ -5,12 +5,12 @@ st.set_page_config(page_title="Predições de Futebol", page_icon="⚽", layout=
 st.title("📊 Análise de Dados Históricos - Open Data")
 st.subheader("Extração de Estatísticas para Modelos de Predição")
 
-# URLs dos arquivos CSV consolidados das ligas (Temporada atual)
+# Links oficiais e estáveis da Temporada 24/25 do Football-Data.co.uk
 LIGAS_CSV = {
-    "Premier League (Inglaterra)": "https://football-data.co.uk",
-    "La Liga (Espanha)": "https://football-data.co.uk",
-    "Serie A (Itália)": "https://football-data.co.uk",
-    "Bundesliga (Alemanha)": "https://football-data.co.uk"
+    "Premier League (Inglaterra) 24/25": "https://football-data.co.uk",
+    "La Liga (Espanha) 24/25": "https://football-data.co.uk",
+    "Serie A (Itália) 24/25": "https://football-data.co.uk",
+    "Bundesliga (Alemanha) 24/25": "https://football-data.co.uk"
 }
 
 liga_selecionada = st.selectbox("Selecione a Competição para Analisar:", list(LIGAS_CSV.keys()))
@@ -18,32 +18,37 @@ liga_selecionada = st.selectbox("Selecione a Competição para Analisar:", list(
 @st.cache_data(ttl=3600)
 def carregar_dados_abertos(url):
     try:
-        # Carrega o CSV direto da fonte pública via Pandas
+        # Carrega o CSV direto da URL pública usando tratamento nativo do Pandas
         df = pd.read_csv(url)
         
-        # Seleciona apenas as colunas principais de interesse para predições
-        # HomeTeam = Mandante, AwayTeam = Visitante, FTHG = Gols Mandante, FTAG = Gols Visitante, FTR = Resultado Final
+        # Filtra as colunas principais para o seu modelo de previsão
         colunas_uteis = ['Date', 'HomeTeam', 'AwayTeam', 'FTHG', 'FTAG', 'FTR', 'HS', 'AS', 'HST', 'AST']
+        df_filtrado = df[[col for col in colunas_uteis if col in df.columns]].dropna()
         
-        # Filtra o DataFrame caso as colunas existam no arquivo
-        df_filtrado = df[[col1 for col1 in colunas_uteis if col1 in df.columns]]
         return df_filtrado
     except Exception as e:
-        st.error(f"Erro ao carregar base de dados: {e}")
+        st.error(f"Erro ao ler o arquivo CSV: {e}")
         return None
 
-with st.spinner("Carregando histórico de partidas do servidor público..."):
+with st.spinner("Carregando banco de dados de partidas..."):
     df_partidas = carregar_dados_abertos(LIGAS_CSV[liga_selecionada])
 
-if df_partidas is not None:
-    st.success(f"Histórico de {liga_selecionada} carregado com sucesso!")
+if df_partidas is not None and not df_partidas.empty:
+    st.success(f"Base de dados da {liga_selecionada} carregada com sucesso!")
     
-    # Exibe o histórico de todos os jogos ocorridos na temporada
-    st.markdown("### 🗓️ Histórico de Partidas Realizadas")
+    # Exibe a tabela interativa limpa
     st.dataframe(df_partidas, use_container_width=True)
     
-    # Gera uma tabela de classificação dinâmica baseada nos resultados calculados
-    st.markdown("### 🏆 Significado das principais colunas para seu modelo:")
-    st.write("- **FTHG / FTAG**: Gols do Mandante / Gols do Visitante")
-    st.write("- **HS / AS**: Chutes do Mandante / Chutes do Visitante")
-    st.write("- **HST / AST**: Chutes no Alvo do Mandante / Chutes no Alvo do Visitante")
+    # Informações auxiliares das colunas para modelagem
+    st.markdown("### 🏆 Guia de Métricas Avançadas Carregadas:")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric(label="Total de Jogos Processados", value=len(df_partidas))
+    with col2:
+        st.write("**FTHG / FTAG**: Gols do Mandante / Visitante")
+        st.write("**FTR**: Resultado (H=Mandante, A=Visitante, D=Empate)")
+    with col3:
+        st.write("**HS / AS**: Chutes do Mandante / Visitante")
+        st.write("**HST / AST**: Chutes no Alvo do Mandante / Visitante")
+else:
+    st.warning("Nenhum dado pôde ser extraído deste campeonato.")
