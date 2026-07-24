@@ -116,4 +116,4 @@ if termo_busca:
                 
         except Exception as e:
             st.error(f"❌ Falha física de conexão com a API: {e}")
- conexão falhou. Verifique se o seu token está ativo ou se o limite por minuto foi excedido.")
+            conexão falhou. Verifique se o seu token está ativo ou se o limite por minuto foi excedido.")
