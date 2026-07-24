@@ -6,7 +6,7 @@ st.set_page_config(page_title="MyPredict", page_icon="⚽", layout="wide")
 st.title("🏆 MyPredict: DataScout")
 st.subheader("Análise Estatística Avançada para Previsões")
 
-# 1. Puxa a chave segura do Streamlit
+# 1. Recupera a chave de segurança salva no st.secrets
 api_key = st.secrets["MINHA_API_KEY"]
 headers = {
     'x-apisports-key': api_key,
@@ -14,7 +14,7 @@ headers = {
     'Accept': '*/*'
 }
 
-# Dicionário com os IDs das ligas na API-Sports
+# Dicionário mapeando os IDs oficiais das competições na API-Sports
 LIGAS = {
     "Brasileirão Série A": 71,
     "Premier League (Inglaterra)": 39,
@@ -25,11 +25,12 @@ LIGAS = {
 liga_selecionada = st.selectbox("Selecione a Competição:", list(LIGAS.keys()))
 id_liga = LIGAS[liga_selecionada]
 
-# Ajuste automático de temporada para o ano corrente (2026)
+# Temporada atual de referência para busca de dados
 ano_temporada = 2026
 
-@st.cache_data(ttl=600)  # Evita gastar seus créditos a cada clique
+@st.cache_data(ttl=600)  # Guarda os dados na memória por 10 minutos para economizar requisições
 def buscar_classificacao(league_id, season):
+    # URL formatada corretamente com o '?' separando os parâmetros de busca
     url = f"https://api-sports.io{league_id}&season={season}"
     try:
         response = requests.get(url, headers=headers)
@@ -37,7 +38,7 @@ def buscar_classificacao(league_id, season):
             return response.json().get("response", [])
         return None
     except Exception as e:
-        st.error(f"Erro de conexão: {e}")
+        st.error(f"Erro de conexão com o servidor da API: {e}")
         return None
 
 with st.spinner("Buscando dados atualizados da API..."):
@@ -45,13 +46,14 @@ with st.spinner("Buscando dados atualizados da API..."):
 
 if dados:
     try:
-        # A API retorna uma lista. Pegamos o primeiro item dela.
+        # CORREÇÃO 1: 'dados' é uma lista, então pegamos o índice [0] para acessar o dicionário
         liga_data = dados[0]["league"]
-        # Dentro de standings, os dados ficam na primeira posição da lista interna
-        tabela = liga_data["standings"][0]
+        
+        # CORREÇÃO 2: 'standings' é uma lista de listas. O índice [0] isola a tabela de pontos corridos
+        tabela_real = liga_data["standings"][0]
         
         lista_times = []
-        for item in tabela:
+        for item in tabela_real:
             lista_times.append({
                 "Posição": item["rank"],
                 "Clube": item["team"]["name"],
@@ -65,13 +67,14 @@ if dados:
                 "Forma": item.get("form", "-")
             })
             
+        # Transforma a lista de dicionários estruturada em uma tabela de dados do Pandas
         df = pd.DataFrame(lista_times)
         
         st.success(f"Dados do {liga_selecionada} carregados com sucesso!")
-        # Exibe a tabela interativa lindamente na tela do celular ou Xbox
+        # Renderiza a planilha final de forma interativa e adaptada à largura da tela
         st.dataframe(df, use_container_width=True, hide_index=True)
         
     except Exception as e:
-        st.error(f"Erro ao processar os dados: {e}. Pode ser que a temporada {ano_temporada} ainda não tenha dados gerados para esta liga.")
+        st.error(f"Erro ao processar a resposta do servidor: {e}. Certifique-se de que a temporada {ano_temporada} possui dados ativos para esta competição.")
 else:
-    st.error("Não foi possível carregar os dados. Verifique suas credenciais nos segredos do Streamlit.")
+    st.error("Não foi possível carregar os dados. Verifique os logs do console ou suas credenciais nos segredos do Streamlit.")
