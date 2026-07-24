@@ -2,84 +2,69 @@ import streamlit as st
 import requests
 import pandas as pd
 
-st.set_page_config(page_title="MyPredict", page_icon="⚽", layout="wide")
-st.title("🏆 MyPredict: DataScout")
-st.subheader("Análise Estatística Avançada para Previsões")
+# 1. Configuração de autenticação e segurança
+# Guarde suas chaves no arquivo .streamlit/secrets.toml para produção
+API_KEY = st.secrets.get("api_football_key", "SUA_CHAVE_AQUI")
+API_HOST = "v3.football.api-sports.io"
 
-# 1. Recupera a chave de segurança salva no st.secrets
-api_key = st.secrets["MINHA_API_KEY"]
-headers = {
-    'x-apisports-key': api_key,
-    'User-Agent': 'Mozilla/5.0',
-    'Accept': '*/*'
-}
-
-# Dicionário mapeando os IDs oficiais das competições na API-Sports
-LIGAS = {
-    "Brasileirão Série A": 71,
-    "Premier League (Inglaterra)": 39,
-    "La Liga (Espanha)": 140,
-    "Champions League": 2
-}
-
-liga_selecionada = st.selectbox("Selecione a Competição:", list(LIGAS.keys()))
-id_liga = LIGAS[liga_selecionada]
-
-# Temporada atual de referência para busca de dados
-ano_temporada = 2026
-
-@st.cache_data(ttl=600)
-def buscar_classificacao(league_id, season):
-    # Mudamos aqui! A URL base fica limpa e fixa
-    url = "https://api-sports.io"
-    
-    # O próprio Python vai juntar esses parâmetros na URL com as barras e os '?' corretos
-    parametros = {
-        "league": league_id,
-        "season": season
+# 2. Função de busca com cache (essencial para economizar sua cota da API)
+@st.cache_data(ttl=3600)  # Guarda o resultado em cache por 1 hora (3600 segundos)
+def buscar_dados_futebol(endpoint, params=None):
+    url = f"https://{API_HOST}/{endpoint}"
+    headers = {
+        "x-rapidapi-key": API_KEY,
+        "x-rapidapi-host": API_HOST
     }
     
     try:
-        response = requests.get(url, headers=headers, params=parametros)
-        if response.status_code == 200:
-            return response.json().get("response", [])
-        return None
-    except Exception as e:
-        st.error(f"Erro de conexão com o servidor da API: {e}")
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Erro ao conectar com a API-Football: {e}")
         return None
 
-with st.spinner("Buscando dados atualizados da API..."):
-    dados = buscar_classificacao(id_liga, ano_temporada)
+# 3. Interface no Streamlit
+st.title("⚽ Dashboard API-Football")
 
-if dados:
-    try:
-        # Acessa o primeiro item da lista de resposta da API
-        liga_data = dados[0]["league"]
+# Campo para o usuário digitar o ID do campeonato (Ex: 71 para o Brasileirão)
+league_id = st.number_input("Digite o ID da Liga:", min_value=1, value=71)
+season = st.number_input("Digite o Ano da Temporada (Ano atual ou anterior):", min_value=2010, max_value=2026, value=2026)
+
+if st.button("Buscar Classificação"):
+    with st.spinner("Acessando dados da API..."):
+        # Endpoint de classificação (standings)
+        endpoint = "standings"
+        parametros = {"league": league_id, "season": season}
         
-        # Isola a tabela real de times
-        tabela_real = liga_data["standings"][0]
+        dados = buscar_dados_futebol(endpoint, params=parametros)
         
-        lista_times = []
-        for item in tabela_real:
-            lista_times.append({
-                "Posição": item["rank"],
-                "Clube": item["team"]["name"],
-                "Pontos": item["points"],
-                "Jogos": item["all"]["played"],
-                "Vitórias": item["all"]["win"],
-                "Empates": item["all"]["draw"],
-                "Derrotas": item["all"]["lose"],
-                "Gols Pró": item["all"]["goals"]["for"],
-                "Gols Contra": item["all"]["goals"]["against"],
-                "Forma": item.get("form", "-")
-            })
+        if dados and "response" in dados and dados["response"]:
+            st.success("Dados carregados!")
             
-        df = pd.DataFrame(lista_times)
-        
-        st.success(f"Dados do {liga_selecionada} carregados com sucesso!")
-        st.dataframe(df, use_container_width=True, hide_index=True)
-        
-    except Exception as e:
-        st.error(f"Erro ao processar a resposta do servidor: {e}.")
-else:
-    st.error("Não foi possível carregar os dados. Verifique sua credencial ou se o plano está ativo.")
+            # Estruturando os dados retornados em um DataFrame para exibição amigável
+            try:
+                liga_info = dados["response"][0]["league"]
+                st.subheader(f"Tabela de: {liga_info['name']} - {liga_info['country']}")
+                
+                tabela_dados = liga_info["standings"][0]
+                
+                # Criando uma lista limpa para o Pandas DataFrame
+                lista_times = []
+                for item in tabela_dados:
+                    lista_times.append({
+                        "Posição": item["rank"],
+                        "Time": item["team"]["name"],
+                        "Pontos": item["points"],
+                        "Jogos": item["all"]["played"],
+                        "Vitórias": item["all"]["win"],
+                        "Saldos de Gols": item["goalsDiff"]
+                    })
+                
+                df = pd.DataFrame(lista_times).set_index("Posição")
+                st.dataframe(df, use_container_width=True) # Exibe como tabela interativa
+                
+            except (KeyError, IndexError):
+                st.warning("Formato de resposta inesperado ou liga sem classificação disponível.")
+        else:
+            st.error("Nenhum dado encontrado para os parâmetros informados.")
