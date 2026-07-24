@@ -20,7 +20,9 @@ HEADERS = {
 
 # --- FUNÇÃO HELPER PARA REQUISIÇÕES (Regra 5) ---
 def fazer_requisicao(endpoint, params=None):
-    url = f"{BASE_URL}{endpoint}"
+# Garante a barra correta entre a URL base e o endpoint
+    url = f"{BASE_URL.rstrip('/')}/{endpoint.lstrip('/')}"
+
     try:
         response = requests.get(url, headers=HEADERS, params=params)
         response.raise_for_status()
