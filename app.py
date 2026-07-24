@@ -1,50 +1,51 @@
 import streamlit as st
 import requests
 
-st.set_page_config(page_title="MyPredicts", page_icon="🎲")
-st.title("🎲 MyPredicts - Diagnóstico de Chaves")
+st.title("⚽ Painel de Futebol - API-Football")
 
-API_FOOTBALL = st.secrets["MINHA_API_KEY"]
-API_FOOTYSTATS = st.secrets["API_FOOTYSTATS"]
+# 1. Puxa a sua chave de forma segura dos Secrets do Streamlit
+try:
+    API_KEY = st.secrets["MINHA_API_KEY"]
+except Exception:
+    st.error("Erro: A variável 'MINHA_API_KEY' não foi configurada nos Secrets do Streamlit.")
+    st.stop()
 
-# ==========================================
-# TESTE 1: API-FOOTBALL (Modo Direto / API-Sports)
-# ==========================================
-st.subheader("1. Teste API-Football")
+# 2. Configura os parâmetros de acesso da API-Football
+# Usando a URL v3 oficial do serviço
+API_URL = "https://api-sports.io"
 
-url_football = "https://api-sports.io"
-# Tentativa usando o cabeçalho nativo da API-Sports
-headers_football = {
-    'x-apisports-key': API_FOOTBALL
+# O cabeçalho PRECISA ser exatamente 'x-apisports-key' para este site
+headers = {
+    "x-apisports-key": API_KEY,
+    "Accept": "application/json"
 }
 
-try:
-    req_fb = requests.get(url_football, headers=headers_football)
-    if req_fb.status_code == 200:
-        st.success("API-Football Conectada!")
-        st.json(req_fb.json())
-    else:
-        st.error(f"Erro 403: Verifique se sua chave é do plano correto da API-Sports ou se requer a URL do RapidAPI.")
-except Exception as e:
-    st.error(f"Erro: {e}")
+# 3. Interface do usuário
+st.write("Clique no botão abaixo para testar a conexão e listar as ligas disponíveis.")
 
-st.divider()
-
-# ==========================================
-# TESTE 2: FOOTYSTATS (Endpoint permitido no plano inicial)
-# ==========================================
-st.subheader("2. Teste FootyStats")
-
-# Mudamos para o endpoint de ligas selecionadas, mais aceito em planos iniciais
-url_footystats = "https://footystats.org"
-parametros_footystats = {"key": API_FOOTYSTATS}
-
-try:
-    req_fs = requests.get(url_footystats, params=parametros_footystats)
-    if req_fs.status_code == 200:
-        st.success("FootyStats Conectada!")
-        st.json(req_fs.json())
-    else:
-        st.error(f"Erro 403: Sua chave FootyStats não tem permissão para este plano/recurso.")
-except Exception as e:
-    st.error(f"Erro: {e}")
+if st.button("Carregar Ligas de Futebol"):
+    with st.spinner("Buscando dados no servidor da API-Football..."):
+        try:
+            # Faz a chamada HTTP de forma segura
+            response = requests.get(API_URL, headers=headers, timeout=10)
+            response.raise_for_status()
+            
+            dados = response.json()
+            
+            # Verifica se o servidor retornou algum erro interno de API (ex: chave errada)
+            if dados.get("errors"):
+                st.error(f"A API retornou um erro: {dados['errors']}")
+            else:
+                st.success("Conexão efetuada com sucesso!")
+                
+                # Exibe a quantidade de ligas encontradas
+                total_ligas = len(dados.get("response", []))
+                st.metric(label="Total de Ligas Disponíveis", value=total_ligas)
+                
+                # Mostra o JSON bruto estruturado na tela
+                st.json(dados)
+                
+        except requests.exceptions.HTTPError as e:
+            st.error(f"Erro de comunicação HTTP: {e}")
+        except requests.exceptions.RequestException:
+            st.error("Não foi possível conectar aos servidores da API-Football. Verifique sua conexão.")
