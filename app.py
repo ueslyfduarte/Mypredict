@@ -10,7 +10,8 @@ st.set_page_config(page_title="MyPredicts", layout="wide")
 # ---------------------------------------------------------------------
 if "MINHA_API_KEY" in st.secrets:
     HEADERS = {
-        'x-apisports-key': st.secrets["MINHA_API_KEY"]
+        'x-apisports-key': st.secrets["MINHA_API_KEY"],
+        'x-rapidapi-host': 'v3.football.api-sports.io'
     }
 else:
     st.error("⚠️ ERRO CRÍTICO: Configure a tag 'MINHA_API_KEY' no painel do Streamlit.")
@@ -35,51 +36,120 @@ def registrar_acao():
 
 
 # ---------------------------------------------------------------------
+# [MÓDULO RESTRITO - PARTE 1] FUNÇÕES DE CONEXÃO DIRETA DA API
+# ---------------------------------------------------------------------
+
+# IDs das principais ligas mundiais (Top 8 + Copas) para puxar de forma cirúrgica
+TOP_LIGAS_IDS = [71, 72, 39, 140, 135, 78, 61, 2, 13, 3] # Ex: Brasileirão, Premier League, UCL, Libertadores...
+
+@st.cache_data(ttl=86400)
+def api_buscar_leagues_direto():
+    """Gasta exatamente 1 requisição para trazer as configurações e temporadas das ligas no topo"""
+    try:
+        ids_string = ",".join(map(str, TOP_LIGAS_IDS))
+        url = f"{BASE_URL}/leagues"
+        response = requests.get(url, headers=HEADERS, params={"ids": ids_string}, timeout=12)
+        if response.status_code == 200:
+            return response.json().get("response", [])
+        return []
+    except:
+        return []
+
+@st.cache_data(ttl=86400)
+def api_buscar_times_por_liga(id_liga, ano_temporada):
+    """Busca a lista de clubes associada à liga e temporada escolhidas"""
+    try:
+        url = f"{BASE_URL}/teams"
+        response = requests.get(url, headers=HEADERS, params={"league": id_liga, "season": ano_temporada}, timeout=12)
+        if response.status_code == 200:
+            dados = response.json().get("response", [])
+            return dict(sorted({item["team"]["name"]: item["team"]["id"] for item in dados}.items()))
+        return {}
+    except:
+        return {}
+
+
+# ---------------------------------------------------------------------
 # [MÓDULO 2] INTERFACE DE ENTRADA (SELETORES E BOTÃO REAL NO TOPO)
 # ---------------------------------------------------------------------
 st.title("📊 MyPredicts")
 
-# Dicionários de estrutura real (Serão alimentados dinamicamente via API posteriormente)
-dict_ligas_reais = {}  # Formato futuro: {"Brasileirão Série A": {"id": 71, "seasons": [2026, 2025]}}
-dict_times_reais = {}  # Formato futuro: {"Botafogo": 124, "Flamengo": 127}
+# Dispara a busca automática e real direto no endpoint da API Football
+dados_api_leagues = api_buscar_leagues_direto()
 
-# 1. SELETOR DE COMPETIÇÃO (Formato rolar ou pesquisar)
-liga_selecionada = st.selectbox(
-    "🏆 Selecione a Competição:",
-    options=list(dict_ligas_reais.keys()) if dict_ligas_reais else ["Selecione uma Liga"],
-    index=0,
-    help="Digite o nome do campeonato para buscar na lista real da API."
-)
-
-# 2. SELETOR DE TEMPORADA (Atual ou Passada)
-temporada_selecionada = st.selectbox(
-    "📅 Selecione a Temporada:",
-    options=["2026", "2025"], # Será filtrado dinamicamente com base nas chaves da liga escolhida acima
-    index=0
-)
-
-# 3. SELEÇÃO EM CASCATA DOS TIMES (Mandante e Visitante)
-col_a, col_b = st.columns(2)
-
-with col_a:
-    time_a = st.selectbox(
-        "🏠 Selecione o Time A (Mandante):",
-        options=list(dict_times_reais.keys()) if dict_times_reais else ["Selecione o Mandante"],
+if dados_api_leagues:
+    # Mapeia dinamicamente os nomes das ligas com seus respectivos objetos de resposta da API
+    dict_ligas_reais = {f"{item['league']['name']} ({item['country']['name']})": item for item in dados_api_leagues}
+    lista_nomes_ligas = sorted(list(dict_ligas_reais.keys()))
+    
+    # 1. SELETOR DE COMPETIÇÃO (Formato rolar ou pesquisar)
+    nome_liga_selecionada = st.selectbox(
+        "🏆 Selecione a Competição:",
+        options=lista_nomes_ligas,
         index=0,
-        key="mandante_real"
+        help="Escolha ou pesquise o campeonato na lista real entregue pela API."
     )
+    
+    objeto_liga = dict_ligas_reais[nome_liga_selecionada]
+    id_liga_selecionada = objeto_liga["league"]["id"]
+    
+    # Processa as datas reais de início e fim fornecidas pela API para tratar calendários híbridos (Brasil vs Europa)
+    lista_seasons = objeto_liga.get("seasons", [])
+    opcoes_temporadas = {}
+    for s in lista_seasons:
+        ano_base = s["year"]
+        try:
+            data_inicio = datetime.strptime(s["start"], "%Y-%m-%d")
+            data_fim = datetime.strptime(s["end"], "%Y-%m-%d")
+            rotulo = f"{data_inicio.year}/{data_fim.year}" if data_inicio.year != data_fim.year else f"{ano_base}"
+        except:
+            rotulo = f"{ano_base}"
+        opcoes_temporadas[rotulo] = ano_base
 
-with col_b:
-    time_b = st.selectbox(
-        "🚌 Selecione o Time B (Visitante):",
-        options=list(dict_times_reais.keys()) if dict_times_reais else ["Selecione o Visitante"],
-        index=0,
-        key="visitante_real"
+    # Restringe a exibição estritamente às duas últimas (Atual e Passada)
+    lista_rotulos_ordenados = sorted(list(opcoes_temporadas.keys()), reverse=True)[:2]
+    
+    # 2. SELETOR DE TEMPORADA (Atual ou Passada)
+    temporada_rotulo_selecionado = st.selectbox(
+        "📅 Selecione a Temporada (Atual ou Passada):",
+        options=lista_rotulos_ordenados,
+        index=0
     )
-
-# 4. BOTÃO PRINCIPAL DE DISPARO DO CRUNCH DE DADOS
-st.write("")
-botao_gerar = st.button("🔥 Gerar MyPredict", use_container_width=True, on_click=registrar_acao)
+    ano_temporada_real = opcoes_temporadas[temporada_rotulo_selecionado]
+    
+    # 3. SELEÇÃO EM CASCATA DOS TIMES (Busca real baseada nas escolhas anteriores)
+    dict_times_reais = api_buscar_times_por_liga(id_liga_selecionada, ano_temporada_real)
+    
+    if dict_times_reais:
+        col_a, col_b = st.columns(2)
+        
+        with col_a:
+            time_a = st.selectbox(
+                "🏠 Selecione o Time A (Mandante):",
+                options=list(dict_times_reais.keys()),
+                index=0,
+                key="mandante_real"
+            )
+            id_time_a = dict_times_reais[time_a]
+            
+        with col_b:
+            time_b = st.selectbox(
+                "🚌 Selecione o Time B (Visitante):",
+                options=list(dict_times_reais.keys()),
+                index=0,
+                key="visitante_real"
+            )
+            id_time_b = dict_times_reais[time_b]
+            
+        # 4. BOTÃO PRINCIPAL DE DISPARO DO CRUNCH DE DADOS
+        st.write("")
+        botao_gerar = st.button("🔥 Gerar MyPredict", use_container_width=True, on_click=registrar_acao)
+    else:
+        st.warning("⚠️ Limite por minuto atingido ou nenhum clube listado para os parâmetros selecionados.")
+        botao_gerar = False
+else:
+    st.error("❌ Falha de conexão inicial com a API Football. Verifique se o seu token ('MINHA_API_KEY') está devidamente configurado.")
+    botao_gerar = False
 
 
 # ESPAÇAMENTO COMPACTO APENAS ENTRE OS MÓDULOS DO APLICATIVO
@@ -104,8 +174,10 @@ def calcular_probabilidades_confronto():
 st.subheader("📈 Análise de Desempenho e Predições")
 
 if botao_gerar:
-    # Este bloco executará as consultas reais de Head-to-Head (/fixtures/headtohead)
-    # e estatísticas dos clubes puxando as variáveis dos seletores do topo.
-    st.info("Estrutura disparada com sucesso. Pronto para receber os payloads de retorno da API Football.")
+    if id_time_a != id_time_b:
+        st.success(f"⚡ Estrutura do MyPredict disparada para: {time_a} x {time_b}")
+        # As chamadas reais de estatísticas e H2H usando os IDs 'id_time_a' e 'id_time_b' serão conectadas aqui.
+    else:
+        st.error("Erro: Selecione dois clubes diferentes para realizar a análise de confronto.")
 else:
     st.caption("Aguardando a definição do confronto e o clique em 'Gerar MyPredict'.")
