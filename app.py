@@ -3,14 +3,15 @@ import requests
 
 st.title("⚽ Teste de Conexão - API-Football")
 
-# 1. A chave é criada primeiro
+# 1. Puxa a chave dos Secrets
 try:
     API_KEY = st.secrets["MINHA_API_KEY"]
 except Exception:
     st.error("Erro: A variável 'MINHA_API_KEY' não foi encontrada nos Secrets do Streamlit.")
     st.stop()
 
-# 2. Agora os cabeçalhos usam a chave que já existe
+# 2. Configura os parâmetros com a URL completa do futebol
+# É obrigatório o subdomínio 'v3.football.'
 API_URL = "https://api-sports.io"
 
 headers = {
