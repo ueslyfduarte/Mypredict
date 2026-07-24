@@ -1,51 +1,42 @@
 import streamlit as st
 import requests
-from datetime import datetime
 
-st.title("⚽ Central de Jogos ao Vivo e do Dia")
+st.title("🎲 MyPredicts - Teste de Conexão")
 
-# 1. Conexão automática com os Secrets salvos no site
-API_KEY_FOOTBALL = st.secrets["MINHA_API_KEY"]
+# 1. Puxando as chaves diretamente da aba secreta do Streamlit
+API_FOOTBALL = st.secrets["MINHA_API_KEY"]
+API_FOOTYSTATS = st.secrets["API_FOOTYSTATS"]
 
-# 2. Função para buscar os jogos de hoje
-@st.cache_data(ttl=600)  # Atualiza os dados a cada 10 minutos
-def buscar_jogos_hoje():
-    hoje = datetime.today().strftime('%Y-%m-%d')
-    url = "https://api-sports.io"
-    
-    # Parâmetros para buscar os jogos da data atual
-    querystring = {"date": hoje}
-    
-    headers = {
-        'x-rapidapi-host': 'v3.football.api-sports.io',
-        'x-rapidapi-key': API_KEY_FOOTBALL
-    }
-    
-    resposta = requests.get(url, headers=headers, params=querystring)
-    return resposta.json().get("response", [])
+# 2. Teste de Conexão Externa 1: API-Football
+st.subheader("1. Conexão API-Football")
+url_football = "https://api-sports.io"
+headers_football = {
+    'x-rapidapi-host': 'v3.football.api-sports.io',
+    'x-rapidapi-key': API_FOOTBALL
+}
 
-# 3. Execução e exibição na tela
-lista_jogos = buscar_jogos_hoje()
+try:
+    req_fb = requests.get(url_football, headers=headers_football)
+    if req_fb.status_code == 200:
+        st.success("Conexão com API-Football estabelecida com sucesso!")
+        st.json(req_fb.json())
+    else:
+        st.error(f"Erro na API-Football. Status: {req_fb.status_code}")
+except Exception as e:
+    st.error(f"Falha ao conectar na API-Football: {e}")
 
-if not lista_jogos:
-    st.info("Nenhum jogo encontrado para a data de hoje.")
-else:
-    for jogo in lista_jogos:
-        liga = jogo['league']['name']
-        paiz = jogo['league']['country']
-        home = jogo['teams']['home']['name']
-        away = jogo['teams']['away']['name']
-        
-        # Placar (se já tiver começado ou terminado)
-        gols_home = jogo['goals']['home']
-        gols_away = jogo['goals']['away']
-        status = jogo['fixture']['status']['long']
-        
-        # Formatação visual simples
-        with st.container():
-            st.markdown(f"**{liga} ({paiz})** - *{status}*")
-            if gols_home is not None:
-                st.write(f"🏠 {home} **{gols_home}** x **{gols_away}** {away} 🚌")
-            else:
-                st.write(f"🏠 {home} x {away} 🚌")
-            st.divider()
+st.divider()
+
+# 3. Teste de Conexão Externa 2: FootyStats
+st.subheader("2. Conexão FootyStats")
+url_footystats = f"https://footystats.org{API_FOOTYSTATS}"
+
+try:
+    req_fs = requests.get(url_footystats)
+    if req_fs.status_code == 200:
+        st.success("Conexão com FootyStats estabelecida com sucesso!")
+        st.json(req_fs.json())
+    else:
+        st.error(f"Erro na FootyStats. Status: {req_fs.status_code}")
+except Exception as e:
+    st.error(f"Falha ao conectar na FootyStats: {e}")
