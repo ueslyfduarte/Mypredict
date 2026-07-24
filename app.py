@@ -1,58 +1,49 @@
 import streamlit as st
 import pandas as pd
-import cloudscraper
 
 st.set_page_config(page_title="Predições de Futebol", page_icon="⚽", layout="wide")
-st.title("📊 Análise de Dados Históricos - FBref")
-st.subheader("Extração de Estatísticas Avançadas sem API")
+st.title("📊 Análise de Dados Históricos - Open Data")
+st.subheader("Extração de Estatísticas para Modelos de Predição")
 
-# Mapeamento de URLs do FBref para as principais competições
-LIGAS = {
-    "Brasileirão Série A": "https://fbref.com",
-    "Premier League (Inglaterra)": "https://fbref.com",
-    "La Liga (Espanha)": "https://fbref.com",
-    "Champions League": "https://fbref.com"
+# URLs dos arquivos CSV consolidados das ligas (Temporada atual)
+LIGAS_CSV = {
+    "Premier League (Inglaterra)": "https://football-data.co.uk",
+    "La Liga (Espanha)": "https://football-data.co.uk",
+    "Serie A (Itália)": "https://football-data.co.uk",
+    "Bundesliga (Alemanha)": "https://football-data.co.uk"
 }
 
-liga_selecionada = st.selectbox("Selecione a Competição para Analisar:", list(LIGAS.keys()))
+liga_selecionada = st.selectbox("Selecione a Competição para Analisar:", list(LIGAS_CSV.keys()))
 
-@st.cache_data(ttl=3600)  # Guarda os dados por 1 hora para o app abrir instantaneamente
-def raspar_dados_fbref(url):
+@st.cache_data(ttl=3600)
+def carregar_dados_abertos(url):
     try:
-        # Cria o scraper que simula um navegador real para evitar bloqueios do Cloudflare
-        scraper = cloudscraper.create_scraper()
-        response = scraper.get(url)
+        # Carrega o CSV direto da fonte pública via Pandas
+        df = pd.read_csv(url)
         
-        if response.status_code == 200:
-            # O pandas lê as tabelas de dentro do código HTML capturado pelo cloudscraper
-            tabelas = pd.read_html(response.text)
-            
-            # A primeira tabela (índice 0) é a classificação geral do campeonato
-            df_classificacao = tabelas[0]
-            
-            # Remove colunas vazias ou de notas que o FBref costuma criar
-            if 'Notes' in df_classificacao.columns:
-                df_classificacao = df_classificacao.drop(columns=['Notes'])
-                
-            return df_classificacao
-        else:
-            st.error(f"O FBref rejeitou a conexão. Código de status: {response.status_code}")
-            return None
+        # Seleciona apenas as colunas principais de interesse para predições
+        # HomeTeam = Mandante, AwayTeam = Visitante, FTHG = Gols Mandante, FTAG = Gols Visitante, FTR = Resultado Final
+        colunas_uteis = ['Date', 'HomeTeam', 'AwayTeam', 'FTHG', 'FTAG', 'FTR', 'HS', 'AS', 'HST', 'AST']
+        
+        # Filtra o DataFrame caso as colunas existam no arquivo
+        df_filtrado = df[[col1 for col1 in colunas_uteis if col1 in df.columns]]
+        return df_filtrado
     except Exception as e:
-        st.error(f"Erro ao processar a raspagem: {e}")
+        st.error(f"Erro ao carregar base de dados: {e}")
         return None
 
-with st.spinner("Buscando tabelas de estatísticas avançadas direto do FBref..."):
-    df_classificacao = raspar_dados_fbref(LIGAS[liga_selecionada])
+with st.spinner("Carregando histórico de partidas do servidor público..."):
+    df_partidas = carregar_dados_abertos(LIGAS_CSV[liga_selecionada])
 
-if df_classificacao is not None:
-    st.success(f"Dados de {liga_selecionada} carregados com sucesso!")
+if df_partidas is not None:
+    st.success(f"Histórico de {liga_selecionada} carregado com sucesso!")
     
-    # Exibe a tabela interativa lindamente na tela do Streamlit
-    st.dataframe(df_classificacao, use_container_width=True)
+    # Exibe o histórico de todos os jogos ocorridos na temporada
+    st.markdown("### 🗓️ Histórico de Partidas Realizadas")
+    st.dataframe(df_partidas, use_container_width=True)
     
-    st.markdown("### 💡 Próximo Passo para o seu Modelo de Predição")
-    st.write(
-        "Agora que os dados estão estruturados no formato de tabela, você pode usar colunas como "
-        "Gols (G), Gols Sofridos (GS) ou o saldo de gols para iniciar análises matemáticas de probabilidade."
-    )
+    # Gera uma tabela de classificação dinâmica baseada nos resultados calculados
+    st.markdown("### 🏆 Significado das principais colunas para seu modelo:")
+    st.write("- **FTHG / FTAG**: Gols do Mandante / Gols do Visitante")
+    st.write("- **HS / AS**: Chutes do Mandante / Chutes do Visitante")
+    st.write("- **HST / AST**: Chutes no Alvo do Mandante / Chutes no Alvo do Visitante")
