@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 import io
+import re
 
 # =========================================================================
 # CONFIGURAÇÃO DA PÁGINA - TEMA PRETO E DOURADO
@@ -131,7 +132,7 @@ st.markdown("<div class='quote'>\"O futebol é a coisa mais importante entre as 
 # MENU LATERAL
 # =========================================================================
 st.sidebar.title("⚙️ Navegação")
-aba = st.sidebar.radio("", ["🧮 Simulador Manual", "📊 Backtesting Offline"])
+aba = st.sidebar.radio("", ["🧮 Simulador Manual", "🌐 Dados Automáticos (FBref)", "📊 Backtesting Offline"])
 
 # =========================================================================
 # FUNÇÕES AUXILIARES
@@ -490,7 +491,180 @@ if aba == "🧮 Simulador Manual":
             st.warning("🤝 Previsão: Empate")
 
 # =========================================================================
-# ABA BACKTESTING OFFLINE (CORRIGIDA COM LIMPEZA ROBUSTA)
+# ABA DADOS AUTOMÁTICOS VIA CSV DO FBREF
+# =========================================================================
+elif aba == "🌐 Dados Automáticos (FBref)":
+    st.header("🌐 Dados Automáticos – FBref (CSV direto)")
+    st.caption("Selecione o time. O sistema buscará as médias automaticamente via CSV (sem Cloudflare).")
+
+    # Mapeamento de times da Premier League 2024/25 para IDs do FBref
+    TIMES_PREMIER = {
+        "Arsenal": "18bb7c10",
+        "Aston Villa": "8602292d",
+        "Bournemouth": "4ba7cbea",
+        "Brentford": "cd051869",
+        "Brighton & Hove Albion": "d07537b9",
+        "Chelsea": "cff3d9bb",
+        "Crystal Palace": "47c64c55",
+        "Everton": "d3fd31cc",
+        "Fulham": "fd962109",
+        "Ipswich Town": "c5a5e62a",
+        "Leicester City": "a2d435b3",
+        "Liverpool": "822bd0ba",
+        "Manchester City": "b8fd03ef",
+        "Manchester United": "19538871",
+        "Newcastle United": "b2b47a98",
+        "Nottingham Forest": "e4a775cb",
+        "Southampton": "33c895d4",
+        "Tottenham Hotspur": "361ca564",
+        "West Ham United": "7c21e445",
+        "Wolverhampton Wanderers": "8cec06e1"
+    }
+
+    col1, col2 = st.columns(2)
+    with col1:
+        nome_a = st.selectbox("Time A (Mandante)", list(TIMES_PREMIER.keys()), key="ta_auto")
+    with col2:
+        nome_b = st.selectbox("Time B (Visitante)", list(TIMES_PREMIER.keys()), key="tb_auto")
+
+    if st.button("🔎 Buscar Dados Automáticos"):
+        id_a = TIMES_PREMIER.get(nome_a)
+        id_b = TIMES_PREMIER.get(nome_b)
+        if not id_a or not id_b:
+            st.error("ID do time não encontrado.")
+        else:
+            season = "2024-2025"
+            base_a = f"https://fbref.com/en/squads/{id_a}/{season}"
+            base_b = f"https://fbref.com/en/squads/{id_b}/{season}"
+            url_std_a = f"{base_a}/stats/{id_a}-{season}-Premier-League-Stats.csv"
+            url_shoot_a = f"{base_a}/shooting/{id_a}-{season}-Premier-League-Shooting.csv"
+            url_std_b = f"{base_b}/stats/{id_b}-{season}-Premier-League-Stats.csv"
+            url_shoot_b = f"{base_b}/shooting/{id_b}-{season}-Premier-League-Shooting.csv"
+
+            def baixar_medias(url_std, url_shoot):
+                try:
+                    df_std = pd.read_csv(url_std, header=1)
+                    df_shoot = pd.read_csv(url_shoot, header=1)
+                    jogos = df_std['MP'].max() if 'MP' in df_std.columns else 38
+                    medias = {}
+                    if 'Gls' in df_std.columns:
+                        medias['gols'] = df_std['Gls'].sum() / jogos
+                    if 'Sh' in df_std.columns:
+                        medias['chutes'] = df_std['Sh'].sum() / jogos
+                    if 'SoT' in df_std.columns:
+                        medias['chutes_gol'] = df_std['SoT'].sum() / jogos
+                    if 'xG' in df_shoot.columns:
+                        medias['xg'] = df_shoot['xG'].sum() / jogos
+                    elif 'xG' in df_std.columns:
+                        medias['xg'] = df_std['xG'].sum() / jogos
+                    return medias
+                except Exception as e:
+                    st.error(f"Erro ao baixar CSVs: {e}")
+                    return None
+
+            with st.spinner("Baixando dados do FBref..."):
+                med_a = baixar_medias(url_std_a, url_shoot_a)
+                med_b = baixar_medias(url_std_b, url_shoot_b)
+
+            if med_a and med_b:
+                st.session_state.fbref_data_a = med_a
+                st.session_state.fbref_data_b = med_b
+                st.session_state.fbref_nomes = (nome_a, nome_b)
+                st.success("Dados extraídos com sucesso!")
+            else:
+                st.error("Falha ao obter dados de um dos times.")
+
+    if 'fbref_data_a' in st.session_state and 'fbref_data_b' in st.session_state:
+        med_a = st.session_state.fbref_data_a
+        med_b = st.session_state.fbref_data_b
+        nome_a, nome_b = st.session_state.fbref_nomes
+        st.markdown("---")
+        st.subheader("📊 Dados Extraídos (médias por jogo)")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write(f"**{nome_a}**")
+            st.write(med_a)
+        with col2:
+            st.write(f"**{nome_b}**")
+            st.write(med_b)
+
+        with st.expander("🛡️ Completar dados defensivos (se necessário)"):
+            med_a['gols_sofridos'] = st.number_input(f"Gols Sofridos {nome_a}", 0.0, 10.0, 1.0, key="fa_gs")
+            med_a['chutes_sofridos'] = st.number_input(f"Chutes Sofridos {nome_a}", 0.0, 50.0, 10.0, key="fa_cs")
+            med_b['gols_sofridos'] = st.number_input(f"Gols Sofridos {nome_b}", 0.0, 10.0, 1.0, key="fb_gs")
+            med_b['chutes_sofridos'] = st.number_input(f"Chutes Sofridos {nome_b}", 0.0, 50.0, 10.0, key="fb_cs")
+
+        st.markdown("### 🧠 Fatores Psicológicos e Momento")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write(f"**{nome_a}**")
+            rod_a = st.number_input("Rodada A", 1, 38, 20, key="ra")
+            pos_a = st.slider("Posição A (0-100)", 0, 100, 60, key="pa")
+            org_a = st.slider("Orgulho A", 0, 30, 0, key="oa")
+        with col2:
+            st.write(f"**{nome_b}**")
+            rod_b = st.number_input("Rodada B", 1, 38, 20, key="rb")
+            pos_b = st.slider("Posição B (0-100)", 0, 100, 40, key="pb")
+            org_b = st.slider("Orgulho B", 0, 30, 0, key="ob")
+
+        if st.button("⚡ GERAR MYPREDICT (Automático)", use_container_width=True):
+            # Montar estatísticas
+            estatisticas_a = {k: v for k, v in med_a.items() if v is not None}
+            estatisticas_b = {k: v for k, v in med_b.items() if v is not None}
+            # Preencher valores padrão
+            estatisticas_a.setdefault('gols', 1.4)
+            estatisticas_a.setdefault('chutes', 12.0)
+            estatisticas_a.setdefault('chutes_gol', 4.5)
+            estatisticas_a.setdefault('xg', 1.4)
+            estatisticas_b.setdefault('gols', 1.4)
+            estatisticas_b.setdefault('chutes', 12.0)
+            estatisticas_b.setdefault('chutes_gol', 4.5)
+            estatisticas_b.setdefault('xg', 1.4)
+
+            # Médias da liga (referência)
+            medias_liga = {'gols': 1.4, 'chutes': 14.0, 'chutes_gol': 5.0, 'xg': 1.5,
+                           'gols_sofridos': 1.2, 'chutes_sofridos': 12.0}
+
+            def calc_overall_avancado(est, medias_liga):
+                fvo = normalizar_por_media(est.get('gols', 1.4), medias_liga['gols'])
+                fco = normalizar_por_media(est.get('chutes_gol', 4.5) / max(est.get('gols', 1.0), 0.1), medias_liga['chutes_gol'] / medias_liga['gols'])
+                ataque = (fvo * 0.6) + (fco * 0.4)
+                frd = normalizar_por_media(est.get('gols_sofridos', 1.2), medias_liga['gols_sofridos'], inverter=True)
+                defesa = frd
+                consistencia = 50.0  # simplificado
+                resistencia = 50.0
+                overall = (consistencia * 0.35) + (ataque * 0.25) + (defesa * 0.25) + (resistencia * 0.15)
+                return max(0.0, min(100.0, overall))
+
+            ovr_a = calc_overall_avancado(estatisticas_a, medias_liga)
+            ovr_b = calc_overall_avancado(estatisticas_b, medias_liga)
+            im_a, _, _, _, _ = calcular_im(50, 50, 50, 50, 50, 0, 50)
+            im_b, _, _, _, _ = calcular_im(50, 50, 50, 50, 50, 0, 50)
+            irc_a, _, _, _, _, _, _, _, _ = calcular_irc(rod_a, pos_a, "Média", org_a, 0, 0, 0, 0, 0)
+            irc_b, _, _, _, _, _, _, _, _ = calcular_irc(rod_b, pos_b, "Média", org_b, 0, 0, 0, 0, 0)
+            imp_a = calcular_imp(ovr_a, im_a, irc_a)
+            imp_b = calcular_imp(ovr_b, im_b, irc_b)
+            prob_a, prob_e, prob_b = calcular_probabilidades(imp_a, imp_b)
+
+            st.header("📊 Resultado MyPredict")
+            col1, col2, col3 = st.columns(3)
+            col1.metric(f"🏠 {nome_a}", f"{imp_a:.1f}", f"OVR: {ovr_a:.1f}")
+            col2.metric("⚖️ Diferença", f"{imp_a - imp_b:+.1f}")
+            col3.metric(f"🚌 {nome_b}", f"{imp_b:.1f}", f"OVR: {ovr_b:.1f}")
+            st.subheader("🎯 Probabilidades de Resultado")
+            c1, c2, c3 = st.columns(3)
+            c1.metric(f"Vitória {nome_a}", f"{prob_a:.1f}%")
+            c2.metric("Empate", f"{prob_e:.1f}%")
+            c3.metric(f"Vitória {nome_b}", f"{prob_b:.1f}%")
+            if prob_a > prob_b and prob_a > prob_e:
+                st.success(f"🏆 Previsão: Vitória do {nome_a}")
+            elif prob_b > prob_a and prob_b > prob_e:
+                st.success(f"🏆 Previsão: Vitória do {nome_b}")
+            else:
+                st.warning("🤝 Previsão: Empate")
+
+# =========================================================================
+# ABA BACKTESTING OFFLINE (FUNCIONAL)
 # =========================================================================
 elif aba == "📊 Backtesting Offline":
     st.header("📊 Backtesting Walk‑Forward – Leitura Robusta de CSV")
@@ -515,8 +689,7 @@ elif aba == "📊 Backtesting Offline":
                     # Limpeza agressiva dos nomes
                     for col in ['hometeam', 'awayteam']:
                         df[col] = df[col].astype(str).str.strip().str.replace('"', '').str.replace("'", '')
-                        # Remove qualquer caractere não alfanumérico no início/fim que possa ter restado
-                        df[col] = df[col].str.extract(r'([\w\s]+)')[0].str.strip()
+                        df[col] = df[col].str.replace(r'[^\w\s]', '', regex=True).str.strip()
 
                     st.success(f"CSV lido! {len(df)} jogos encontrados.")
                     st.write("**Exemplos de nomes limpos:**", df['hometeam'].head(3).tolist())
@@ -548,7 +721,7 @@ elif aba == "📊 Backtesting Offline":
                         escanteios_m = float(row['hc']) if 'hc' in df.columns and not pd.isna(row['hc']) else None
                         escanteios_v = float(row['ac']) if 'ac' in df.columns and not pd.isna(row['ac']) else None
 
-                        # Funções get_stats / update_stats
+                        # Funções get_stats / update_stats (idênticas)
                         def get_stats(time_name):
                             if time_name not in times_stats:
                                 return {
