@@ -4,18 +4,24 @@ import requests
 st.set_page_config(page_title="Analisador ImA por Confronto", layout="wide")
 
 # =========================================================================
-# MÓDULO 1: PONTE DE CONEXÃO COM A API (MANTENDO O TRATAMENTO DE TEXTO PURO)
+# MÓDULO 1: PONTE DE CONEXÃO COM A API (CORRIGIDA CONFORME ITEM 1 E 3)
 # =========================================================================
 @st.cache_data(ttl=3600)
 def buscar_dados_api(endpoint_url):
     try:
         API_KEY = st.secrets["API_SPORTS_KEY"]
-        headers = {'x-apisports-key': API_KEY}
+        
+        # Cabeçalhos estritos de autenticação e formato (Item 3)
+        headers = {
+            'x-apisports-key': API_KEY,
+            'Accept': 'application/json'
+        }
+        
         response = requests.get(endpoint_url, headers=headers)
         
-        # ITEM 9 ADAPTADO: Se a API não devolver código 200, captura o erro em texto puro
+        # ITEM 9: Verificação da resposta bruta
         if response.status_code != 200:
-            return {"sucesso": False, "erro": f"Erro HTTP {response.status_code}: {response.text}", "dados": []}
+            return {"sucesso": False, "erro": f"Erro HTTP {response.status_code}: {response.text[:200]}...", "dados": []}
             
         dados_brutos = response.json()
         
@@ -77,22 +83,22 @@ def calcular_ima_final(cc3, cc5, g3, g5, g10, tab_dinamica):
     return (sub_campo * 0.45) + (sub_geral * 0.35) + (tab_dinamica * 0.20)
 
 # =========================================================================
-# INTERFACE DE SELEÇÃO INTELIGENTE POR DATA RETROATIVA
+# INTERFACE DE SELEÇÃO: ITEM 1 E ITEM 11.a DO CHECKLIST
 # =========================================================================
 st.title("📈 Analisador Inteligente de Confrontos (ImA)")
 st.write("Selecione os filtros para carregar os confrontos históricos reais.")
 
-BASE_URL = "https://api-sports.io"
+# ITEM 1: Configuração estrita da URL Base homologada para desenvolvedores
+BASE_URL = "https://api-football.com"
 ID_LIGA = "39"
 
 col_temp, col_data = st.columns(2)
 with col_temp:
     temporada = st.selectbox("1º Passo: Temporada:", ["2023", "2022", "2024"])
 with col_data:
-    # Filtro por data específica para aliviar o peso da requisição na API
     data_consulta = st.text_input("2º Passo: Data do Jogo (YYYY-MM-DD):", value="2024-04-03")
 
-# Chamada leve filtrando liga, temporada e um dia específico de jogos
+# URL construída seguindo rigorosamente o Item 11.a do checklist
 url_fixtures_leves = f"{BASE_URL}/fixtures?league={ID_LIGA}&season={temporada}&date={data_consulta}"
 
 with st.spinner("Buscando partidas agendadas para esta data..."):
