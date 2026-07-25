@@ -92,16 +92,53 @@ def processar_aproveitamento_bloco(lista_jogos, id_time, limite_jogos, apenas_ma
     if jogos_contados == 0: return 50.0
     return (pontos_convertidos / (jogos_contados * 3)) * 100
 
-def calcular_ima_final(cc3, cc5, g3, g5, g10, tab_dinamica):
-    """ Equação ponderada exata do Passo 2 """
-    # 1. Bloco Condição de Campo (45%)
-    sub_campo = (cc3 * 0.65) + (cc5 * 0.35)
-    # 2. Bloco Geral (35%)
-    sub_geral = (g3 * 0.50) + (g5 * 0.35) + (g10 * 0.15)
-    # 3. Tabela Dinâmica (20%)
-    sub_tabela = tab_dinamica
-    
-    return (sub_campo * 0.45) + (sub_geral * 0.35) + (sub_tabela * 0.20)
+if st.button("🔍 Carregar ImA da Rodada"):
+    with st.spinner("Buscando jogos e processando histórico do ImA..."):
+        resposta_rodada = buscar_dados_api(url_rodada)
+        
+        # --- DIAGNÓSTICO DO CHECKLIST SE FALHAR ---
+        if not resposta_rodada["sucesso"]:
+            st.error("❌ Falha na comunicação com a API.")
+            st.json(resposta_rodada["erro"])
+        elif len(resposta_rodada["dados"]) == 0:
+            st.warning("⚠️ Resposta veio vazia ('response': []). O formato do nome da rodada na API pode estar diferente para este ano.")
+            # Vamos printar a URL que tentamos para checar o erro
+            st.code(f"URL tentada: {url_rodada}")
+        else:
+            # Se deu certo, ele roda os blocos abaixo
+            for partida in resposta_rodada["dados"]:
+                id_h, name_h = partida["teams"]["home"]["id"], partida["teams"]["home"]["name"]
+                id_a, name_a = partida["teams"]["away"]["id"], partida["teams"]["away"]["name"]
+                g_h_real, g_a_real = partida["goals"]["home"], partida["goals"]["away"]
+                
+                url_h_hist = f"{BASE_URL}/fixtures?team={id_h}&season={temporada}&last=10"
+                url_a_hist = f"{BASE_URL}/fixtures?team={id_a}&season={temporada}&last=10"
+                res_h = buscar_dados_api(url_h_hist)
+                res_a = buscar_dados_api(url_a_hist)
+                
+                if res_h["sucesso"] and res_a["sucesso"]:
+                    cc3_h = processar_aproveitamento_bloco(res_h["dados"], id_h, 3, apenas_mando=True, tipo_mando="home")
+                    cc5_h = processar_aproveitamento_bloco(res_h["dados"], id_h, 5, apenas_mando=True, tipo_mando="home")
+                    g3_h  = processar_aproveitamento_bloco(res_h["dados"], id_h, 3)
+                    g5_h  = processar_aproveitamento_bloco(res_h["dados"], id_h, 5)
+                    g10_h = processar_aproveitamento_bloco(res_h["dados"], id_h, 10)
+                    im_home = calcular_ima_final(cc3_h, cc5_h, g3_h, g5_h, g10_h, 60.0)
+                    
+                    cc3_a = processar_aproveitamento_bloco(res_a["dados"], id_a, 3, apenas_mando=True, tipo_mando="away")
+                    cc5_a = processar_aproveitamento_bloco(res_a["dados"], id_a, 5, apenas_mando=True, tipo_mando="away")
+                    g3_a  = processar_aproveitamento_bloco(res_a["dados"], id_a, 3)
+                    g5_a  = processar_aproveitamento_bloco(res_a["dados"], id_a, 5)
+                    g10_a = processar_aproveitamento_bloco(res_a["dados"], id_a, 10)
+                    im_away = calcular_ima_final(cc3_a, cc5_a, g3_a, g5_a, g10_a, 60.0)
+                    
+                    disparidade_ima = im_home - im_away
+                    
+                    with st.expander(f"🏟️ {name_h} vs {name_a} — Placar Real: {g_h_real} x {g_a_real}"):
+                        col1, col2, col3 = st.columns(3)
+                        with col1: st.metric(f"ImA {name_h}", f"{im_home:.1f}")
+                        with col2: st.metric("Disparidade ImA", f"{disparidade_ima:+.1f}")
+                        with col3: st.metric(f"ImA {name_a}", f"{im_away:.1f}")
+
 
 # =========================================================================
 # INTERFACE DE SELEÇÃO DA RODADA
