@@ -4,8 +4,9 @@ import requests
 st.set_page_config(page_title="Analisador ImA por Confronto", layout="wide")
 
 # =========================================================================
-# MÓDULO 1: PONTE DE CONEXÃO COM A API
+# MÓDULO 1: PONTE DE CONEXÃO COM A API (COM MEMÓRIA SALVA-COTAS)
 # =========================================================================
+@st.cache_data(ttl=3600)  # Memoriza os dados por 1 hora para economizar sua cota diária
 def buscar_dados_api(endpoint_url):
     try:
         API_KEY = st.secrets["API_SPORTS_KEY"]
@@ -13,6 +14,7 @@ def buscar_dados_api(endpoint_url):
         response = requests.get(endpoint_url, headers=headers)
         dados_brutos = response.json()
         
+        # Se a API retornou bloqueio por cota, exibe o aviso exato na tela (Item 9)
         if "errors" in dados_brutos and dados_brutos["errors"]:
             return {"sucesso": False, "erro": dados_brutos["errors"], "dados": []}
             
@@ -76,12 +78,11 @@ def calcular_ima_final(cc3, cc5, g3, g5, g10, tab_dinamica):
 st.title("📈 Analisador Inteligente de Confrontos (ImA)")
 st.write("Selecione a temporada para listar os confrontos e datas reais disponíveis.")
 
-BASE_URL = "https://v3.football.api-sports.io"
+BASE_URL = "https://api-sports.io"
 ID_LIGA = "39" # Premier League
 
 temporada = st.selectbox("1º Passo: Escolha a Temporada Histórica:", ["2023", "2022", "2024"])
 
-# Chamada automática para buscar TODAS as partidas do ano e alimentar o menu
 url_todas_fixtures = f"{BASE_URL}/fixtures?league={ID_LIGA}&season={temporada}"
 
 with st.spinner("Mapeando calendário e buscando datas dos jogos na API..."):
@@ -90,12 +91,11 @@ with st.spinner("Mapeando calendário e buscando datas dos jogos na API..."):
 if resposta_calendario["sucesso"] and resposta_calendario["dados"]:
     lista_jogos_brutos = resposta_calendario["dados"]
     
-    # Cria uma lista formatada em texto para o usuário escolher no menu do Streamlit
     opcoes_menu = []
     mapa_confrontos = {}
     
     for item in lista_jogos_brutos:
-        data_resumida = item["fixture"]["date"][:10] # Pega apenas YYYY-MM-DD
+        data_resumida = item["fixture"]["date"][:10]
         rodada_nome = item["fixture"]["round"]
         casa = item["teams"]["home"]["name"]
         fora = item["teams"]["away"]["name"]
@@ -104,9 +104,7 @@ if resposta_calendario["sucesso"] and resposta_calendario["dados"]:
         opcoes_menu.append(texto_opcao)
         mapa_confrontos[texto_opcao] = item
         
-    # Ordena as opções por data para facilitar a busca do usuário
     opcoes_menu.sort()
-    
     confronto_selecionado = st.selectbox("2º Passo: Selecione o Confronto Desejado:", options=opcoes_menu)
     
     if st.button("🚀 Calcular ImA Deste Confronto"):
@@ -127,7 +125,6 @@ if resposta_calendario["sucesso"] and resposta_calendario["dados"]:
             res_a = buscar_dados_api(url_a_hist)
             
             if res_h["sucesso"] and res_a["sucesso"]:
-                # Mandante
                 cc3_h = processar_aproveitamento_bloco(res_h["dados"], id_h, 3, apenas_mando=True, tipo_mando="home")
                 cc5_h = processar_aproveitamento_bloco(res_h["dados"], id_h, 5, apenas_mando=True, tipo_mando="home")
                 g3_h  = processar_aproveitamento_bloco(res_h["dados"], id_h, 3)
@@ -135,7 +132,6 @@ if resposta_calendario["sucesso"] and resposta_calendario["dados"]:
                 g10_h = processar_aproveitamento_bloco(res_h["dados"], id_h, 10)
                 im_home = calcular_ima_final(cc3_h, cc5_h, g3_h, g5_h, g10_h, 60.0)
                 
-                # Visitante
                 cc3_a = processar_aproveitamento_bloco(res_a["dados"], id_a, 3, apenas_mando=True, tipo_mando="away")
                 cc5_a = processar_aproveitamento_bloco(res_a["dados"], id_a, 5, apenas_mando=True, tipo_mando="away")
                 g3_a  = processar_aproveitamento_bloco(res_a["dados"], id_a, 3)
@@ -152,6 +148,11 @@ if resposta_calendario["sucesso"] and resposta_calendario["dados"]:
                 with col1: st.metric(f"ImA {name_h} (Mandante)", f"{im_home:.1f}")
                 with col2: st.metric("Disparidade ImA", f"{disparidade_ima:+.1f}")
                 with col3: st.metric(f"ImA {name_a} (Visitante)", f"{im_away:.1f}")
+            else:
+                st.error("Erro ao puxar o histórico dos times. Cota esgotada por minuto.")
 else:
-    st.error("Falha ao mapear o calendário da liga ou limite atingido. Verifique seus Secrets.")
+    st.error("Falha ao mapear o calendário da liga ou limite atingido.")
+    if not resposta_calendario["sucesso"]:
+        st.subheader("Resposta Bruta de Erro da API (Item 9):")
+        st.json(resposta_calendario["erro"])
 
