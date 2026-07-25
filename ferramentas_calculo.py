@@ -3,7 +3,7 @@
 # =========================================================================
 
 # -------------------------------------------------------------------------
-# 🏛️ PASSO 1: MÁQUINA DE CALCULAR OVERALL (Escala 0 a 100)
+# 🛠️ PASSO 1: MÁQUINA DE CALCULAR OVERALL (Escala 0 a 100)
 # -------------------------------------------------------------------------
 
 def calcular_fmp(prateleira_time, prateleira_rival):
@@ -53,7 +53,7 @@ def classificar_intervalo_fifa(nota):
 def calcular_pontos_retrovisor(mando, resultado, escalao_rival):
     """
     ⚖️ PASSO 3: RETROVISOR DE AJUSTE DE EMPATES (HISTÓRICO)
-    O empate assume valores ponderados de vitória (base de 3 pontos) conforme as prateleiras:
+    O empate assume valores ponderados de vitória (base de 3 pontos) conforme as prateleiras.
     """
     if resultado == "VITÓRIA": return 3.0
     if resultado == "DERROTA": return 0.0
@@ -65,7 +65,7 @@ def calcular_pontos_retrovisor(mando, resultado, escalao_rival):
         else:
             return 3.0 * 1.000  # Contra igual/inferior vale 100%
     else: # MANDANTE
-        if escalao_rival in ["Escalão A (Elite)", "Igual"]:
+        if escalao_rival == "Escalão A (Elite)":
             return 3.0 * 0.666  # Vale 66,6%
         elif escalao_rival == "Escalão B (Meio)":
             return 3.0 * 0.333  # Vale 33,3%
@@ -82,7 +82,7 @@ def calcular_im_final(cc3, cc5, geral_3, geral_5, geral_10, tabela_dinamica):
     Tabela Dinâmica (20%): Cruzamento de Posição Real vs Posição Recente
     """
     sub_campo = (cc3 * 0.65) + (cc5 * 0.35)
-    sub_geral = (geral_3 * 0.50) + (geral_5 * 0.35) + (geral_10 * 0.15)
+    sub_geral = (get_3 = geral_3 * 0.50) + (geral_5 * 0.35) + (geral_10 * 0.15)
     return (sub_campo * 0.45) + (sub_geral * 0.35) + (tabela_dinamica * 0.20)
 
 # -------------------------------------------------------------------------
@@ -90,13 +90,13 @@ def calcular_im_final(cc3, cc5, geral_3, geral_5, geral_10, tabela_dinamica):
 # -------------------------------------------------------------------------
 
 def calcular_fac(rodada):
-    """ 1. FAC (Fator de Altura da Competição): Modulador temporal obrigatório """
+    """ 1. FAC (Fator de Altura da Competição): Modulador temporal obrigatório baseado na rodada """
     if 1 <= rodada <= 10: return 0.30
     if 11 <= rodada <= 25: return 0.60
     if 26 <= rodada <= 33: return 0.85
     return 1.00  # Rodadas 34 a 38 (Impacto integral)
 
-def calcular_irc_final(rodada, nota_posicao, prospecção_elite, orgulho_ferido, revanche):
+def calcular_irc_final(rodada, nota_posicao, prospeccao_elite, orgulho_ferido, revanche):
     """
     🧠 Fórmula: Nota IRC = 50 + (Urgência Real + Orgulho Ferido + Revanche) × FAC
     Aplica Piso 0 e Teto 100 estritamente para evitar abusos de notas.
