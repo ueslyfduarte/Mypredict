@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import os
-import csv
 
 # Importação Integral das Fórmulas da sua Caixa de Ferramentas Externa
 from ferramentas_calculo import (
@@ -30,47 +29,49 @@ if modo_dados == "Planilha Local (.csv)":
         st.stop()
         
     try:
-        # PRÉ-PROCESSADOR DINÂMICO: Lê o arquivo limpando espaços e tabulações extras
-        linhas_limpas = []
-        with open(arquivo_csv, 'r', encoding='utf-8') as f:
-            for linha in f:
-                # Divide a linha considerando qualquer quantidade de espaços vazios ou tabs
-                partes = linha.strip().split()
-                if partes:
-                    linhas_limpas.append(partes)
-        
-        # Converte as linhas tratadas diretamente em um DataFrame organizado do Pandas
-        headers = linhas_limpas[0]
-        dados_corrigidos = linhas_limpas[1:]
-        df_jogos = pd.DataFrame(dados_corrigidos, columns=headers)
+        # CORREÇÃO DEFINITIVA (VÍRGULA): on_bad_lines='skip' ignora qualquer linha desalinhada e carrega o arquivo liso
+        df_jogos = pd.read_csv(arquivo_csv, sep=',', on_bad_lines='skip', engine='python')
         
         st.header("🗂️ Seleção de Confronto por Planilha")
         
-        # Monta as opções do menu usando os títulos em inglês do seu arquivo real
+        # Monta as opções do menu usando os títulos oficiais em inglês do Football-Data
         opcoes_menu = []
         for idx, r in df_jogos.iterrows():
-            texto = f"📅 {r['Date']} - {r['HomeTeam']} vs {r['AwayTeam']}"
-            opcoes_menu.append(texto)
+            # Evita erros se a linha contiver células em branco
+            if pd.notna(r.get('Date')) and pd.notna(r.get('HomeTeam')) and pd.notna(r.get('AwayTeam')):
+                texto = f"📅 {r['Date']} - {r['HomeTeam']} vs {r['AwayTeam']}"
+                opcoes_menu.append(texto)
+        
+        if not opcoes_menu:
+            st.warning("⚠️ Planilha carregada, mas nenhuma linha válida foi identificada.")
+            st.stop()
             
         jogo_sel = st.selectbox("Selecione o Jogo da Lista:", options=opcoes_menu)
         
-        # Separa os dados da linha selecionada
-        dados_partida = df_jogos[df_jogos.apply(lambda r: f"📅 {r['Date']} - {r['HomeTeam']} vs {r['AwayTeam']}" == jogo_sel, axis=1)].iloc[0]
+        # Separa os dados da linha selecionada de forma isolada
+        linha_filtrada = df_jogos[df_jogos.apply(lambda r: f"📅 {r.get('Date')} - {r.get('HomeTeam')} vs {r.get('AwayTeam')}" == jogo_sel if pd.notna(r.get('Date')) else False, axis=1)]
         
-        # Preenchimento Automático Baseado nas Colunas do Arquivo Real
+        if linha_filtrada.empty:
+            st.error("Erro ao isolar os dados do confronto selecionado.")
+            st.stop()
+            
+        dados_partida = linha_filtrada.iloc[0]
+        
+        # Preenchimento Automático Baseado nas Colunas Oficiais da Planilha Real
         time_m = dados_partida["HomeTeam"]
         time_v = dados_partida["AwayTeam"]
         gols_m_real = dados_partida.get("FTHG", "?") 
         gols_v_real = dados_partida.get("FTAG", "?") 
         rodada_atual = 6
         
-        # Definição das prateleiras baseadas nas equipes reais selecionadas
-        prat_m = "Elite" if time_m in ["Liverpool", "ManCity", "Arsenal", "ManUnited", "Chelsea", "Tottenham"] else "Meio"
-        prat_v = "Elite" if time_v in ["Liverpool", "ManCity", "Arsenal", "ManUnited", "Chelsea", "Tottenham"] else "Meio"
+        # Definição automática de prateleiras baseadas nas equipes selecionadas
+        grandes = ["Liverpool", "Man City", "Arsenal", "Man United", "Chelsea", "Tottenham"]
+        prat_m = "Elite" if time_m in grandes else "Meio"
+        prat_v = "Elite" if time_v in grandes else "Meio"
         ancora_m = "Escalão A (Elite)" if prat_m == "Elite" else "Escalão B (Meio)"
         ancora_v = "Escalão A (Elite)" if prat_v == "Elite" else "Escalão B (Meio)"
         
-        # Valores estruturais padrão de desenvolvimento para alimentar suas equações
+        # Valores estruturais padrão de desenvolvimento alimentando as equações
         fvo_m, fco_m, frd_m, fcd_m, fdm_m, ier_m = 80.0, 80.0, 80.0, 80.0, 80.0, 80.0
         fcd_r_m, egz_r_m, fri_r_m, fzc_r_m = 75.0, 75.0, 70.0, 70.0
         cc3_m, cc5_m, g3_m, g5_m, g10_m, tab_m = 75.0, 75.0, 75.0, 75.0, 75.0, 75.0
@@ -111,7 +112,7 @@ else:
 # =========================================================================
 # PROCESSAMENTO CENTRALIZADO (MOTOR MATEMÁTICO INTEGRAL)
 # =========================================================================
-# Conversão de tipos de dados para float garantindo precisão matemática
+# Garante que as variáveis numéricas sejam floats puros para as equações da Caixa de Ferramentas
 fvo_m, fco_m, frd_m, fcd_m = float(fvo_m), float(fco_m), float(frd_m), float(fcd_m)
 fdm_m, ier_m, fcd_r_m, egz_r_m = float(fdm_m), float(ier_m), float(fcd_r_m), float(egz_r_m)
 fri_r_m, fzc_r_m, cc3_m, cc5_m = float(fri_r_m), float(fzc_r_m), float(cc3_m), float(cc5_m)
@@ -122,7 +123,7 @@ fdm_v, ier_v, fcd_r_v, egz_r_v = float(fdm_v), float(ier_v), float(fcd_r_v), flo
 fri_r_v, fzc_r_v, cc3_v, cc5_v = float(fri_r_v), float(fzc_r_v), float(cc3_v), float(cc5_v)
 g3_v, g5_v, g10_v, tab_v = float(g3_v), float(g5_v), float(g10_v), float(tab_v)
 
-# Mandante
+# Execução das equações importadas
 atq_m = calcular_bloco_ataque(fvo_m, fco_m)
 def_m = calcular_bloco_defesa(frd_m, fcd_m)
 cons_m = calcular_bloco_consistencia(fdm_m, ier_m)
@@ -132,7 +133,6 @@ im_m = calcular_im_final(cc3_m, cc5_m, g3_m, g5_m, g10_m, tab_m)
 irc_m = calcular_irc_final(rodada_atual, int(pos_m), elite_m, int(org_m), int(rev_m))
 juncao_m = calcular_juncao_unificada(overall_m, im_m, irc_m)
 
-# Visitante
 atq_v = calcular_bloco_ataque(fvo_v, fco_v)
 def_v = calcular_bloco_defesa(frd_v, fcd_v)
 cons_v = calcular_bloco_consistencia(fdm_v, ier_v)
@@ -179,6 +179,4 @@ with col_res_v:
     st.metric("🔰 Nota Junção Visitante", f"{juncao_v:.2f} / 100")
     st.write(f"• **Overall Final (Passo 1):** {overall_v:.1f} ({classificar_intervalo_fifa(overall_v)})")
     st.write(f"• ⚔️ **Força de Ataque:** {atq_v:.1f} | 🛡️ **Defesa:** {def_v:.1f}")
-    st.write(f"• 📐 **Consistência Tática:** {cons_v:.1f} | 🥊 **Resistência:** {pres_v:.1f}")
-    st.write(f"• **Índice Momento (IM):** {im_v:.1f}")
-    st.write(f"• Índice Psicológico (IRC): {irc_v:.1f}")
+    st.write(f"• 📐 Consistência Tática: {cons_v:.1f} | 🥊 Resistência: {pres_v:.1f}")st.write(f"• Índice Momento (IM): {im_v:.1f}")st.write(f"• Índice Psicológico (IRC): {irc_v:.1f}")
