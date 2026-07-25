@@ -117,7 +117,7 @@ pres_v = calcular_bloco_resistencia_pressao(fcd_r_v, egz_r_v, fri_r_v, fzc_r_v)
 overall_v = calcular_overall_unificado(cons_v, atq_v, def_v, pres_v)
 im_v = calcular_im_final(cc3_v, cc5_v, g3_v, g5_v, g10_v, tab_v)
 irc_v = calcular_irc_final(rodada_atual, pos_v, elite_teorica_v, orgulho_v, 10 if revanche_v else 0)
-juncao_v = calcular_juncao_unificado(overall_v, im_v, irc_v)
+juncao_v = calcular_juncao_unificada(overall_v, im_v, irc_v)
 
 # Cálculo da Disparidade Crítica Final (Passo 4)
 disparidade_critica = juncao_m - juncao_v
