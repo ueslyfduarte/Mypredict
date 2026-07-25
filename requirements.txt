@@ -1,7 +1,5 @@
-numpy
-beautifulsoup4
-requests
-pandas
 streamlit
+pandas
+numpy
+requests
 cloudscraper
-phyton_dotenv
