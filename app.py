@@ -1,4 +1,4 @@
-import streamlit st
+import streamlit as st
 import pandas as pd
 import os
 
@@ -160,4 +160,4 @@ with col_res_v:
     st.write(f"• 📐 **Consistência Tática:** {cons_v:.1f} | 🥊 **Resistência:** {pres_v:.1f}")
     st.write(f"• **Índice Momento (IM):** {im_v:.1f}")
     st.write(f"• **Índice Psicológico (IRC):** {irc_v:.1f}")
- {irc_v:.1f}")
+
