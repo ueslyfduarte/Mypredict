@@ -33,7 +33,9 @@ if modo_dados == "Planilha Local (.csv)":
         st.info("📊 **Aguardando Planilha:** Crie o arquivo 'jogos_historicos.csv' no seu GitHub para rodar o modo local de graça.")
         st.stop()
         
-    df_jogos = pd.read_csv(arquivo_csv)
+    # CORREÇÃO AUTOMÁTICA DE SEPARADOR: Lê o arquivo mesmo que ele use espaços em vez de vírgulas
+df_jogos = pd.read_csv(arquivo_csv, sep=r'\s+', engine='python')
+
     
     st.header("🗂️ Seleção de Confronto por Planilha")
     c1, c2 = st.columns(2)
