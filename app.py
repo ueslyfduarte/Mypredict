@@ -4,19 +4,23 @@ import requests
 st.set_page_config(page_title="Analisador ImA por Confronto", layout="wide")
 
 # =========================================================================
-# MÓDULO 1: PONTE DE CONEXÃO COM A API (COM MEMÓRIA SALVA-COTAS)
+# MÓDULO 1: PONTE DE CONEXÃO COM A API (MANTENDO O TRATAMENTO DE TEXTO PURO)
 # =========================================================================
-@st.cache_data(ttl=3600)  # Memoriza os dados por 1 hora para economizar sua cota diária
+@st.cache_data(ttl=3600)
 def buscar_dados_api(endpoint_url):
     try:
         API_KEY = st.secrets["API_SPORTS_KEY"]
         headers = {'x-apisports-key': API_KEY}
         response = requests.get(endpoint_url, headers=headers)
+        
+        # ITEM 9 ADAPTADO: Se a API não devolver código 200, captura o erro em texto puro
+        if response.status_code != 200:
+            return {"sucesso": False, "erro": f"Erro HTTP {response.status_code}: {response.text}", "dados": []}
+            
         dados_brutos = response.json()
         
-        # Se a API retornou bloqueio por cota, exibe o aviso exato na tela (Item 9)
         if "errors" in dados_brutos and dados_brutos["errors"]:
-            return {"sucesso": False, "erro": dados_brutos["errors"], "dados": []}
+            return {"sucesso": False, "erro": str(dados_brutos["errors"]), "dados": []}
             
         return {"sucesso": True, "erro": None, "dados": dados_brutos.get("response", [])}
     except Exception as e:
@@ -32,7 +36,7 @@ def calcular_pontos_retrovisor(mando, resultado, prateleira_rival):
     if mando == "VISITANTE":
         if prateleira_rival == "Elite (Top 4)": return 3.0 * 0.666
         else: return 3.0 * 1.000
-    else: # MANDANTE
+    else:
         if prateleira_rival in ["Elite (Top 4)", "Igual"]: return 3.0 * 0.666
         elif prateleira_rival == "Meio de Tabela": return 3.0 * 0.333
         elif prateleira_rival == "Z-4": return 0.0
@@ -73,20 +77,26 @@ def calcular_ima_final(cc3, cc5, g3, g5, g10, tab_dinamica):
     return (sub_campo * 0.45) + (sub_geral * 0.35) + (tab_dinamica * 0.20)
 
 # =========================================================================
-# INTERFACE DE SELEÇÃO INTELIGENTE
+# INTERFACE DE SELEÇÃO INTELIGENTE POR DATA RETROATIVA
 # =========================================================================
 st.title("📈 Analisador Inteligente de Confrontos (ImA)")
-st.write("Selecione a temporada para listar os confrontos e datas reais disponíveis.")
+st.write("Selecione os filtros para carregar os confrontos históricos reais.")
 
 BASE_URL = "https://api-sports.io"
-ID_LIGA = "39" # Premier League
+ID_LIGA = "39"
 
-temporada = st.selectbox("1º Passo: Escolha a Temporada Histórica:", ["2023", "2022", "2024"])
+col_temp, col_data = st.columns(2)
+with col_temp:
+    temporada = st.selectbox("1º Passo: Temporada:", ["2023", "2022", "2024"])
+with col_data:
+    # Filtro por data específica para aliviar o peso da requisição na API
+    data_consulta = st.text_input("2º Passo: Data do Jogo (YYYY-MM-DD):", value="2024-04-03")
 
-url_todas_fixtures = f"{BASE_URL}/fixtures?league={ID_LIGA}&season={temporada}"
+# Chamada leve filtrando liga, temporada e um dia específico de jogos
+url_fixtures_leves = f"{BASE_URL}/fixtures?league={ID_LIGA}&season={temporada}&date={data_consulta}"
 
-with st.spinner("Mapeando calendário e buscando datas dos jogos na API..."):
-    resposta_calendario = buscar_dados_api(url_todas_fixtures)
+with st.spinner("Buscando partidas agendadas para esta data..."):
+    resposta_calendario = buscar_dados_api(url_fixtures_leves)
 
 if resposta_calendario["sucesso"] and resposta_calendario["dados"]:
     lista_jogos_brutos = resposta_calendario["dados"]
@@ -95,17 +105,15 @@ if resposta_calendario["sucesso"] and resposta_calendario["dados"]:
     mapa_confrontos = {}
     
     for item in lista_jogos_brutos:
-        data_resumida = item["fixture"]["date"][:10]
         rodada_nome = item["fixture"]["round"]
         casa = item["teams"]["home"]["name"]
         fora = item["teams"]["away"]["name"]
         
-        texto_opcao = f"📅 {data_resumida} - ({rodada_nome}) - {casa} vs {fora}"
+        texto_opcao = f"⚽ ({rodada_nome}) - {casa} vs {fora}"
         opcoes_menu.append(texto_opcao)
         mapa_confrontos[texto_opcao] = item
         
-    opcoes_menu.sort()
-    confronto_selecionado = st.selectbox("2º Passo: Selecione o Confronto Desejado:", options=opcoes_menu)
+    confronto_selecionado = st.selectbox("3º Passo: Selecione o Confronto Abaixo:", options=opcoes_menu)
     
     if st.button("🚀 Calcular ImA Deste Confronto"):
         jogo_escolhido = mapa_confrontos[confronto_selecionado]
@@ -149,10 +157,10 @@ if resposta_calendario["sucesso"] and resposta_calendario["dados"]:
                 with col2: st.metric("Disparidade ImA", f"{disparidade_ima:+.1f}")
                 with col3: st.metric(f"ImA {name_a} (Visitante)", f"{im_away:.1f}")
             else:
-                st.error("Erro ao puxar o histórico dos times. Cota esgotada por minuto.")
+                st.error("Erro ao puxar o histórico dos times.")
 else:
-    st.error("Falha ao mapear o calendário da liga ou limite atingido.")
+    st.error("Nenhum jogo localizado para esta combinação de data e temporada.")
     if not resposta_calendario["sucesso"]:
         st.subheader("Resposta Bruta de Erro da API (Item 9):")
-        st.json(resposta_calendario["erro"])
+        st.write(resposta_calendario["erro"])
 
