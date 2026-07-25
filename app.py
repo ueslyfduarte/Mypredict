@@ -15,25 +15,139 @@ st.set_page_config(
 )
 
 # =========================================================================
-# CSS CUSTOMIZADO
+# CSS CUSTOMIZADO - MODERNO E DESTACADO
 # =========================================================================
 st.markdown("""
 <style>
-    .stApp { background-color: #0a0a0a; color: #e0e0e0; }
-    section[data-testid="stSidebar"] { background-color: #111111; border-right: 2px solid #1e3a5f; }
-    section[data-testid="stSidebar"] * { color: #e0e0e0 !important; }
-    h1, h2, h3, h4, h5, h6 { color: #4da6ff !important; font-weight: 700; }
-    div[data-testid="stMetric"] { background-color: #1a1a1a; border: 1px solid #2a4a6f; border-radius: 10px; padding: 15px; color: #ffffff; }
-    div[data-testid="stMetric"] label { color: #4da6ff !important; }
-    div.stButton > button { background-color: #1e3a5f; color: white; border: 2px solid #4da6ff; border-radius: 8px; font-weight: bold; transition: 0.3s; }
-    div.stButton > button:hover { background-color: #2a4a6f; border-color: #80c1ff; }
-    .mypredict-btn { background: linear-gradient(135deg, #0a1a2f, #1e3a5f); color: white; border: 2px solid #4da6ff; border-radius: 10px; padding: 15px 40px; font-size: 20px; font-weight: bold; cursor: pointer; width: 100%; transition: 0.3s; margin: 20px 0; }
-    .mypredict-btn:hover { background: linear-gradient(135deg, #1e3a5f, #2a4a6f); border-color: #80c1ff; box-shadow: 0 0 20px rgba(77, 166, 255, 0.6); }
-    .welcome-card { background: linear-gradient(135deg, #0d2137, #1a1a2e); border: 1px solid #2a4a6f; border-radius: 15px; padding: 30px; margin: 20px 0; }
-    .quote { font-style: italic; color: #a0c4e8; font-size: 18px; border-left: 4px solid #4da6ff; padding-left: 20px; margin: 25px 0; }
-    .streamlit-expanderHeader { background-color: #1a1a1a; border: 1px solid #2a4a6f; border-radius: 8px; color: #4da6ff; }
-    .stTextInput>div>div>input, .stNumberInput>div>div>input { background-color: #1a1a1a; color: white; border: 1px solid #2a4a6f; }
-    .compare-box { background-color: #111; border: 1px solid #2a4a6f; border-radius: 10px; padding: 20px; margin: 10px 0; }
+    /* Fundo e tipografia */
+    .stApp { background-color: #0a0a0f; color: #e0e0e0; }
+    section[data-testid="stSidebar"] { background-color: #0d0d1a; border-right: 2px solid #1e3a5f; }
+    section[data-testid="stSidebar"] * { color: #c0d0f0 !important; }
+
+    /* Títulos */
+    h1, h2, h3 { color: #4da6ff !important; font-weight: 700; letter-spacing: 1px; }
+    h2 { border-bottom: 2px solid #2a4a6f; padding-bottom: 8px; }
+
+    /* Métricas - cards modernos */
+    div[data-testid="stMetric"] {
+        background: linear-gradient(135deg, #111122, #1a1a2e);
+        border: 1px solid #2a4a6f;
+        border-radius: 15px;
+        padding: 20px;
+        color: #ffffff;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        transition: 0.3s;
+    }
+    div[data-testid="stMetric"]:hover {
+        border-color: #4da6ff;
+        box-shadow: 0 6px 25px rgba(77,166,255,0.3);
+    }
+    div[data-testid="stMetric"] label { color: #80bfff !important; font-weight: 600; }
+
+    /* Botão MyPredict */
+    div.stButton > button {
+        background: linear-gradient(135deg, #1e3a5f, #0d2137);
+        color: white;
+        border: 2px solid #4da6ff;
+        border-radius: 12px;
+        font-weight: bold;
+        font-size: 18px;
+        padding: 12px 30px;
+        transition: 0.3s;
+        letter-spacing: 1px;
+    }
+    div.stButton > button:hover {
+        background: linear-gradient(135deg, #2a4a6f, #1e3a5f);
+        border-color: #80c1ff;
+        box-shadow: 0 0 25px rgba(77,166,255,0.7);
+        transform: scale(1.02);
+    }
+
+    /* Cartões de boas-vindas e frase */
+    .welcome-card {
+        background: linear-gradient(135deg, #0d2137, #141428);
+        border: 1px solid #2a4a6f;
+        border-radius: 15px;
+        padding: 30px;
+        margin: 20px 0;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+    }
+    .quote {
+        font-style: italic;
+        color: #a0c4e8;
+        font-size: 20px;
+        border-left: 5px solid #4da6ff;
+        padding-left: 25px;
+        margin: 30px 0;
+        background: rgba(77,166,255,0.05);
+        padding: 15px 25px;
+        border-radius: 0 10px 10px 0;
+    }
+
+    /* Expanders modernos */
+    .streamlit-expanderHeader {
+        background: linear-gradient(90deg, #1a1a2e, #111122);
+        border: 1px solid #2a4a6f;
+        border-radius: 10px;
+        color: #4da6ff;
+        font-weight: 600;
+    }
+    .streamlit-expanderHeader:hover {
+        border-color: #4da6ff;
+    }
+
+    /* Campos de input */
+    .stTextInput>div>div>input, .stNumberInput>div>div>input {
+        background-color: #1a1a2e;
+        color: white;
+        border: 1px solid #2a4a6f;
+        border-radius: 8px;
+    }
+
+    /* Dataframe customizado */
+    .stDataFrame {
+        background-color: #0d0d1a;
+        border: 1px solid #2a4a6f;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    .stDataFrame thead th {
+        background-color: #1e3a5f !important;
+        color: #ffffff !important;
+        font-weight: bold;
+    }
+    .stDataFrame tbody td {
+        background-color: #111122;
+        color: #e0e0e0;
+        border-bottom: 1px solid #2a2a4a;
+    }
+    .stDataFrame tbody tr:hover td {
+        background-color: #1a1a35 !important;
+    }
+
+    /* Banner de resultado */
+    .result-banner {
+        padding: 20px;
+        border-radius: 15px;
+        text-align: center;
+        font-size: 24px;
+        font-weight: bold;
+        margin: 20px 0;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.7);
+    }
+    .result-win { background: linear-gradient(135deg, #0a3d0a, #1a5c1a); border: 2px solid #4caf50; color: #a5d6a7; }
+    .result-draw { background: linear-gradient(135deg, #3d3500, #5c5200); border: 2px solid #ffc107; color: #ffe082; }
+    .result-loss { background: linear-gradient(135deg, #3d0a0a, #5c1a1a); border: 2px solid #f44336; color: #ef9a9a; }
+
+    /* Cartões de mercados */
+    .market-card {
+        background: linear-gradient(135deg, #111122, #1a1a2e);
+        border: 1px solid #2a4a6f;
+        border-radius: 10px;
+        padding: 15px;
+        margin: 8px 0;
+        text-align: center;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -240,9 +354,6 @@ def calcular_im(cc3, cc5, geral_3, geral_5, geral_10, bonus_zebra, tab_din):
 def calcular_irc(rodada, nota_posicao, prospeccao, orgulho_ferido, revanche,
                  sequencia, pressao_torcida, importancia, desfalques,
                  fatores_empiricos=None):
-    """
-    IRC turbinado com fatores empíricos (IF, FCF, VCD) se fornecidos.
-    """
     def fac(r):
         if r <= 10: return 0.30
         elif r <= 25: return 0.60
@@ -253,7 +364,6 @@ def calcular_irc(rodada, nota_posicao, prospeccao, orgulho_ferido, revanche,
     urgencia = nota_posicao + fpt
     fatores = urgencia + orgulho_ferido + revanche + sequencia + pressao_torcida + importancia + desfalques
 
-    # Adiciona fatores empíricos se existirem
     if fatores_empiricos:
         fatores += fatores_empiricos.get('if_val', 0)
         fatores += fatores_empiricos.get('fcf_val', 0)
@@ -311,7 +421,6 @@ elif aba == "🧮 Simulador Manual":
     with col2:
         nome_b = st.text_input("Nome Time B (Visitante)", "Vasco")
 
-    # Médias da Liga
     with st.expander("📊 Médias da Liga (Referência)", expanded=False):
         cols = st.columns(6)
         med_liga = {}
@@ -331,14 +440,11 @@ elif aba == "🧮 Simulador Manual":
 
     def criar_seletores_time(prefixo, nome_time, mando):
         st.subheader(f"📈 {nome_time} ({'Mandante' if mando == 'C' else 'Visitante'})")
-        
-        # Valores padrão seguros
         tab_din = 50.0
         nota_posicao = 50.0
         prospeccao = "Média"
-        aprov_5j = 50  # valor dummy, será atualizado
+        aprov_5j = 50
 
-        # ===== PAINEL INICIAL =====
         with st.expander("📋 Painel Inicial: Posicionamento e Prospecção", expanded=True):
             col_pos1, col_pos2 = st.columns(2)
             posicao_real = col_pos1.number_input("Posição Real na Tabela", 1, 20, 5, key=f"{prefixo}_pos_real")
@@ -349,12 +455,7 @@ elif aba == "🧮 Simulador Manual":
             nota_posicao = 100.0 - (posicao_real - 1) * (100.0 / 19.0)
             nota_posicao = max(0.0, min(100.0, nota_posicao))
             pos_momentanea = 21.0 - (aprov_5j / 100.0) * 20.0
-            if prospeccao in ["Elite Absoluta"]:
-                mult_prat = 1.6
-            elif prospeccao in ["Alta", "Média"]:
-                mult_prat = 1.0
-            else:
-                mult_prat = 0.0
+            mult_prat = 1.6 if prospeccao in ["Elite Absoluta"] else (1.0 if prospeccao in ["Alta", "Média"] else 0.0)
             tab_din = 50.0 + (posicao_real - pos_momentanea) * mult_prat
             tab_din = max(0.0, min(100.0, tab_din))
             st.caption(f"🔹 Nota Posição (IRC): {nota_posicao:.1f} | Tabela Dinâmica (IM): {tab_din:.1f}")
@@ -417,7 +518,6 @@ elif aba == "🧮 Simulador Manual":
                 estatisticas['gols_finais'] = cols[1].number_input("Nota", 0.0, 100.0, 70.0, key=f"{prefixo}_gols_fin_v")
                 p_res['gols_finais'] = 1.0
 
-        # ---- ESTATÍSTICAS DE MERCADOS ----
         with st.expander("📊 Estatísticas de Mercados (últimos 10 jogos)", expanded=False):
             st.caption("Insira o total de jogos considerados e a contagem de ocorrências.")
             n_jogos = st.number_input("Total de jogos (base)", 1, 50, 10, key=f"{prefixo}_n_jogos_mercado")
@@ -431,17 +531,12 @@ elif aba == "🧮 Simulador Manual":
             truncado = st.number_input("Jogo Truncado (Under 1.5 gols)", 0, n_jogos, 2, key=f"{prefixo}_truncado")
             mercados = {
                 'n_jogos': n_jogos,
-                'gol_ht': gol_ht,
-                'over15_ht': over15_ht,
-                'over15_ft': over15_ft,
-                'over25_ft': over25_ft,
-                'ambas': ambas,
-                'escanteios_media': escanteios_media,
-                'goleada': goleada,
-                'truncado': truncado
+                'gol_ht': gol_ht, 'over15_ht': over15_ht,
+                'over15_ft': over15_ft, 'over25_ft': over25_ft,
+                'ambas': ambas, 'escanteios_media': escanteios_media,
+                'goleada': goleada, 'truncado': truncado
             }
 
-        # ---- MOMENTO (IM) ----
         with st.expander("📈 Índice de Momento (IM)", expanded=False):
             st.markdown("**Condição de Campo**")
             cc3 = st.slider(f"Últimos 3 jogos em { 'casa' if mando == 'C' else 'fora' }", 0, 100, 65, key=f"{prefixo}_cc3")
@@ -452,55 +547,34 @@ elif aba == "🧮 Simulador Manual":
             g10 = st.slider("Últimos 10 jogos gerais", 0, 100, 60, key=f"{prefixo}_g10")
             bonus_zebra = st.number_input("Bônus de Zebra (+15 se ativado)", 0, 15, 0, key=f"{prefixo}_zebra")
 
-        # Histórico IM para IER
         with st.expander("📉 Histórico IM (últimos 5 jogos)", expanded=False):
-            hist_im = []
-            for i in range(5):
-                hist_im.append(st.number_input(f"IM jogo {i+1}", 0.0, 100.0, 50.0, key=f"{prefixo}_im_hist{i}"))
+            hist_im = [st.number_input(f"IM jogo {i+1}", 0.0, 100.0, 50.0, key=f"{prefixo}_im_hist{i}") for i in range(5)]
 
-        # Prateleira (para FMP) e IRC
         prat = st.selectbox("Prateleira do time (para FMP)",
                             ["Elite Absoluta", "Alta", "Média", "Baixa", "Crítica"],
                             key=f"{prefixo}_prat_fmp")
-        # --- IRC com fatores empíricos ---
+
         with st.expander("🧠 IRC (Psicológico / Contextual)", expanded=False):
             rodada = st.number_input("Rodada", 1, 38, 20, key=f"{prefixo}_rod")
-            orgulho = st.slider("Orgulho Ferido (0-30)", 0, 30, 0,
-                                help="+10 derrota para inferior; +20 goleada humilhante",
-                                key=f"{prefixo}_org")
-            revanche = st.slider("Revanche (0-20)", 0, 20, 0,
-                                 help="+10 se rival eliminou/goleou recentemente",
-                                 key=f"{prefixo}_rev")
+            orgulho = st.slider("Orgulho Ferido (0-30)", 0, 30, 0, key=f"{prefixo}_org")
+            revanche = st.slider("Revanche (0-20)", 0, 20, 0, key=f"{prefixo}_rev")
             st.markdown("---")
             st.markdown("**Fatores Contextuais**")
-            sequencia = st.slider("Sequência (+/-10)", -10, 10, 0,
-                                  help="+2 por vitória consecutiva (máx. +10); -2 por derrota consecutiva (mín. -10)",
-                                  key=f"{prefixo}_seq")
-            pressao = st.slider("Pressão da Torcida (-10 a +15)", -10, 15, 0,
-                                help="Mandante com estádio lotado +10; visitante em clássico hostil -5",
-                                key=f"{prefixo}_pressao")
-            importancia = st.selectbox("Importância do Jogo", [0, 10, 20],
-                                       help="0=normal, 10=clássico, 20=final/semifinal",
-                                       key=f"{prefixo}_imp")
-            desfalques = st.slider("Desfalques Graves (-15 a 0)", -15, 0, 0,
-                                   help="Penalidade por jogadores-chave ausentes",
-                                   key=f"{prefixo}_desf")
-
+            sequencia = st.slider("Sequência (+/-10)", -10, 10, 0, key=f"{prefixo}_seq")
+            pressao = st.slider("Pressão da Torcida (-10 a +15)", -10, 15, 0, key=f"{prefixo}_pressao")
+            importancia = st.selectbox("Importância do Jogo", [0, 10, 20], key=f"{prefixo}_imp")
+            desfalques = st.slider("Desfalques Graves (-15 a 0)", -15, 0, 0, key=f"{prefixo}_desf")
             st.markdown("---")
             st.markdown("**🧪 Fatores Empíricos Automáticos**")
             usar_empiricos = st.checkbox("Ativar fatores empíricos", value=True, key=f"{prefixo}_usar_emp")
             if usar_empiricos:
-                # IF - Ímpeto de Forma (baseado no aproveitamento 5j já informado)
                 if_val = (aprov_5j - 50) * 0.3
                 st.caption(f"Ímpeto de Forma (IF): {if_val:.1f} (aprov. {aprov_5j}%)")
-                # FCF - Fortaleza Casa/Fora (baseado no CC3)
                 fcf_val = (cc3 - 50) * 0.25
                 st.caption(f"Fortaleza Casa/Fora (FCF): {fcf_val:.1f} (CC3: {cc3})")
-                # VCD - Vantagem no Confronto Direto (novo campo)
                 vitorias_cd = st.number_input("Vitórias nos últimos 5 confrontos diretos", 0, 5, 2, key=f"{prefixo}_vcd_vit")
                 derrotas_cd = 5 - vitorias_cd
-                vcd_val = (vitorias_cd * 6) - (derrotas_cd * 4)
-                vcd_val = max(-15, min(15, vcd_val))
+                vcd_val = max(-15, min(15, (vitorias_cd * 6) - (derrotas_cd * 4)))
                 st.caption(f"Vantagem Confronto Direto (VCD): {vcd_val:.1f} ({vitorias_cd}V/{derrotas_cd}D)")
                 fatores_emp = {'if_val': if_val, 'fcf_val': fcf_val, 'vcd_val': vcd_val}
             else:
@@ -512,38 +586,28 @@ elif aba == "🧮 Simulador Manual":
         return (estatisticas, p_atk, p_def, p_fdm, p_res, hist_im, prat,
                 im_params, irc_params, prospeccao, mercados)
 
-    # Time A (mandante)
+    # Time A e B
     (est_a, p_atk_a, p_def_a, p_fdm_a, p_res_a, hist_im_a, prat_a,
      im_params_a, irc_params_a, prosp_a, mercados_a) = criar_seletores_time("a", nome_a, "C")
-
     st.divider()
-
-    # Time B (visitante)
     (est_b, p_atk_b, p_def_b, p_fdm_b, p_res_b, hist_im_b, prat_b,
      im_params_b, irc_params_b, prosp_b, mercados_b) = criar_seletores_time("b", nome_b, "F")
 
     if st.button("⚡ GERAR MYPREDICT", use_container_width=True):
-        # Cálculo completo com detalhamento
         res_a = calcular_overall(est_a, med_liga, prat_a, prat_b,
                                  p_atk_a, p_def_a, p_fdm_a, p_res_a, hist_im_a)
         res_b = calcular_overall(est_b, med_liga, prat_b, prat_a,
                                  p_atk_b, p_def_b, p_fdm_b, p_res_b, hist_im_b)
-
         im_a, bc_a, bg_a, td_a, bz_a = calcular_im(*im_params_a)
         im_b, bc_b, bg_b, td_b, bz_b = calcular_im(*im_params_b)
-
-        # IRC agora com 10 parâmetros (o último é fatores_emp)
         irc_a, fac_a, urg_a, org_a, rev_a, seq_a, pr_a, imp_a, desf_a = calcular_irc(*irc_params_a)
         irc_b, fac_b, urg_b, org_b, rev_b, seq_b, pr_b, imp_b, desf_b = calcular_irc(*irc_params_b)
 
         jun_a = calcular_juncao(res_a['overall'], im_a, irc_a)
         jun_b = calcular_juncao(res_b['overall'], im_b, irc_b)
-
         prob_a, prob_e, prob_b = calcular_probabilidades(jun_a, jun_b)
 
-        # =================================================================
-        # EXIBIÇÃO DOS RESULTADOS
-        # =================================================================
+        # ===================== RESULTADOS COM LAYOUT MODERNO =====================
         st.header("📊 Resultado MyPredict")
         col1, col2, col3 = st.columns(3)
         col1.metric(f"🏠 {nome_a}", f"{jun_a:.1f}", f"Overall: {res_a['overall']:.1f}")
@@ -556,18 +620,24 @@ elif aba == "🧮 Simulador Manual":
         c2.metric("Empate", f"{prob_e:.1f}%")
         c3.metric(f"Vitória {nome_b}", f"{prob_b:.1f}%")
 
+        # Banner de resultado
         if prob_a > prob_b and prob_a > prob_e:
-            st.success(f"🏆 Previsão: Vitória do {nome_a}")
+            banner_class = "result-win"
+            texto = f"🏆 {nome_a} VENCE"
         elif prob_b > prob_a and prob_b > prob_e:
-            st.success(f"🏆 Previsão: Vitória do {nome_b}")
+            banner_class = "result-win"
+            texto = f"🏆 {nome_b} VENCE"
         else:
-            st.warning("🤝 Previsão: Empate")
+            banner_class = "result-draw"
+            texto = "🤝 EMPATE"
+        st.markdown(f"<div class='result-banner {banner_class}'>{texto}</div>", unsafe_allow_html=True)
 
-        # MERCADOS ADICIONAIS
+        # Mercados
         st.markdown("---")
         st.subheader("📈 Probabilidades de Mercados Adicionais")
         def pct(count, total):
             return (count / total) * 100 if total > 0 else 0.0
+
         mercados_nomes = {
             'gol_ht': 'Gol no 1º Tempo',
             'over15_ht': 'Over 1.5 HT',
@@ -581,13 +651,13 @@ elif aba == "🧮 Simulador Manual":
         with colM1:
             st.markdown(f"**{nome_a}**")
             for k, nome in mercados_nomes.items():
-                st.write(f"- {nome}: {pct(mercados_a[k], mercados_a['n_jogos']):.1f}%")
-            st.write(f"- Média de Escanteios: {mercados_a['escanteios_media']:.1f}")
+                st.markdown(f"<div class='market-card'><b>{nome}</b>: {pct(mercados_a[k], mercados_a['n_jogos']):.1f}%</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='market-card'><b>Média de Escanteios</b>: {mercados_a['escanteios_media']:.1f}</div>", unsafe_allow_html=True)
         with colM2:
             st.markdown(f"**{nome_b}**")
             for k, nome in mercados_nomes.items():
-                st.write(f"- {nome}: {pct(mercados_b[k], mercados_b['n_jogos']):.1f}%")
-            st.write(f"- Média de Escanteios: {mercados_b['escanteios_media']:.1f}")
+                st.markdown(f"<div class='market-card'><b>{nome}</b>: {pct(mercados_b[k], mercados_b['n_jogos']):.1f}%</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='market-card'><b>Média de Escanteios</b>: {mercados_b['escanteios_media']:.1f}</div>", unsafe_allow_html=True)
 
         st.markdown("**Probabilidades Combinadas (média simples)**")
         cols_merc = st.columns(4)
@@ -599,14 +669,11 @@ elif aba == "🧮 Simulador Manual":
         esc_comb = (mercados_a['escanteios_media'] + mercados_b['escanteios_media']) / 2
         st.metric("Média de Escanteios Combinada", f"{esc_comb:.1f}")
 
-        # =================================================================
-        # TABELA COMPARATIVA DAS MACRO ESTATÍSTICAS (OVR, IM, IRC, JUNÇÃO)
-        # =================================================================
+        # TABELA COMPARATIVA
         st.markdown("---")
         st.subheader("📋 Tabela Comparativa das Macro Estatísticas")
         df_comparativo = pd.DataFrame({
-            'Métrica': ['Overall', 'Ataque', 'Defesa', 'Consistência', 'Resistência',
-                        'IM', 'IRC', 'Junção'],
+            'Métrica': ['Overall', 'Ataque', 'Defesa', 'Consistência', 'Resistência', 'IM', 'IRC', 'Junção'],
             nome_a: [f"{res_a['overall']:.1f}", f"{res_a['ataque']:.1f}", f"{res_a['defesa']:.1f}",
                      f"{res_a['consistencia']:.1f}", f"{res_a['resistencia']:.1f}",
                      f"{im_a:.1f}", f"{irc_a:.1f}", f"{jun_a:.1f}"],
@@ -616,60 +683,33 @@ elif aba == "🧮 Simulador Manual":
         })
         st.dataframe(df_comparativo, use_container_width=True, hide_index=True)
 
-        # COMPARAÇÃO DETALHADA LADO A LADO (mantida)
-        st.markdown("---")
-        st.subheader("🔍 Comparação Detalhada (lado a lado)")
-        with st.container():
+        with st.expander("🔍 Comparação Detalhada (lado a lado)"):
             colA, colB = st.columns(2)
-            with colA:
-                st.markdown(f"### 🏠 {nome_a}")
-                st.write(f"**Prateleira:** {prat_a} (rival {prat_b})")
-                st.write("**Overall**")
-                st.write(f"- Ataque: {res_a['ataque']:.1f} (FVO: {res_a['fvo']:.1f}, FCO: {res_a['fco']:.1f})")
-                st.write(f"- Defesa: {res_a['defesa']:.1f} (FRD: {res_a['frd']:.1f}, FCD Def: {res_a['fcd_def']:.1f})")
-                st.write(f"- Consistência: {res_a['consistencia']:.1f} (FDM: {res_a['fdm']:.1f}, IER: {res_a['ier']:.1f})")
-                st.write(f"- Resistência: {res_a['resistencia']:.1f} (FCD Res: {res_a['fcd_res']:.1f}, EGZ: {res_a['egz_res']:.1f}, FRI: {res_a['fri_res']:.1f}, FZC: {res_a['fzc_res']:.1f})")
-                st.write(f"**Overall Final:** {res_a['overall']:.1f}")
-                st.write("**IM**")
-                st.write(f"- Cond. Campo: {bc_a:.1f} | Geral: {bg_a:.1f} | Tab. Dinâmica: {td_a:.1f} | Zebra: {bz_a:.1f}")
-                st.write(f"**IM Final:** {im_a:.1f}")
-                st.write("**IRC**")
-                st.write(f"- FAC: {fac_a:.2f}, Urgência: {urg_a:.1f}, Orgulho: {org_a:.1f}, Revanche: {rev_a:.1f}")
-                st.write(f"- Sequência: {seq_a:.1f}, Pressão: {pr_a:.1f}, Importância: {imp_a:.1f}, Desfalques: {desf_a:.1f}")
-                # Mostrar fatores empíricos se usados
-                if irc_params_a[-1]:
-                    emp = irc_params_a[-1]
-                    st.write(f"- IF: {emp['if_val']:.1f}, FCF: {emp['fcf_val']:.1f}, VCD: {emp['vcd_val']:.1f}")
-                st.write(f"**IRC Final:** {irc_a:.1f}")
-                st.write(f"**Junção:** {jun_a:.1f}")
-            with colB:
-                st.markdown(f"### 🚌 {nome_b}")
-                st.write(f"**Prateleira:** {prat_b} (rival {prat_a})")
-                st.write("**Overall**")
-                st.write(f"- Ataque: {res_b['ataque']:.1f} (FVO: {res_b['fvo']:.1f}, FCO: {res_b['fco']:.1f})")
-                st.write(f"- Defesa: {res_b['defesa']:.1f} (FRD: {res_b['frd']:.1f}, FCD Def: {res_b['fcd_def']:.1f})")
-                st.write(f"- Consistência: {res_b['consistencia']:.1f} (FDM: {res_b['fdm']:.1f}, IER: {res_b['ier']:.1f})")
-                st.write(f"- Resistência: {res_b['resistencia']:.1f} (FCD Res: {res_b['fcd_res']:.1f}, EGZ: {res_b['egz_res']:.1f}, FRI: {res_b['fri_res']:.1f}, FZC: {res_b['fzc_res']:.1f})")
-                st.write(f"**Overall Final:** {res_b['overall']:.1f}")
-                st.write("**IM**")
-                st.write(f"- Cond. Campo: {bc_b:.1f} | Geral: {bg_b:.1f} | Tab. Dinâmica: {td_b:.1f} | Zebra: {bz_b:.1f}")
-                st.write(f"**IM Final:** {im_b:.1f}")
-                st.write("**IRC**")
-                st.write(f"- FAC: {fac_b:.2f}, Urgência: {urg_b:.1f}, Orgulho: {org_b:.1f}, Revanche: {rev_b:.1f}")
-                st.write(f"- Sequência: {seq_b:.1f}, Pressão: {pr_b:.1f}, Importância: {imp_b:.1f}, Desfalques: {desf_b:.1f}")
-                if irc_params_b[-1]:
-                    emp = irc_params_b[-1]
-                    st.write(f"- IF: {emp['if_val']:.1f}, FCF: {emp['fcf_val']:.1f}, VCD: {emp['vcd_val']:.1f}")
-                st.write(f"**IRC Final:** {irc_b:.1f}")
-                st.write(f"**Junção:** {jun_b:.1f}")
+            for nome, res, im_val, irc_val, bc, bg, td, bz, fac_val, urg, org, rev, seq, pr, imp, desf, prat_t, prat_r, irc_par in [
+                (nome_a, res_a, im_a, irc_a, bc_a, bg_a, td_a, bz_a, fac_a, urg_a, org_a, rev_a, seq_a, pr_a, imp_a, desf_a, prat_a, prat_b, irc_params_a),
+                (nome_b, res_b, im_b, irc_b, bc_b, bg_b, td_b, bz_b, fac_b, urg_b, org_b, rev_b, seq_b, pr_b, imp_b, desf_b, prat_b, prat_a, irc_params_b)
+            ]:
+                with colA if nome == nome_a else colB:
+                    st.markdown(f"### {'🏠' if nome == nome_a else '🚌'} {nome}")
+                    st.write(f"**Prateleira:** {prat_t} (rival {prat_r})")
+                    st.write("**Overall**")
+                    st.write(f"- Ataque: {res['ataque']:.1f} (FVO: {res['fvo']:.1f}, FCO: {res['fco']:.1f})")
+                    st.write(f"- Defesa: {res['defesa']:.1f} (FRD: {res['frd']:.1f}, FCD Def: {res['fcd_def']:.1f})")
+                    st.write(f"- Consistência: {res['consistencia']:.1f} (FDM: {res['fdm']:.1f}, IER: {res['ier']:.1f})")
+                    st.write(f"- Resistência: {res['resistencia']:.1f} (FCD Res: {res['fcd_res']:.1f}, EGZ: {res['egz_res']:.1f}, FRI: {res['fri_res']:.1f}, FZC: {res['fzc_res']:.1f})")
+                    st.write(f"**Overall Final:** {res['overall']:.1f}")
+                    st.write("**IM**")
+                    st.write(f"- Cond. Campo: {bc:.1f} | Geral: {bg:.1f} | Tab. Dinâmica: {td:.1f} | Zebra: {bz:.1f}")
+                    st.write(f"**IM Final:** {im_val:.1f}")
+                    st.write("**IRC**")
+                    st.write(f"- FAC: {fac_val:.2f}, Urgência: {urg:.1f}, Orgulho: {org:.1f}, Revanche: {rev:.1f}")
+                    st.write(f"- Sequência: {seq:.1f}, Pressão: {pr:.1f}, Importância: {imp:.1f}, Desfalques: {desf:.1f}")
+                    if irc_par[-1]:
+                        emp = irc_par[-1]
+                        st.write(f"- IF: {emp['if_val']:.1f}, FCF: {emp['fcf_val']:.1f}, VCD: {emp['vcd_val']:.1f}")
+                    st.write(f"**IRC Final:** {irc_val:.1f}")
+                    st.write(f"**Junção:** {calcular_juncao(res['overall'], im_val, irc_val):.1f}")
 
-        with st.expander("📋 Ver todas as variáveis utilizadas"):
-            st.write("**Estatísticas ativas Time A:**", list(est_a.keys()) if est_a else "Nenhuma")
-            st.write("**Estatísticas ativas Time B:**", list(est_b.keys()) if est_b else "Nenhuma")
-
-# =========================================================================
-# RODAPÉ
-# =========================================================================
 st.sidebar.divider()
 st.sidebar.caption("MyPredict by Ferry v0.3")
 st.sidebar.caption(f"{datetime.now().strftime('%d/%m/%Y %H:%M')}")
