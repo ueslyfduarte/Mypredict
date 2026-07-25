@@ -321,12 +321,12 @@ elif aba == "🧮 Simulador Manual":
     def criar_seletores_time(prefixo, nome_time, mando):
         st.subheader(f"📈 {nome_time} ({'Mandante' if mando == 'C' else 'Visitante'})")
         
-        # Inicializa tab_din com valor padrão seguro
+        # Valores padrão seguros
         tab_din = 50.0
         nota_posicao = 50.0
         prospeccao = "Média"
 
-        # ===== PAINEL INICIAL (novo) =====
+        # ===== PAINEL INICIAL =====
         with st.expander("📋 Painel Inicial: Posicionamento e Prospecção", expanded=True):
             col_pos1, col_pos2 = st.columns(2)
             posicao_real = col_pos1.number_input("Posição Real na Tabela", 1, 20, 5, key=f"{prefixo}_pos_real")
@@ -334,13 +334,9 @@ elif aba == "🧮 Simulador Manual":
             prospeccao = st.selectbox("Prospecção Teórica Ideal (Prateleira)",
                                       ["Elite Absoluta", "Alta", "Média", "Baixa", "Crítica"],
                                       key=f"{prefixo}_prosp_painel")
-            # Cálculo automático da Nota Posição (100 = líder)
-            if posicao_real is not None:
-                nota_posicao = 100.0 - (posicao_real - 1) * (100.0 / 19.0)
-                nota_posicao = max(0.0, min(100.0, nota_posicao))
-            # Posição momentânea baseada no aproveitamento
+            nota_posicao = 100.0 - (posicao_real - 1) * (100.0 / 19.0)
+            nota_posicao = max(0.0, min(100.0, nota_posicao))
             pos_momentanea = 21.0 - (aprov_5j / 100.0) * 20.0
-            # Multiplicador de prateleira
             if prospeccao in ["Elite Absoluta"]:
                 mult_prat = 1.6
             elif prospeccao in ["Alta", "Média"]:
@@ -433,19 +429,25 @@ elif aba == "🧮 Simulador Manual":
         with st.expander("🧠 IRC (Psicológico / Contextual)", expanded=False):
             rodada = st.number_input("Rodada", 1, 38, 20, key=f"{prefixo}_rod")
             orgulho = st.slider("Orgulho Ferido (0-30)", 0, 30, 0,
-                                help="+10 derrota para inferior; +20 goleada humilhante")
+                                help="+10 derrota para inferior; +20 goleada humilhante",
+                                key=f"{prefixo}_org")
             revanche = st.slider("Revanche (0-20)", 0, 20, 0,
-                                 help="+10 se rival eliminou/goleou recentemente")
+                                 help="+10 se rival eliminou/goleou recentemente",
+                                 key=f"{prefixo}_rev")
             st.markdown("---")
             st.markdown("**Novos Fatores**")
             sequencia = st.slider("Sequência (+/-10)", -10, 10, 0,
-                                  help="+2 por vitória consecutiva (máx. +10); -2 por derrota consecutiva (mín. -10)")
+                                  help="+2 por vitória consecutiva (máx. +10); -2 por derrota consecutiva (mín. -10)",
+                                  key=f"{prefixo}_seq")
             pressao = st.slider("Pressão da Torcida (-10 a +15)", -10, 15, 0,
-                                help="Mandante com estádio lotado +10; visitante em clássico hostil -5")
+                                help="Mandante com estádio lotado +10; visitante em clássico hostil -5",
+                                key=f"{prefixo}_pressao")
             importancia = st.selectbox("Importância do Jogo", [0, 10, 20],
-                                       help="0=normal, 10=clássico, 20=final/semifinal")
+                                       help="0=normal, 10=clássico, 20=final/semifinal",
+                                       key=f"{prefixo}_imp")
             desfalques = st.slider("Desfalques Graves (-15 a 0)", -15, 0, 0,
-                                   help="Penalidade por jogadores-chave ausentes")
+                                   help="Penalidade por jogadores-chave ausentes",
+                                   key=f"{prefixo}_desf")
 
         im_params = (cc3, cc5, g3, g5, g10, bonus_zebra, tab_din)
         irc_params = (rodada, nota_posicao, prospeccao, orgulho, revanche,
@@ -481,9 +483,7 @@ elif aba == "🧮 Simulador Manual":
 
         prob_a, prob_e, prob_b = calcular_probabilidades(jun_a, jun_b)
 
-        # =================================================================
-        # EXIBIÇÃO DOS RESULTADOS (COMPARAÇÃO LADO A LADO)
-        # =================================================================
+        # EXIBIÇÃO DOS RESULTADOS
         st.header("📊 Resultado MyPredict")
         col1, col2, col3 = st.columns(3)
         col1.metric(f"🏠 {nome_a}", f"{jun_a:.1f}", f"Overall: {res_a['overall']:.1f}")
@@ -503,7 +503,6 @@ elif aba == "🧮 Simulador Manual":
         else:
             st.warning("🤝 Previsão: Empate")
 
-        # COMPARAÇÃO DETALHADA LADO A LADO
         st.markdown("---")
         st.subheader("🔍 Comparação Detalhada (lado a lado)")
 
@@ -545,7 +544,6 @@ elif aba == "🧮 Simulador Manual":
                 st.write(f"**IRC Final:** {irc_b:.1f}")
                 st.write(f"**Junção:** {jun_b:.1f}")
 
-        # Detalhamento completo expander (redundante, mas mantido)
         with st.expander("📋 Ver todas as variáveis utilizadas"):
             st.write("**Estatísticas ativas Time A:**", list(est_a.keys()) if est_a else "Nenhuma")
             st.write("**Estatísticas ativas Time B:**", list(est_b.keys()) if est_b else "Nenhuma")
