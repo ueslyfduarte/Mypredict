@@ -238,7 +238,11 @@ def calcular_im(cc3, cc5, geral_3, geral_5, geral_10, bonus_zebra, tab_din):
     return im, bloco_campo, bloco_geral, tab_din, bonus_zebra
 
 def calcular_irc(rodada, nota_posicao, prospeccao, orgulho_ferido, revanche,
-                 sequencia, pressao_torcida, importancia, desfalques):
+                 sequencia, pressao_torcida, importancia, desfalques,
+                 fatores_empiricos=None):
+    """
+    IRC turbinado com fatores empíricos (IF, FCF, VCD) se fornecidos.
+    """
     def fac(r):
         if r <= 10: return 0.30
         elif r <= 25: return 0.60
@@ -248,6 +252,13 @@ def calcular_irc(rodada, nota_posicao, prospeccao, orgulho_ferido, revanche,
     fpt = -10 if (prospeccao == "Elite Absoluta" and rodada <= 10) else 0
     urgencia = nota_posicao + fpt
     fatores = urgencia + orgulho_ferido + revanche + sequencia + pressao_torcida + importancia + desfalques
+
+    # Adiciona fatores empíricos se existirem
+    if fatores_empiricos:
+        fatores += fatores_empiricos.get('if_val', 0)
+        fatores += fatores_empiricos.get('fcf_val', 0)
+        fatores += fatores_empiricos.get('vcd_val', 0)
+
     fac_valor = fac(rodada)
     nota = 50 + fatores * fac_valor
     nota = max(0.0, min(100.0, nota))
@@ -325,6 +336,7 @@ elif aba == "🧮 Simulador Manual":
         tab_din = 50.0
         nota_posicao = 50.0
         prospeccao = "Média"
+        aprov_5j = 50  # valor dummy, será atualizado
 
         # ===== PAINEL INICIAL =====
         with st.expander("📋 Painel Inicial: Posicionamento e Prospecção", expanded=True):
@@ -405,6 +417,30 @@ elif aba == "🧮 Simulador Manual":
                 estatisticas['gols_finais'] = cols[1].number_input("Nota", 0.0, 100.0, 70.0, key=f"{prefixo}_gols_fin_v")
                 p_res['gols_finais'] = 1.0
 
+        # ---- ESTATÍSTICAS DE MERCADOS ----
+        with st.expander("📊 Estatísticas de Mercados (últimos 10 jogos)", expanded=False):
+            st.caption("Insira o total de jogos considerados e a contagem de ocorrências.")
+            n_jogos = st.number_input("Total de jogos (base)", 1, 50, 10, key=f"{prefixo}_n_jogos_mercado")
+            gol_ht = st.number_input("Gol no 1º Tempo (Sim)", 0, n_jogos, 6, key=f"{prefixo}_gol_ht")
+            over15_ht = st.number_input("Over 1.5 HT (Sim)", 0, n_jogos, 4, key=f"{prefixo}_over15_ht")
+            over15_ft = st.number_input("Over 1.5 FT (Sim)", 0, n_jogos, 7, key=f"{prefixo}_over15_ft")
+            over25_ft = st.number_input("Over 2.5 FT (Sim)", 0, n_jogos, 5, key=f"{prefixo}_over25_ft")
+            ambas = st.number_input("Ambas Marcam (Sim)", 0, n_jogos, 4, key=f"{prefixo}_ambas")
+            escanteios_media = st.number_input("Média de Escanteios/Jogo", 0.0, 20.0, 5.2, key=f"{prefixo}_escanteios_media")
+            goleada = st.number_input("Goleada (vitória por 3+ gols)", 0, n_jogos, 1, key=f"{prefixo}_goleada")
+            truncado = st.number_input("Jogo Truncado (Under 1.5 gols)", 0, n_jogos, 2, key=f"{prefixo}_truncado")
+            mercados = {
+                'n_jogos': n_jogos,
+                'gol_ht': gol_ht,
+                'over15_ht': over15_ht,
+                'over15_ft': over15_ft,
+                'over25_ft': over25_ft,
+                'ambas': ambas,
+                'escanteios_media': escanteios_media,
+                'goleada': goleada,
+                'truncado': truncado
+            }
+
         # ---- MOMENTO (IM) ----
         with st.expander("📈 Índice de Momento (IM)", expanded=False):
             st.markdown("**Condição de Campo**")
@@ -426,6 +462,7 @@ elif aba == "🧮 Simulador Manual":
         prat = st.selectbox("Prateleira do time (para FMP)",
                             ["Elite Absoluta", "Alta", "Média", "Baixa", "Crítica"],
                             key=f"{prefixo}_prat_fmp")
+        # --- IRC com fatores empíricos ---
         with st.expander("🧠 IRC (Psicológico / Contextual)", expanded=False):
             rodada = st.number_input("Rodada", 1, 38, 20, key=f"{prefixo}_rod")
             orgulho = st.slider("Orgulho Ferido (0-30)", 0, 30, 0,
@@ -435,7 +472,7 @@ elif aba == "🧮 Simulador Manual":
                                  help="+10 se rival eliminou/goleou recentemente",
                                  key=f"{prefixo}_rev")
             st.markdown("---")
-            st.markdown("**Novos Fatores**")
+            st.markdown("**Fatores Contextuais**")
             sequencia = st.slider("Sequência (+/-10)", -10, 10, 0,
                                   help="+2 por vitória consecutiva (máx. +10); -2 por derrota consecutiva (mín. -10)",
                                   key=f"{prefixo}_seq")
@@ -449,21 +486,41 @@ elif aba == "🧮 Simulador Manual":
                                    help="Penalidade por jogadores-chave ausentes",
                                    key=f"{prefixo}_desf")
 
+            st.markdown("---")
+            st.markdown("**🧪 Fatores Empíricos Automáticos**")
+            usar_empiricos = st.checkbox("Ativar fatores empíricos", value=True, key=f"{prefixo}_usar_emp")
+            if usar_empiricos:
+                # IF - Ímpeto de Forma (baseado no aproveitamento 5j já informado)
+                if_val = (aprov_5j - 50) * 0.3
+                st.caption(f"Ímpeto de Forma (IF): {if_val:.1f} (aprov. {aprov_5j}%)")
+                # FCF - Fortaleza Casa/Fora (baseado no CC3)
+                fcf_val = (cc3 - 50) * 0.25
+                st.caption(f"Fortaleza Casa/Fora (FCF): {fcf_val:.1f} (CC3: {cc3})")
+                # VCD - Vantagem no Confronto Direto (novo campo)
+                vitorias_cd = st.number_input("Vitórias nos últimos 5 confrontos diretos", 0, 5, 2, key=f"{prefixo}_vcd_vit")
+                derrotas_cd = 5 - vitorias_cd
+                vcd_val = (vitorias_cd * 6) - (derrotas_cd * 4)
+                vcd_val = max(-15, min(15, vcd_val))
+                st.caption(f"Vantagem Confronto Direto (VCD): {vcd_val:.1f} ({vitorias_cd}V/{derrotas_cd}D)")
+                fatores_emp = {'if_val': if_val, 'fcf_val': fcf_val, 'vcd_val': vcd_val}
+            else:
+                fatores_emp = None
+
         im_params = (cc3, cc5, g3, g5, g10, bonus_zebra, tab_din)
         irc_params = (rodada, nota_posicao, prospeccao, orgulho, revanche,
-                      sequencia, pressao, importancia, desfalques)
+                      sequencia, pressao, importancia, desfalques, fatores_emp)
         return (estatisticas, p_atk, p_def, p_fdm, p_res, hist_im, prat,
-                im_params, irc_params, prospeccao)
+                im_params, irc_params, prospeccao, mercados)
 
     # Time A (mandante)
     (est_a, p_atk_a, p_def_a, p_fdm_a, p_res_a, hist_im_a, prat_a,
-     im_params_a, irc_params_a, prosp_a) = criar_seletores_time("a", nome_a, "C")
+     im_params_a, irc_params_a, prosp_a, mercados_a) = criar_seletores_time("a", nome_a, "C")
 
     st.divider()
 
     # Time B (visitante)
     (est_b, p_atk_b, p_def_b, p_fdm_b, p_res_b, hist_im_b, prat_b,
-     im_params_b, irc_params_b, prosp_b) = criar_seletores_time("b", nome_b, "F")
+     im_params_b, irc_params_b, prosp_b, mercados_b) = criar_seletores_time("b", nome_b, "F")
 
     if st.button("⚡ GERAR MYPREDICT", use_container_width=True):
         # Cálculo completo com detalhamento
@@ -475,6 +532,7 @@ elif aba == "🧮 Simulador Manual":
         im_a, bc_a, bg_a, td_a, bz_a = calcular_im(*im_params_a)
         im_b, bc_b, bg_b, td_b, bz_b = calcular_im(*im_params_b)
 
+        # IRC agora com 10 parâmetros (o último é fatores_emp)
         irc_a, fac_a, urg_a, org_a, rev_a, seq_a, pr_a, imp_a, desf_a = calcular_irc(*irc_params_a)
         irc_b, fac_b, urg_b, org_b, rev_b, seq_b, pr_b, imp_b, desf_b = calcular_irc(*irc_params_b)
 
@@ -483,14 +541,16 @@ elif aba == "🧮 Simulador Manual":
 
         prob_a, prob_e, prob_b = calcular_probabilidades(jun_a, jun_b)
 
+        # =================================================================
         # EXIBIÇÃO DOS RESULTADOS
+        # =================================================================
         st.header("📊 Resultado MyPredict")
         col1, col2, col3 = st.columns(3)
         col1.metric(f"🏠 {nome_a}", f"{jun_a:.1f}", f"Overall: {res_a['overall']:.1f}")
         col2.metric("⚖️ Diferença", f"{abs(jun_a - jun_b):.1f}")
         col3.metric(f"🚌 {nome_b}", f"{jun_b:.1f}", f"Overall: {res_b['overall']:.1f}")
 
-        st.subheader("🎯 Probabilidades")
+        st.subheader("🎯 Probabilidades de Resultado")
         c1, c2, c3 = st.columns(3)
         c1.metric(f"Vitória {nome_a}", f"{prob_a:.1f}%")
         c2.metric("Empate", f"{prob_e:.1f}%")
@@ -503,9 +563,62 @@ elif aba == "🧮 Simulador Manual":
         else:
             st.warning("🤝 Previsão: Empate")
 
+        # MERCADOS ADICIONAIS
+        st.markdown("---")
+        st.subheader("📈 Probabilidades de Mercados Adicionais")
+        def pct(count, total):
+            return (count / total) * 100 if total > 0 else 0.0
+        mercados_nomes = {
+            'gol_ht': 'Gol no 1º Tempo',
+            'over15_ht': 'Over 1.5 HT',
+            'over15_ft': 'Over 1.5 FT',
+            'over25_ft': 'Over 2.5 FT',
+            'ambas': 'Ambas Marcam',
+            'goleada': 'Goleada (3+ gols)',
+            'truncado': 'Jogo Truncado (Under 1.5)'
+        }
+        colM1, colM2 = st.columns(2)
+        with colM1:
+            st.markdown(f"**{nome_a}**")
+            for k, nome in mercados_nomes.items():
+                st.write(f"- {nome}: {pct(mercados_a[k], mercados_a['n_jogos']):.1f}%")
+            st.write(f"- Média de Escanteios: {mercados_a['escanteios_media']:.1f}")
+        with colM2:
+            st.markdown(f"**{nome_b}**")
+            for k, nome in mercados_nomes.items():
+                st.write(f"- {nome}: {pct(mercados_b[k], mercados_b['n_jogos']):.1f}%")
+            st.write(f"- Média de Escanteios: {mercados_b['escanteios_media']:.1f}")
+
+        st.markdown("**Probabilidades Combinadas (média simples)**")
+        cols_merc = st.columns(4)
+        for i, (k, nome) in enumerate(mercados_nomes.items()):
+            pa = pct(mercados_a[k], mercados_a['n_jogos'])
+            pb = pct(mercados_b[k], mercados_b['n_jogos'])
+            p_comb = (pa + pb) / 2
+            cols_merc[i % 4].metric(nome, f"{p_comb:.1f}%")
+        esc_comb = (mercados_a['escanteios_media'] + mercados_b['escanteios_media']) / 2
+        st.metric("Média de Escanteios Combinada", f"{esc_comb:.1f}")
+
+        # =================================================================
+        # TABELA COMPARATIVA DAS MACRO ESTATÍSTICAS (OVR, IM, IRC, JUNÇÃO)
+        # =================================================================
+        st.markdown("---")
+        st.subheader("📋 Tabela Comparativa das Macro Estatísticas")
+        df_comparativo = pd.DataFrame({
+            'Métrica': ['Overall', 'Ataque', 'Defesa', 'Consistência', 'Resistência',
+                        'IM', 'IRC', 'Junção'],
+            nome_a: [f"{res_a['overall']:.1f}", f"{res_a['ataque']:.1f}", f"{res_a['defesa']:.1f}",
+                     f"{res_a['consistencia']:.1f}", f"{res_a['resistencia']:.1f}",
+                     f"{im_a:.1f}", f"{irc_a:.1f}", f"{jun_a:.1f}"],
+            nome_b: [f"{res_b['overall']:.1f}", f"{res_b['ataque']:.1f}", f"{res_b['defesa']:.1f}",
+                     f"{res_b['consistencia']:.1f}", f"{res_b['resistencia']:.1f}",
+                     f"{im_b:.1f}", f"{irc_b:.1f}", f"{jun_b:.1f}"]
+        })
+        st.dataframe(df_comparativo, use_container_width=True, hide_index=True)
+
+        # COMPARAÇÃO DETALHADA LADO A LADO (mantida)
         st.markdown("---")
         st.subheader("🔍 Comparação Detalhada (lado a lado)")
-
         with st.container():
             colA, colB = st.columns(2)
             with colA:
@@ -523,9 +636,12 @@ elif aba == "🧮 Simulador Manual":
                 st.write("**IRC**")
                 st.write(f"- FAC: {fac_a:.2f}, Urgência: {urg_a:.1f}, Orgulho: {org_a:.1f}, Revanche: {rev_a:.1f}")
                 st.write(f"- Sequência: {seq_a:.1f}, Pressão: {pr_a:.1f}, Importância: {imp_a:.1f}, Desfalques: {desf_a:.1f}")
+                # Mostrar fatores empíricos se usados
+                if irc_params_a[-1]:
+                    emp = irc_params_a[-1]
+                    st.write(f"- IF: {emp['if_val']:.1f}, FCF: {emp['fcf_val']:.1f}, VCD: {emp['vcd_val']:.1f}")
                 st.write(f"**IRC Final:** {irc_a:.1f}")
                 st.write(f"**Junção:** {jun_a:.1f}")
-
             with colB:
                 st.markdown(f"### 🚌 {nome_b}")
                 st.write(f"**Prateleira:** {prat_b} (rival {prat_a})")
@@ -541,6 +657,9 @@ elif aba == "🧮 Simulador Manual":
                 st.write("**IRC**")
                 st.write(f"- FAC: {fac_b:.2f}, Urgência: {urg_b:.1f}, Orgulho: {org_b:.1f}, Revanche: {rev_b:.1f}")
                 st.write(f"- Sequência: {seq_b:.1f}, Pressão: {pr_b:.1f}, Importância: {imp_b:.1f}, Desfalques: {desf_b:.1f}")
+                if irc_params_b[-1]:
+                    emp = irc_params_b[-1]
+                    st.write(f"- IF: {emp['if_val']:.1f}, FCF: {emp['fcf_val']:.1f}, VCD: {emp['vcd_val']:.1f}")
                 st.write(f"**IRC Final:** {irc_b:.1f}")
                 st.write(f"**Junção:** {jun_b:.1f}")
 
