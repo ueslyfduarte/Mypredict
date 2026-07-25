@@ -1,18 +1,10 @@
-# import streamlit as st
+import streamlit as st
 import requests
 import pandas as pd
 import numpy as np
 from datetime import datetime
 
-# =========================================================================
-# CONFIGURAÇÃO DA PÁGINA - TEMA PRETO E DOURADO
-# =========================================================================
-st.set_page_config(
-    page_title="MyPredict by Ferry v0.4",
-    page_icon="⚽",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="MyPredict by Ferry v0.4", page_icon="⚽", layout="wide", initial_sidebar_state="expanded")
 
 # =========================================================================
 # CSS CUSTOMIZADO - PRETO E DOURADO
