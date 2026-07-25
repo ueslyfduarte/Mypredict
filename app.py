@@ -181,14 +181,12 @@ if aba == "🧮 Simulador Manual":
     # Para não alongar ainda mais, este trecho é idêntico ao que já estava funcionando.
     # Basta copiar a aba completa do último código funcional que você tinha.
     st.header("🧮 Simulador Manual – Em atualização. Utilize o código da versão 0.4.")
-    st.info("Esta seção está em manutenção. Enquanto isso, use a aba Backtesting.")
-
-# =========================================================================
-# ABA BACKTESTING OFFLINE (CORRIGIDA – AUTO DETECTA TABULAÇÕES)
+    st.info("Esta seção está em manutenção. Enquanto isso, use a aba # =========================================================================
+# ABA BACKTESTING OFFLINE – CORRIGIDA COM LIMPEZA DE STRINGS
 # =========================================================================
 elif aba == "📊 Backtesting Offline":
-    st.header("📊 Backtesting Walk‑Forward – Leitura Robusta de CSV")
-    st.caption("Cole todo o conteúdo do CSV (vírgulas ou tabulações). O sistema detecta automaticamente o separador.")
+    st.header("📊 Backtesting Walk‑Forward – Leitura Robusta de CSV (com limpeza)")
+    st.caption("Cole todo o conteúdo do CSV. O sistema detecta o separador e limpa os nomes dos times automaticamente.")
 
     texto_dados = st.text_area("Cole os dados da temporada", height=250,
                                placeholder="Div,Date,Time,HomeTeam,AwayTeam,FTHG,FTAG,...")
@@ -198,15 +196,19 @@ elif aba == "📊 Backtesting Offline":
             st.error("Insira os dados dos jogos.")
         else:
             try:
-                # Tenta ler com auto-detecção de separador (vírgula ou tab)
+                # Auto-detecção de separador (vírgula, tab, etc.)
                 df = pd.read_csv(io.StringIO(texto_dados), sep=None, engine='python')
-                df.columns = [c.lower() for c in df.columns]
+                df.columns = [c.strip().lower().replace('"', '') for c in df.columns]
 
                 obrigatorias = ['hometeam', 'awayteam', 'fthg', 'ftag']
                 if any(c not in df.columns for c in obrigatorias):
                     st.error(f"Colunas obrigatórias não encontradas. Disponíveis: {list(df.columns)}")
                 else:
+                    # Limpeza dos nomes dos times (remove aspas e espaços)
+                    df['hometeam'] = df['hometeam'].astype(str).str.strip().str.replace('"', '')
+                    df['awayteam'] = df['awayteam'].astype(str).str.strip().str.replace('"', '')
                     st.success(f"CSV lido! {len(df)} jogos encontrados.")
+                    st.write("**Exemplos de nomes limpos:**", df['hometeam'].head(3).tolist())
 
                     # Estruturas da simulação
                     times_stats = {}
