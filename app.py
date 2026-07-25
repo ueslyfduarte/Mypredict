@@ -5,7 +5,7 @@ import numpy as np
 from datetime import datetime
 
 # =========================================================================
-# CONFIGURAÇÃO DA PÁGINA - TEMA PRETO, BRANCO E AZUL
+# CONFIGURAÇÃO DA PÁGINA - TEMA PRETO E DOURADO
 # =========================================================================
 st.set_page_config(
     page_title="MyPredict by Ferry v0.3",
@@ -15,40 +15,47 @@ st.set_page_config(
 )
 
 # =========================================================================
-# CSS CUSTOMIZADO - MODERNO E DESTACADO
+# CSS CUSTOMIZADO - PRETO E DOURADO
 # =========================================================================
 st.markdown("""
 <style>
     /* Fundo e tipografia */
-    .stApp { background-color: #0a0a0f; color: #e0e0e0; }
-    section[data-testid="stSidebar"] { background-color: #0d0d1a; border-right: 2px solid #1e3a5f; }
-    section[data-testid="stSidebar"] * { color: #c0d0f0 !important; }
+    .stApp { background-color: #0a0a0a; color: #ffffff; }
+    section[data-testid="stSidebar"] { background-color: #0d0d0d; border-right: 2px solid #ffd700; }
+    section[data-testid="stSidebar"] * { color: #ffffff !important; }
 
     /* Títulos */
-    h1, h2, h3 { color: #4da6ff !important; font-weight: 700; letter-spacing: 1px; }
-    h2 { border-bottom: 2px solid #2a4a6f; padding-bottom: 8px; }
+    h1, h2, h3 { color: #ffd700 !important; font-weight: 700; letter-spacing: 1px; }
+    h2 { border-bottom: 2px solid #ffd700; padding-bottom: 8px; }
 
-    /* Métricas - cards modernos */
+    /* Métricas - cards dourados */
     div[data-testid="stMetric"] {
-        background: linear-gradient(135deg, #111122, #1a1a2e);
-        border: 1px solid #2a4a6f;
+        background: linear-gradient(135deg, #1a1a00, #2a2a00);
+        border: 1px solid #ffd700;
         border-radius: 15px;
         padding: 20px;
         color: #ffffff;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        box-shadow: 0 4px 15px rgba(255,215,0,0.2);
         transition: 0.3s;
     }
     div[data-testid="stMetric"]:hover {
-        border-color: #4da6ff;
-        box-shadow: 0 6px 25px rgba(77,166,255,0.3);
+        border-color: #ffea80;
+        box-shadow: 0 6px 25px rgba(255,215,0,0.5);
     }
-    div[data-testid="stMetric"] label { color: #80bfff !important; font-weight: 600; }
+    div[data-testid="stMetric"] label { color: #ffd700 !important; font-weight: 600; }
+    /* Valor do delta: positivo = verde, negativo = vermelho */
+    div[data-testid="stMetric"] [data-testid="stMetricDelta"] svg {
+        color: inherit !important;
+    }
+    div[data-testid="stMetric"] [data-testid="stMetricDelta"] {
+        color: #4caf50 !important; /* padrão verde, será sobrescrito se negativo via lógica */
+    }
 
-    /* Botão MyPredict */
+    /* Botão MyPredict dourado */
     div.stButton > button {
-        background: linear-gradient(135deg, #1e3a5f, #0d2137);
-        color: white;
-        border: 2px solid #4da6ff;
+        background: linear-gradient(135deg, #4d3e00, #1a1a00);
+        color: #ffd700;
+        border: 2px solid #ffd700;
         border-radius: 12px;
         font-weight: bold;
         font-size: 18px;
@@ -57,72 +64,71 @@ st.markdown("""
         letter-spacing: 1px;
     }
     div.stButton > button:hover {
-        background: linear-gradient(135deg, #2a4a6f, #1e3a5f);
-        border-color: #80c1ff;
-        box-shadow: 0 0 25px rgba(77,166,255,0.7);
+        background: linear-gradient(135deg, #6b5200, #4d3e00);
+        border-color: #ffea80;
+        box-shadow: 0 0 25px rgba(255,215,0,0.7);
         transform: scale(1.02);
     }
 
     /* Cartões de boas-vindas e frase */
     .welcome-card {
-        background: linear-gradient(135deg, #0d2137, #141428);
-        border: 1px solid #2a4a6f;
+        background: linear-gradient(135deg, #1a1a00, #0d0d0d);
+        border: 1px solid #ffd700;
         border-radius: 15px;
         padding: 30px;
         margin: 20px 0;
-        box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+        box-shadow: 0 8px 20px rgba(255,215,0,0.2);
     }
     .quote {
         font-style: italic;
-        color: #a0c4e8;
+        color: #ffd700;
         font-size: 20px;
-        border-left: 5px solid #4da6ff;
+        border-left: 5px solid #ffd700;
         padding-left: 25px;
         margin: 30px 0;
-        background: rgba(77,166,255,0.05);
+        background: rgba(255,215,0,0.05);
         padding: 15px 25px;
         border-radius: 0 10px 10px 0;
     }
 
-    /* Expanders modernos */
+    /* Expanders dourados */
     .streamlit-expanderHeader {
-        background: linear-gradient(90deg, #1a1a2e, #111122);
-        border: 1px solid #2a4a6f;
+        background: linear-gradient(90deg, #1a1a00, #0d0d0d);
+        border: 1px solid #ffd700;
         border-radius: 10px;
-        color: #4da6ff;
+        color: #ffd700;
         font-weight: 600;
     }
-    .streamlit-expanderHeader:hover {
-        border-color: #4da6ff;
-    }
+    .streamlit-expanderHeader:hover { border-color: #ffea80; }
 
     /* Campos de input */
     .stTextInput>div>div>input, .stNumberInput>div>div>input {
-        background-color: #1a1a2e;
+        background-color: #1a1a00;
         color: white;
-        border: 1px solid #2a4a6f;
+        border: 1px solid #ffd700;
         border-radius: 8px;
     }
 
     /* Dataframe customizado */
     .stDataFrame {
-        background-color: #0d0d1a;
-        border: 1px solid #2a4a6f;
+        background-color: #0d0d0d;
+        border: 1px solid #ffd700;
         border-radius: 10px;
         overflow: hidden;
     }
     .stDataFrame thead th {
-        background-color: #1e3a5f !important;
-        color: #ffffff !important;
+        background-color: #ffd700 !important;
+        color: #0a0a0a !important;
         font-weight: bold;
     }
     .stDataFrame tbody td {
-        background-color: #111122;
-        color: #e0e0e0;
-        border-bottom: 1px solid #2a2a4a;
+        background-color: #1a1a00;
+        color: #ffffff;
+        border-bottom: 1px solid #2a2a00;
     }
     .stDataFrame tbody tr:hover td {
-        background-color: #1a1a35 !important;
+        background-color: #2a2a00 !important;
+        color: #ffd700 !important;
     }
 
     /* Banner de resultado */
@@ -133,21 +139,25 @@ st.markdown("""
         font-size: 24px;
         font-weight: bold;
         margin: 20px 0;
-        box-shadow: 0 8px 25px rgba(0,0,0,0.7);
+        box-shadow: 0 8px 25px rgba(255,215,0,0.4);
     }
-    .result-win { background: linear-gradient(135deg, #0a3d0a, #1a5c1a); border: 2px solid #4caf50; color: #a5d6a7; }
-    .result-draw { background: linear-gradient(135deg, #3d3500, #5c5200); border: 2px solid #ffc107; color: #ffe082; }
-    .result-loss { background: linear-gradient(135deg, #3d0a0a, #5c1a1a); border: 2px solid #f44336; color: #ef9a9a; }
+    .result-win { background: linear-gradient(135deg, #0a3d0a, #1a5c1a); border: 2px solid #ffd700; color: #a5d6a7; }
+    .result-draw { background: linear-gradient(135deg, #3d3500, #5c5200); border: 2px solid #ffd700; color: #ffe082; }
 
     /* Cartões de mercados */
     .market-card {
-        background: linear-gradient(135deg, #111122, #1a1a2e);
-        border: 1px solid #2a4a6f;
+        background: linear-gradient(135deg, #1a1a00, #2a2a00);
+        border: 1px solid #ffd700;
         border-radius: 10px;
         padding: 15px;
         margin: 8px 0;
         text-align: center;
+        color: #ffffff;
     }
+
+    /* Sliders personalizados */
+    .stSlider > div > div > div > div { background: #ffd700; }
+    .stCheckbox > label > div { border-color: #ffd700; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -159,7 +169,7 @@ with col_logo:
     st.markdown("<div style='font-size: 60px; text-align: center;'>⚽</div>", unsafe_allow_html=True)
 with col_title:
     st.markdown("<h1 style='margin-bottom: 0;'>MyPredict by Ferry</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #4da6ff; font-size: 18px; margin-top: 0;'>v0.3 • Inteligência Estatística no Futebol</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #ffd700; font-size: 18px; margin-top: 0;'>v0.3 • Inteligência Estatística no Futebol</p>", unsafe_allow_html=True)
 
 st.markdown("<div class='welcome-card'>", unsafe_allow_html=True)
 st.markdown("""
@@ -606,13 +616,32 @@ elif aba == "🧮 Simulador Manual":
         jun_a = calcular_juncao(res_a['overall'], im_a, irc_a)
         jun_b = calcular_juncao(res_b['overall'], im_b, irc_b)
         prob_a, prob_e, prob_b = calcular_probabilidades(jun_a, jun_b)
+        diff_overall = res_a['overall'] - res_b['overall']
 
-        # ===================== RESULTADOS COM LAYOUT MODERNO =====================
+        # ===================== RESULTADOS TEMA PRETO E DOURADO =====================
         st.header("📊 Resultado MyPredict")
+
+        # Primeira linha de métricas com deltas coloridos
         col1, col2, col3 = st.columns(3)
-        col1.metric(f"🏠 {nome_a}", f"{jun_a:.1f}", f"Overall: {res_a['overall']:.1f}")
-        col2.metric("⚖️ Diferença", f"{abs(jun_a - jun_b):.1f}")
-        col3.metric(f"🚌 {nome_b}", f"{jun_b:.1f}", f"Overall: {res_b['overall']:.1f}")
+        delta_color_a = "normal"  # será definido dinamicamente
+        delta_color_b = "normal"
+        if diff_overall > 0:
+            col1.metric(f"🏠 {nome_a}", f"{jun_a:.1f}", f"Overall: {res_a['overall']:.1f}", delta_color="normal")
+            col3.metric(f"🚌 {nome_b}", f"{jun_b:.1f}", f"Overall: {res_b['overall']:.1f}", delta_color="inverse")
+        elif diff_overall < 0:
+            col1.metric(f"🏠 {nome_a}", f"{jun_a:.1f}", f"Overall: {res_a['overall']:.1f}", delta_color="inverse")
+            col3.metric(f"🚌 {nome_b}", f"{jun_b:.1f}", f"Overall: {res_b['overall']:.1f}", delta_color="normal")
+        else:
+            col1.metric(f"🏠 {nome_a}", f"{jun_a:.1f}", f"Overall: {res_a['overall']:.1f}")
+            col3.metric(f"🚌 {nome_b}", f"{jun_b:.1f}", f"Overall: {res_b['overall']:.1f}")
+        # Coluna do meio com diferença (colorida)
+        diff_val = jun_a - jun_b
+        diff_str = f"{diff_val:+.1f}"
+        diff_color = "#4caf50" if diff_val > 0 else ("#f44336" if diff_val < 0 else "#ffffff")
+        col2.markdown(
+            f"<div style='background: #1a1a00; border: 1px solid #ffd700; border-radius: 10px; padding: 15px; text-align: center; color: {diff_color}; font-weight: bold; font-size: 20px;'>⚖️ Diferença<br>{diff_str}</div>",
+            unsafe_allow_html=True
+        )
 
         st.subheader("🎯 Probabilidades de Resultado")
         c1, c2, c3 = st.columns(3)
