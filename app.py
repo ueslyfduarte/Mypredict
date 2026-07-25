@@ -184,11 +184,11 @@ if aba == "🧮 Simulador Manual":
     st.info("Esta seção está em manutenção. Enquanto isso, use a aba Backtesting.")
 
 # =========================================================================
-# ABA BACKTESTING OFFLINE (USANDO PANDAS)
+# ABA BACKTESTING OFFLINE (CORRIGIDA – AUTO DETECTA TABULAÇÕES)
 # =========================================================================
 elif aba == "📊 Backtesting Offline":
     st.header("📊 Backtesting Walk‑Forward – Leitura Robusta de CSV")
-    st.caption("Cole todo o conteúdo do CSV. O sistema detectará automaticamente as colunas necessárias.")
+    st.caption("Cole todo o conteúdo do CSV (vírgulas ou tabulações). O sistema detecta automaticamente o separador.")
 
     texto_dados = st.text_area("Cole os dados da temporada", height=250,
                                placeholder="Div,Date,Time,HomeTeam,AwayTeam,FTHG,FTAG,...")
@@ -198,8 +198,8 @@ elif aba == "📊 Backtesting Offline":
             st.error("Insira os dados dos jogos.")
         else:
             try:
-                # Leitura com pandas
-                df = pd.read_csv(io.StringIO(texto_dados))
+                # Tenta ler com auto-detecção de separador (vírgula ou tab)
+                df = pd.read_csv(io.StringIO(texto_dados), sep=None, engine='python')
                 df.columns = [c.lower() for c in df.columns]
 
                 obrigatorias = ['hometeam', 'awayteam', 'fthg', 'ftag']
