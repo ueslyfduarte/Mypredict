@@ -179,4 +179,6 @@ with col_res_v:
     st.metric("🔰 Nota Junção Visitante", f"{juncao_v:.2f} / 100")
     st.write(f"• **Overall Final (Passo 1):** {overall_v:.1f} ({classificar_intervalo_fifa(overall_v)})")
     st.write(f"• ⚔️ **Força de Ataque:** {atq_v:.1f} | 🛡️ **Defesa:** {def_v:.1f}")
-    st.write(f"• 📐 Consistência Tática: {cons_v:.1f} | 🥊 Resistência: {pres_v:.1f}")st.write(f"• Índice Momento (IM): {im_v:.1f}")st.write(f"• Índice Psicológico (IRC): {irc_v:.1f}")
+    st.write(f"• 📐 Consistência Tática: {cons_v:.1f} | 🥊 Resistência: {pres_v:.1f}")
+    st.write(f"• Índice Momento (IM): {im_v:.1f}")
+    st.write(f"• Índice Psicológico (IRC): {irc_v:.1f}")
