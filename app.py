@@ -1,4 +1,4 @@
-import streamlit as st
+import streamlit st
 import pandas as pd
 import os
 
@@ -33,7 +33,7 @@ if modo_dados == "Planilha Local (.csv)":
         st.info("📊 **Aguardando Planilha:** O arquivo 'jogos_historicos.csv' não foi localizado na raiz do seu GitHub.")
         st.stop()
         
-    # Lê o arquivo mesmo que ele use espaços em vez de vírgulas (conforme seu print)
+    # Lê o arquivo mesmo que ele use espaços em vez de vírgulas
     df_jogos = pd.read_csv(arquivo_csv, sep=r'\s+', engine='python')
     
     st.header("🗂️ Seleção de Confronto por Planilha")
@@ -97,7 +97,7 @@ else:
     pos_v, elite_v, org_v, rev_v = 5, False, 0, 10
 
 # =========================================================================
-# PROCESSAMENTO CENTRALIZADO (MOURA MATEMÁTICO INTEGRAL)
+# PROCESSAMENTO CENTRALIZADO (MOTOR MATEMÁTICO INTEGRAL)
 # =========================================================================
 # Mandante
 atq_m = calcular_bloco_ataque(fvo_m, fco_m)
@@ -160,4 +160,4 @@ with col_res_v:
     st.write(f"• 📐 **Consistência Tática:** {cons_v:.1f} | 🥊 **Resistência:** {pres_v:.1f}")
     st.write(f"• **Índice Momento (IM):** {im_v:.1f}")
     st.write(f"• **Índice Psicológico (IRC):** {irc_v:.1f}")
-e Psicológico (IRC):** {irc_v:.1f}")
+ {irc_v:.1f}")
