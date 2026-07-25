@@ -320,6 +320,11 @@ elif aba == "🧮 Simulador Manual":
 
     def criar_seletores_time(prefixo, nome_time, mando):
         st.subheader(f"📈 {nome_time} ({'Mandante' if mando == 'C' else 'Visitante'})")
+        
+        # Inicializa tab_din com valor padrão seguro
+        tab_din = 50.0
+        nota_posicao = 50.0
+        prospeccao = "Média"
 
         # ===== PAINEL INICIAL (novo) =====
         with st.expander("📋 Painel Inicial: Posicionamento e Prospecção", expanded=True):
@@ -330,9 +335,10 @@ elif aba == "🧮 Simulador Manual":
                                       ["Elite Absoluta", "Alta", "Média", "Baixa", "Crítica"],
                                       key=f"{prefixo}_prosp_painel")
             # Cálculo automático da Nota Posição (100 = líder)
-            nota_posicao = 100.0 - (posicao_real - 1) * (100.0 / 19.0)
-            nota_posicao = max(0.0, min(100.0, nota_posicao))
-            # Posição momentânea baseada no aproveitamento (quanto maior, melhor a posição)
+            if posicao_real is not None:
+                nota_posicao = 100.0 - (posicao_real - 1) * (100.0 / 19.0)
+                nota_posicao = max(0.0, min(100.0, nota_posicao))
+            # Posição momentânea baseada no aproveitamento
             pos_momentanea = 21.0 - (aprov_5j / 100.0) * 20.0
             # Multiplicador de prateleira
             if prospeccao in ["Elite Absoluta"]:
