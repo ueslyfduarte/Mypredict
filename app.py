@@ -1,13 +1,16 @@
 """
-MyPredict 2.0 - Aplicativo Completo com Dados Reais
+MyPredict 2.0 - Aplicativo Completo (com Conversor de CSV)
 """
 import streamlit as st
 import pandas as pd
 from datetime import datetime
 from mypredict.core import *
 from math import exp, factorial
+import os
 
-# Configuração visual
+# ============================================================
+# CONFIGURAÇÃO VISUAL
+# ============================================================
 st.set_page_config(page_title="MyPredict 2.0", page_icon="⚽", layout="wide")
 st.markdown("""
 <style>
@@ -20,6 +23,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ============================================================
+# CARREGAR DADOS PRINCIPAIS
+# ============================================================
 @st.cache_data
 def carregar_dados():
     try:
@@ -27,54 +33,151 @@ def carregar_dados():
         jogos = df.to_dict(orient="records")
         return jogos
     except FileNotFoundError:
-        st.error("Arquivo 'data/meus_jogos.csv' não encontrado.")
+        st.error("Arquivo 'data/meus_jogos.csv' não encontrado. Use o conversor no menu lateral.")
         return []
 
 jogos = carregar_dados()
-if not jogos:
-    st.stop()
 
-# Atribuir prateleiras com base nas odds (menor odd = melhor)
-odds_por_time = {}
-for j in jogos:
-    if j['time'] not in odds_por_time:
-        try:
-            odd = float(j.get('B365H', 3.0)) if j['mando'] == 'casa' else float(j.get('B365A', 3.0))
-            odds_por_time[j['time']] = odd
-        except:
-            odds_por_time[j['time']] = 3.0
-times_ordenados = sorted(odds_por_time, key=lambda t: odds_por_time[t])
-prateleiras = {}
-n = len(times_ordenados)
-for i, t in enumerate(times_ordenados):
-    if i < n*0.15: prateleiras[t] = 1
-    elif i < n*0.35: prateleiras[t] = 2
-    elif i < n*0.65: prateleiras[t] = 3
-    elif i < n*0.85: prateleiras[t] = 4
-    else: prateleiras[t] = 5
-for j in jogos:
-    j['prat_time'] = prateleiras.get(j['time'], 3)
-    j['prat_adv'] = prateleiras.get(j['adv'], 3)
-
-times_disponiveis = sorted(set(j['time'] for j in jogos))
-
-# Funções auxiliares de mercados
-def prob_over(media_gols, limite):
-    prob_under = sum((media_gols**k) * exp(-media_gols) / factorial(k) for k in range(int(limite)+1))
-    return 1 - prob_under
-
-def prob_btts(ata_casa, def_fora, ata_fora, def_casa):
-    media_casa = (ata_casa/50) * (1 - def_fora/100)
-    media_fora = (ata_fora/50) * (1 - def_casa/100)
-    prob_c = 1 - exp(-media_casa)
-    prob_f = 1 - exp(-media_fora)
-    return prob_c * prob_f
-
-# Menu
+# ============================================================
+# MENU LATERAL
+# ============================================================
 st.sidebar.markdown("<h2 style='color:#DAA520;'>⚽ MyPredict 2.0</h2>", unsafe_allow_html=True)
-opcao = st.sidebar.radio("Modo", ["Análise de Jogo", "Backtest"])
+opcao = st.sidebar.radio("Modo", ["Análise de Jogo", "Backtest", "Converter Dados Brutos"])
 
-if opcao == "Análise de Jogo":
+# ============================================================
+# CONVERSOR DE CSV (NOVA FUNCIONALIDADE)
+# ============================================================
+if opcao == "Converter Dados Brutos":
+    st.markdown("<h1 style='text-align:center;'>🔄 Conversor de CSV</h1>", unsafe_allow_html=True)
+    st.markdown("Converte os arquivos da pasta `data/raw/` para o formato do MyPredict.")
+
+    # Listar arquivos na pasta raw
+    raw_path = "data/raw"
+    arquivos_raw = []
+    try:
+        arquivos_raw = [f for f in os.listdir(raw_path) if f.endswith('.csv')]
+    except FileNotFoundError:
+        st.error("Pasta 'data/raw' não encontrada. Verifique se os arquivos foram enviados para lá.")
+
+    if not arquivos_raw:
+        st.warning("Nenhum arquivo CSV encontrado em data/raw/. Adicione os arquivos da Premier League nessa pasta.")
+    else:
+        st.write("Arquivos encontrados:", arquivos_raw)
+
+        if st.button("⚙️ Converter para meus_jogos.csv"):
+            # Ler todos os CSVs da pasta raw
+            dfs = []
+            for arquivo in arquivos_raw:
+                caminho = os.path.join(raw_path, arquivo)
+                try:
+                    df_temp = pd.read_csv(caminho)
+                    dfs.append(df_temp)
+                except Exception as e:
+                    st.error(f"Erro ao ler {arquivo}: {e}")
+
+            if dfs:
+                df = pd.concat(dfs, ignore_index=True)
+
+                # Converter data
+                df['Date'] = pd.to_datetime(df['Date'], dayfirst=True).dt.strftime('%Y-%m-%d')
+
+                # Funções de resultado
+                def res_casa(row):
+                    if row['FTR'] == 'H': return 'V'
+                    elif row['FTR'] == 'A': return 'D'
+                    else: return 'E'
+
+                def res_fora(row):
+                    if row['FTR'] == 'A': return 'V'
+                    elif row['FTR'] == 'H': return 'D'
+                    else: return 'E'
+
+                linhas = []
+                for _, jogo in df.iterrows():
+                    # Mandante
+                    linhas.append({
+                        'data': jogo['Date'],
+                        'time': jogo['HomeTeam'],
+                        'adv': jogo['AwayTeam'],
+                        'mando': 'casa',
+                        'resultado': res_casa(jogo),
+                        'gols': int(jogo['FTHG']),
+                        'gols_sofridos': int(jogo['FTAG']),
+                        'prat_time': 3,
+                        'prat_adv': 3,
+                        'finalizacoes_alvo': float(jogo['HST']),
+                        'finalizacoes_totais': float(jogo['HS']),
+                        'escanteios': float(jogo['HC']),
+                        'faltas_sofridas': float(jogo['AF']),
+                        'B365H': float(jogo.get('B365H', 2.0)),
+                        'B365D': float(jogo.get('B365D', 3.0)),
+                        'B365A': float(jogo.get('B365A', 3.0))
+                    })
+                    # Visitante
+                    linhas.append({
+                        'data': jogo['Date'],
+                        'time': jogo['AwayTeam'],
+                        'adv': jogo['HomeTeam'],
+                        'mando': 'fora',
+                        'resultado': res_fora(jogo),
+                        'gols': int(jogo['FTAG']),
+                        'gols_sofridos': int(jogo['FTHG']),
+                        'prat_time': 3,
+                        'prat_adv': 3,
+                        'finalizacoes_alvo': float(jogo['AST']),
+                        'finalizacoes_totais': float(jogo['AS']),
+                        'escanteios': float(jogo['AC']),
+                        'faltas_sofridas': float(jogo['HF']),
+                        'B365H': float(jogo.get('B365H', 2.0)),
+                        'B365D': float(jogo.get('B365D', 3.0)),
+                        'B365A': float(jogo.get('B365A', 3.0))
+                    })
+
+                df_final = pd.DataFrame(linhas)
+
+                # Exibir prévia
+                st.success(f"Conversão concluída! {len(df_final)} linhas geradas.")
+                st.dataframe(df_final.head(10))
+
+                # Permitir download
+                csv_exportado = df_final.to_csv(index=False)
+                st.download_button(
+                    label="📥 Baixar meus_jogos.csv",
+                    data=csv_exportado,
+                    file_name="meus_jogos.csv",
+                    mime="text/csv"
+                )
+                st.info("Após baixar, substitua o arquivo `data/meus_jogos.csv` no GitHub pelo novo conteúdo.")
+
+# ============================================================
+# ANÁLISE DE JOGO (Mantida igual)
+# ============================================================
+elif opcao == "Análise de Jogo":
+    if not jogos:
+        st.stop()
+    times_disponiveis = sorted(set(j['time'] for j in jogos))
+    # Atribuir prateleiras com base nas odds
+    odds_por_time = {}
+    for j in jogos:
+        if j['time'] not in odds_por_time:
+            try:
+                odd = float(j.get('B365H', 3.0)) if j['mando'] == 'casa' else float(j.get('B365A', 3.0))
+                odds_por_time[j['time']] = odd
+            except:
+                odds_por_time[j['time']] = 3.0
+    times_ordenados = sorted(odds_por_time, key=lambda t: odds_por_time[t])
+    prateleiras = {}
+    n = len(times_ordenados)
+    for i, t in enumerate(times_ordenados):
+        if i < n*0.15: prateleiras[t] = 1
+        elif i < n*0.35: prateleiras[t] = 2
+        elif i < n*0.65: prateleiras[t] = 3
+        elif i < n*0.85: prateleiras[t] = 4
+        else: prateleiras[t] = 5
+    for j in jogos:
+        j['prat_time'] = prateleiras.get(j['time'], 3)
+        j['prat_adv'] = prateleiras.get(j['adv'], 3)
+
     st.markdown("<h1 style='text-align:center;'>⚽ MyPredict 2.0</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align:center; color:#DAA520;'>\"O futebol é a coisa mais importante entre as menos importantes.\" – Arrigo Sacchi</p>", unsafe_allow_html=True)
     st.markdown("---")
@@ -135,7 +238,6 @@ if opcao == "Análise de Jogo":
         mpv_fora_raw = calcular_MPV_final(time_fora)
         prob_casa, prob_empate, prob_fora = probabilidades_1x2(mpv_casa_raw, mpv_fora_raw)
 
-        # Odds reais (último jogo entre eles ou estimativa)
         odds_jogos = [j for j in jogos if j['time'] == time_casa and j['adv'] == time_fora]
         odd_casa = float(odds_jogos[-1].get('B365H', 2.0)) if odds_jogos else 2.0
         odd_empate = float(odds_jogos[-1].get('B365D', 3.0)) if odds_jogos else 3.0
@@ -203,7 +305,12 @@ if opcao == "Análise de Jogo":
         total_esc = esc_casa + esc_fora
         col4.metric("Over 9.5 esc.", f"{prob_over(total_esc, 8.5):.1%}")
 
+# ============================================================
+# BACKTEST (Mantido)
+# ============================================================
 elif opcao == "Backtest":
+    if not jogos:
+        st.stop()
     st.markdown("<h1 style='text-align:center;'>📈 Backtest MyPredict 2.0</h1>", unsafe_allow_html=True)
     if st.button("Executar Backtest"):
         jogos_ord = sorted(jogos, key=lambda x: x['data'])
@@ -262,3 +369,15 @@ elif opcao == "Backtest":
         df_log = pd.DataFrame(log)
         st.dataframe(df_log, use_container_width=True)
         st.success(f"Backtest concluído para {len(log)} partidas.")
+
+# Funções auxiliares de probabilidade
+def prob_over(media_gols, limite):
+    prob_under = sum((media_gols**k) * exp(-media_gols) / factorial(k) for k in range(int(limite)+1))
+    return 1 - prob_under
+
+def prob_btts(ata_casa, def_fora, ata_fora, def_casa):
+    media_casa = (ata_casa/50) * (1 - def_fora/100)
+    media_fora = (ata_fora/50) * (1 - def_casa/100)
+    prob_c = 1 - exp(-media_casa)
+    prob_f = 1 - exp(-media_fora)
+    return prob_c * prob_f
