@@ -1,1 +1,7 @@
-
+data,time,adv,mando,resultado,gols,prat_time,prat_adv
+2024-01-01,Real Madrid,Barcelona,casa,V,3,1,1
+2024-01-01,Barcelona,Real Madrid,fora,D,0,1,1
+2024-01-08,Real Madrid,Atletico Madrid,casa,E,1,1,2
+2024-01-08,Atletico Madrid,Real Madrid,fora,E,1,2,1
+2024-01-15,Barcelona,Real Madrid,fora,V,2,1,1
+2024-01-15,Real Madrid,Barcelona,casa,D,0,1,1
