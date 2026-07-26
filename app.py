@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 - Aplicativo Completo (com Conversor de CSV e Estatísticas Expandidas)
+MyPredict 2.0 - Aplicativo Completo (com Conversor de CSV Robusto)
 """
 import streamlit as st
 import pandas as pd
@@ -50,7 +50,7 @@ opcao = st.sidebar.radio("Modo", ["Análise de Jogo", "Backtest", "Converter Dad
 
 if opcao == "Converter Dados Brutos":
     st.markdown("<h1 style='text-align:center;'>🔄 Conversor de CSV</h1>", unsafe_allow_html=True)
-    st.markdown("Converte arquivos da pasta `data/raw/` para o formato MyPredict, incluindo novas estatísticas.")
+    st.markdown("Converte arquivos da pasta `data/raw/` para o formato MyPredict.")
 
     raw_path = "data/raw"
     try:
@@ -68,68 +68,110 @@ if opcao == "Converter Dados Brutos":
             for arquivo in arquivos_raw:
                 caminho = os.path.join(raw_path, arquivo)
                 try:
-                    dfs.append(pd.read_csv(caminho))
+                    df_temp = pd.read_csv(caminho)
+                    dfs.append(df_temp)
                 except Exception as e:
                     st.error(f"Erro ao ler {arquivo}: {e}")
 
             if dfs:
                 df = pd.concat(dfs, ignore_index=True)
-                df['Date'] = pd.to_datetime(df['Date'], dayfirst=True).dt.strftime('%Y-%m-%d')
 
-                def res_casa(row):
-                    if row['FTR'] == 'H': return 'V'
-                    elif row['FTR'] == 'A': return 'D'
+                # Identificar coluna de data
+                col_data = None
+                for c in df.columns:
+                    if 'date' in c.lower():
+                        col_data = c
+                        break
+                if not col_data:
+                    st.error("Nenhuma coluna de data encontrada (precisa conter 'date').")
+                    st.stop()
+
+                df[col_data] = pd.to_datetime(df[col_data], dayfirst=True).dt.strftime('%Y-%m-%d')
+
+                # Função para pegar coluna flexível
+                def get_col(df, possiveis, tipo=float, padrao=0):
+                    for p in possiveis:
+                        if p in df.columns:
+                            return df[p].astype(tipo)
+                    return pd.Series([padrao]*len(df))
+
+                FTR = get_col(df, ['FTR'], str, '')
+                FTHG = get_col(df, ['FTHG', 'HG'], int, 0)
+                FTAG = get_col(df, ['FTAG', 'AG'], int, 0)
+                HST = get_col(df, ['HST'], float, 0)
+                AST = get_col(df, ['AST'], float, 0)
+                HS = get_col(df, ['HS'], float, 0)
+                AS = get_col(df, ['AS'], float, 0)
+                HC = get_col(df, ['HC'], float, 0)
+                AC = get_col(df, ['AC'], float, 0)
+                HF = get_col(df, ['HF'], float, 0)
+                AF = get_col(df, ['AF'], float, 0)
+                HY = get_col(df, ['HY'], int, 0)
+                AY = get_col(df, ['AY'], int, 0)
+                HR = get_col(df, ['HR'], int, 0)
+                AR = get_col(df, ['AR'], int, 0)
+                B365H = get_col(df, ['B365H'], float, 2.0)
+                B365D = get_col(df, ['B365D'], float, 3.0)
+                B365A = get_col(df, ['B365A'], float, 3.0)
+
+                def res_casa(ftr):
+                    if ftr == 'H': return 'V'
+                    elif ftr == 'A': return 'D'
                     else: return 'E'
 
-                def res_fora(row):
-                    if row['FTR'] == 'A': return 'V'
-                    elif row['FTR'] == 'H': return 'D'
+                def res_fora(ftr):
+                    if ftr == 'A': return 'V'
+                    elif ftr == 'H': return 'D'
                     else: return 'E'
 
                 linhas = []
-                for _, jogo in df.iterrows():
-                    # Mapeamento de colunas opcionais (usando .get para evitar erros)
+                for i in range(len(df)):
+                    jogo = df.iloc[i]
+                    data = jogo[col_data]
+                    home = jogo['HomeTeam']
+                    away = jogo['AwayTeam']
+
                     mandante = {
-                        'data': jogo['Date'],
-                        'time': jogo['HomeTeam'],
-                        'adv': jogo['AwayTeam'],
+                        'data': data,
+                        'time': home,
+                        'adv': away,
                         'mando': 'casa',
-                        'resultado': res_casa(jogo),
-                        'gols': int(jogo['FTHG']),
-                        'gols_sofridos': int(jogo['FTAG']),
+                        'resultado': res_casa(FTR.iloc[i]),
+                        'gols': int(FTHG.iloc[i]),
+                        'gols_sofridos': int(FTAG.iloc[i]),
                         'prat_time': 3,
                         'prat_adv': 3,
-                        'finalizacoes_alvo': float(jogo.get('HST', 0)),
-                        'finalizacoes_totais': float(jogo.get('HS', 0)),
-                        'escanteios': float(jogo.get('HC', 0)),
-                        'faltas_sofridas': float(jogo.get('AF', 0)),
-                        'faltas_cometidas': float(jogo.get('HF', 0)),
-                        'cartoes_amarelos': int(jogo.get('HY', 0)),
-                        'cartoes_vermelhos': int(jogo.get('HR', 0)),
-                        'B365H': float(jogo.get('B365H', 2.0)),
-                        'B365D': float(jogo.get('B365D', 3.0)),
-                        'B365A': float(jogo.get('B365A', 3.0))
+                        'finalizacoes_alvo': float(HST.iloc[i]),
+                        'finalizacoes_totais': float(HS.iloc[i]),
+                        'escanteios': float(HC.iloc[i]),
+                        'faltas_sofridas': float(AF.iloc[i]),
+                        'faltas_cometidas': float(HF.iloc[i]),
+                        'cartoes_amarelos': int(HY.iloc[i]),
+                        'cartoes_vermelhos': int(HR.iloc[i]),
+                        'B365H': float(B365H.iloc[i]) if not pd.isna(B365H.iloc[i]) else 2.0,
+                        'B365D': float(B365D.iloc[i]) if not pd.isna(B365D.iloc[i]) else 3.0,
+                        'B365A': float(B365A.iloc[i]) if not pd.isna(B365A.iloc[i]) else 3.0
                     }
                     visitante = {
-                        'data': jogo['Date'],
-                        'time': jogo['AwayTeam'],
-                        'adv': jogo['HomeTeam'],
+                        'data': data,
+                        'time': away,
+                        'adv': home,
                         'mando': 'fora',
-                        'resultado': res_fora(jogo),
-                        'gols': int(jogo['FTAG']),
-                        'gols_sofridos': int(jogo['FTHG']),
+                        'resultado': res_fora(FTR.iloc[i]),
+                        'gols': int(FTAG.iloc[i]),
+                        'gols_sofridos': int(FTHG.iloc[i]),
                         'prat_time': 3,
                         'prat_adv': 3,
-                        'finalizacoes_alvo': float(jogo.get('AST', 0)),
-                        'finalizacoes_totais': float(jogo.get('AS', 0)),
-                        'escanteios': float(jogo.get('AC', 0)),
-                        'faltas_sofridas': float(jogo.get('HF', 0)),
-                        'faltas_cometidas': float(jogo.get('AF', 0)),
-                        'cartoes_amarelos': int(jogo.get('AY', 0)),
-                        'cartoes_vermelhos': int(jogo.get('AR', 0)),
-                        'B365H': float(jogo.get('B365H', 2.0)),
-                        'B365D': float(jogo.get('B365D', 3.0)),
-                        'B365A': float(jogo.get('B365A', 3.0))
+                        'finalizacoes_alvo': float(AST.iloc[i]),
+                        'finalizacoes_totais': float(AS.iloc[i]),
+                        'escanteios': float(AC.iloc[i]),
+                        'faltas_sofridas': float(HF.iloc[i]),
+                        'faltas_cometidas': float(AF.iloc[i]),
+                        'cartoes_amarelos': int(AY.iloc[i]),
+                        'cartoes_vermelhos': int(AR.iloc[i]),
+                        'B365H': float(B365H.iloc[i]) if not pd.isna(B365H.iloc[i]) else 2.0,
+                        'B365D': float(B365D.iloc[i]) if not pd.isna(B365D.iloc[i]) else 3.0,
+                        'B365A': float(B365A.iloc[i]) if not pd.isna(B365A.iloc[i]) else 3.0
                     }
                     linhas.append(mandante)
                     linhas.append(visitante)
@@ -150,7 +192,7 @@ elif opcao == "Análise de Jogo":
     if not jogos:
         st.stop()
     times_disponiveis = sorted(set(j['time'] for j in jogos))
-    # Atribuir prateleiras (já existente)
+    # Atribuir prateleiras
     odds_por_time = {}
     for j in jogos:
         if j['time'] not in odds_por_time:
@@ -248,7 +290,6 @@ elif opcao == "Análise de Jogo":
         mpv_casa = (mpv_casa_raw - 1000) / 10
         mpv_fora = (mpv_fora_raw - 1000) / 10
 
-        # Exibição (resumida, mas com as novas métricas)
         st.markdown("---")
         col1, col2, col3 = st.columns([2,1,2])
         with col1:
@@ -287,7 +328,7 @@ elif opcao == "Análise de Jogo":
         def media_gols(time, tipo):
             jogos_time = [j for j in jogos if j['time'] == time and j['data'] <= data_ref_dt][-10:]
             if not jogos_time: return 1.0
-            return sum(j['gols'] if tipo == 'marcados' else j['gols_sofridos'] for j in jogos_time)/len(jogos_time)
+            return sum(j.get('gols', 0) if tipo == 'marcados' else j.get('gols_sofridos', 0) for j in jogos_time)/len(jogos_time)
         gols_casa = media_gols(time_casa, 'marcados')
         gols_fora = media_gols(time_fora, 'marcados')
         sofridos_casa = media_gols(time_casa, 'sofridos')
@@ -324,6 +365,9 @@ elif opcao == "Backtest":
             time_casa = chave[1]
             time_fora = chave[2]
             jogo_casa = jogo_dict['casa']
+            jogo_fora = jogo_dict['fora']
+            if not jogo_casa or not jogo_fora:
+                continue
             data_ref = pd.to_datetime(data_jogo)
             jogos_passados = [j for j in jogos if j['data'] < data_ref]
 
@@ -335,7 +379,10 @@ elif opcao == "Backtest":
             def media_gols(time, tipo):
                 jogos_time = [j for j in jogos_passados if j['time'] == time][-10:]
                 if not jogos_time: return 1.0
-                return sum(j['gols'] if tipo == 'marcados' else j['gols_sofridos'] for j in jogos_time)/len(jogos_time)
+                if tipo == 'marcados':
+                    return sum(j.get('gols', 0) for j in jogos_time) / len(jogos_time)
+                else:
+                    return sum(j.get('gols_sofridos', 0) for j in jogos_time) / len(jogos_time)
 
             gols_casa = media_gols(time_casa, 'marcados')
             sofridos_fora = media_gols(time_fora, 'sofridos')
@@ -346,9 +393,9 @@ elif opcao == "Backtest":
             prob_over25 = prob_over(media_total, 2.5)
             prob_bt = prob_btts(ata_casa, def_fora, ata_fora, def_casa)
 
-            total_gols = jogo_casa['gols'] + jogo_casa['gols_sofridos']
+            total_gols = jogo_casa.get('gols', 0) + jogo_casa.get('gols_sofridos', 0)
             over25_real = total_gols > 2.5
-            btts_real = (jogo_casa['gols'] > 0 and jogo_casa['gols_sofridos'] > 0)
+            btts_real = (jogo_casa.get('gols', 0) > 0 and jogo_casa.get('gols_sofridos', 0) > 0)
 
             log.append({
                 'Data': data_jogo.strftime('%Y-%m-%d') if hasattr(data_jogo,'strftime') else str(data_jogo),
@@ -360,6 +407,9 @@ elif opcao == "Backtest":
                 'BTTS Real': 'Sim' if btts_real else 'Não'
             })
 
-        df_log = pd.DataFrame(log)
-        st.dataframe(df_log, use_container_width=True)
-        st.success(f"Backtest concluído para {len(log)} partidas.")
+        if log:
+            df_log = pd.DataFrame(log)
+            st.dataframe(df_log, use_container_width=True)
+            st.success(f"Backtest concluído para {len(log)} partidas.")
+        else:
+            st.warning("Nenhuma partida válida encontrada. Execute a conversão primeiro.")
