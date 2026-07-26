@@ -65,7 +65,7 @@ st.markdown("""
 @st.cache_data
 def carregar_dados():
     try:
-        df = pd.read_csv("data/exemplo_jogos.csv", parse_dates=["data"])
+        df = pd.read_csv("data/meus_jogos.csv", parse_dates=["data"])
         jogos = []
         for _, row in df.iterrows():
             jogos.append({
