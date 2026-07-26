@@ -1,7 +1,13 @@
-data,time,adv,mando,resultado,gols,prat_time,prat_adv
-2024-01-01,Real Madrid,Barcelona,casa,V,3,1,1
-2024-01-01,Barcelona,Real Madrid,fora,D,0,1,1
-2024-01-08,Real Madrid,Atletico Madrid,casa,E,1,1,2
-2024-01-08,Atletico Madrid,Real Madrid,fora,E,1,2,1
-2024-01-15,Barcelona,Real Madrid,fora,V,2,1,1
-2024-01-15,Real Madrid,Barcelona,casa,D,0,1,1
+data,time,adv,mando,resultado,gols,gols_sofridos,prat_time,prat_adv,finalizacoes_alvo,finalizacoes_totais,escanteios,faltas_sofridas
+2025-08-15,Liverpool,Bournemouth,casa,V,4,2,3,3,10.0,19.0,6.0,10.0
+2025-08-15,Bournemouth,Liverpool,fora,D,2,4,3,3,3.0,10.0,7.0,7.0
+2025-08-16,Aston Villa,Newcastle,casa,E,0,0,3,3,3.0,3.0,3.0,11.0
+2025-08-16,Newcastle,Aston Villa,fora,E,0,0,3,3,3.0,16.0,6.0,13.0
+2025-08-16,Brighton,Fulham,casa,E,1,1,3,3,4.0,10.0,4.0,15.0
+2025-08-16,Fulham,Brighton,fora,E,1,1,3,3,2.0,7.0,3.0,16.0
+2025-08-16,Sunderland,West Ham,casa,V,3,0,3,3,5.0,10.0,5.0,10.0
+2025-08-16,West Ham,Sunderland,fora,D,0,3,3,3,4.0,12.0,7.0,8.0
+2025-08-16,Tottenham,Burnley,casa,V,3,0,3,3,6.0,16.0,6.0,8.0
+2025-08-16,Burnley,Tottenham,fora,D,0,3,3,3,4.0,14.0,5.0,14.0
+2025-08-16,Wolves,Man City,casa,D,0,4,3,3,3.0,9.0,4.0,7.0
+2025-08-16,Man City,Wolves,fora,V,4,0,3,3,4.0,15.0,6.0,13.0
