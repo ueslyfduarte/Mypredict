@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 - Aplicativo Completo (Versão Final)
+MyPredict 2.0 - Aplicativo Completo (Conversor Robusto)
 """
 import streamlit as st
 import pandas as pd
@@ -9,7 +9,7 @@ from math import exp, factorial
 import os
 
 # ============================================================
-# CONFIGURAÇÃO DA PÁGINA
+# CONFIGURAÇÃO
 # ============================================================
 st.set_page_config(page_title="MyPredict 2.0", page_icon="⚽", layout="wide")
 st.markdown("""
@@ -57,21 +57,21 @@ st.sidebar.markdown("<h2 style='color:#DAA520;'>⚽ MyPredict 2.0</h2>", unsafe_
 opcao = st.sidebar.radio("Modo", ["Análise de Jogo", "Backtest", "Converter Dados Brutos"])
 
 # ============================================================
-# CONVERSOR DE CSV
+# CONVERSOR ROBUSTO
 # ============================================================
 if opcao == "Converter Dados Brutos":
     st.markdown("<h1 style='text-align:center;'>🔄 Conversor de CSV</h1>", unsafe_allow_html=True)
     st.markdown("Converte os arquivos da pasta `data/raw/` para o formato MyPredict.")
-    
+
     raw_path = "data/raw"
-    arquivos_raw = []
     try:
         arquivos_raw = [f for f in os.listdir(raw_path) if f.endswith('.csv')]
     except FileNotFoundError:
         st.error("Pasta 'data/raw' não encontrada.")
-    
+        arquivos_raw = []
+
     if not arquivos_raw:
-        st.warning("Nenhum CSV em data/raw/. Coloque lá os arquivos premier1.csv e premier2.csv.")
+        st.warning("Nenhum CSV em data/raw/.")
     else:
         st.write("Arquivos encontrados:", arquivos_raw)
         if st.button("⚙️ Converter para meus_jogos.csv"):
@@ -79,85 +79,154 @@ if opcao == "Converter Dados Brutos":
             for arquivo in arquivos_raw:
                 caminho = os.path.join(raw_path, arquivo)
                 try:
-                    df_temp = pd.read_csv(
-                        caminho,
-                        encoding='utf-8-sig',
-                        usecols=['Date', 'HomeTeam', 'AwayTeam', 'FTR', 'FTHG', 'FTAG',
-                                 'HS', 'AS', 'HST', 'AST', 'HF', 'AF', 'HC', 'AC',
-                                 'HY', 'AY', 'HR', 'AR', 'B365H', 'B365D', 'B365A']
-                    )
+                    # Lê o CSV sem forçar colunas, detectando separador
+                    df_temp = pd.read_csv(caminho, encoding='utf-8-sig', sep=None, engine='python')
+                    # Remove espaços dos nomes das colunas
+                    df_temp.columns = df_temp.columns.str.strip()
                     dfs.append(df_temp)
                 except Exception as e:
                     st.error(f"Erro ao ler {arquivo}: {e}")
-            
+
             if not dfs:
                 st.stop()
-            
+
             df = pd.concat(dfs, ignore_index=True)
-            
+
+            # Função para encontrar coluna por palavras-chave
+            def find_col(keywords):
+                for col in df.columns:
+                    col_lower = col.lower().replace(' ', '')
+                    for kw in keywords:
+                        if kw in col_lower:
+                            return col
+                return None
+
+            # Mapeamento necessário
+            col_date = find_col(['date'])
+            col_home = find_col(['hometeam', 'home', 'ht'])
+            col_away = find_col(['awayteam', 'away', 'at'])
+            col_ftr = find_col(['ftr', 'result'])
+            col_fthg = find_col(['fthg', 'homegoals', 'hg'])
+            col_ftag = find_col(['ftag', 'awaygoals', 'ag'])
+            col_hs = find_col(['hs', 'homeshots'])
+            col_as = find_col(['as', 'awayshots'])
+            col_hst = find_col(['hst', 'homeshotsontarget'])
+            col_ast = find_col(['ast', 'awayshotsontarget'])
+            col_hf = find_col(['hf', 'homefouls'])
+            col_af = find_col(['af', 'awayfouls'])
+            col_hc = find_col(['hc', 'homecorners'])
+            col_ac = find_col(['ac', 'awaycorners'])
+            col_hy = find_col(['hy', 'homeyellow'])
+            col_ay = find_col(['ay', 'awayyellow'])
+            col_hr = find_col(['hr', 'homered'])
+            col_ar = find_col(['ar', 'awayred'])
+            col_b365h = find_col(['b365h', 'bet365h'])
+            col_b365d = find_col(['b365d', 'bet365d'])
+            col_b365a = find_col(['b365a', 'bet365a'])
+
+            # Verifica se todas as colunas essenciais foram encontradas
+            erros = []
+            if not col_date: erros.append("Data (Date)")
+            if not col_home: erros.append("Time Mandante (HomeTeam)")
+            if not col_away: erros.append("Time Visitante (AwayTeam)")
+            if not col_ftr: erros.append("Resultado (FTR)")
+            if not col_fthg: erros.append("Gols Mandante (FTHG)")
+            if not col_ftag: erros.append("Gols Visitante (FTAG)")
+
+            if erros:
+                st.error(f"Colunas essenciais não encontradas: {', '.join(erros)}. Colunas disponíveis: {list(df.columns)}")
+                st.stop()
+
             # Converter data
-            df['Date'] = df['Date'].astype(str).str.split(' ').str[0]
-            df['Date'] = pd.to_datetime(df['Date'], format='%d/%m/%Y', exact=False).dt.strftime('%Y-%m-%d')
-            
+            try:
+                df[col_date] = df[col_date].astype(str).str.split(' ').str[0]
+                df[col_date] = pd.to_datetime(df[col_date], format='%d/%m/%Y', exact=False).dt.strftime('%Y-%m-%d')
+            except Exception as e:
+                st.error(f"Erro ao processar datas: {e}")
+                st.stop()
+
+            # Funções de resultado
+            def res_casa(r):
+                return 'V' if r == 'H' else ('D' if r == 'A' else 'E')
+            def res_fora(r):
+                return 'V' if r == 'A' else ('D' if r == 'H' else 'E')
+
             linhas = []
             for _, jogo in df.iterrows():
-                def res_casa(r):
-                    return 'V' if r == 'H' else ('D' if r == 'A' else 'E')
-                def res_fora(r):
-                    return 'V' if r == 'A' else ('D' if r == 'H' else 'E')
-                
+                # Extrai valores com fallback seguro
+                try:
+                    fthg = int(jogo[col_fthg])
+                    ftag = int(jogo[col_ftag])
+                    hst = float(jogo.get(col_hst, 0)) if col_hst else 0.0
+                    ast = float(jogo.get(col_ast, 0)) if col_ast else 0.0
+                    hs  = float(jogo.get(col_hs, 0)) if col_hs else 0.0
+                    as_ = float(jogo.get(col_as, 0)) if col_as else 0.0
+                    hc  = float(jogo.get(col_hc, 0)) if col_hc else 0.0
+                    ac  = float(jogo.get(col_ac, 0)) if col_ac else 0.0
+                    hf  = float(jogo.get(col_hf, 0)) if col_hf else 0.0
+                    af  = float(jogo.get(col_af, 0)) if col_af else 0.0
+                    hy  = int(jogo.get(col_hy, 0)) if col_hy else 0
+                    ay  = int(jogo.get(col_ay, 0)) if col_ay else 0
+                    hr  = int(jogo.get(col_hr, 0)) if col_hr else 0
+                    ar  = int(jogo.get(col_ar, 0)) if col_ar else 0
+                    b365h = float(jogo.get(col_b365h, 2.0)) if col_b365h else 2.0
+                    b365d = float(jogo.get(col_b365d, 3.0)) if col_b365d else 3.0
+                    b365a = float(jogo.get(col_b365a, 3.0)) if col_b365a else 3.0
+                except Exception as e:
+                    st.warning(f"Erro em uma linha: {e}")
+                    continue
+
                 mandante = {
-                    'data': jogo['Date'],
-                    'time': jogo['HomeTeam'],
-                    'adv': jogo['AwayTeam'],
+                    'data': jogo[col_date],
+                    'time': jogo[col_home],
+                    'adv': jogo[col_away],
                     'mando': 'casa',
-                    'resultado': res_casa(jogo['FTR']),
-                    'gols': int(jogo['FTHG']),
-                    'gols_sofridos': int(jogo['FTAG']),
+                    'resultado': res_casa(jogo[col_ftr]),
+                    'gols': fthg,
+                    'gols_sofridos': ftag,
                     'prat_time': 3, 'prat_adv': 3,
-                    'finalizacoes_alvo': float(jogo['HST']),
-                    'finalizacoes_totais': float(jogo['HS']),
-                    'escanteios': float(jogo['HC']),
-                    'faltas_sofridas': float(jogo['AF']),
-                    'faltas_cometidas': float(jogo['HF']),
-                    'cartoes_amarelos': int(jogo['HY']),
-                    'cartoes_vermelhos': int(jogo['HR']),
-                    'B365H': float(jogo['B365H']),
-                    'B365D': float(jogo['B365D']),
-                    'B365A': float(jogo['B365A'])
+                    'finalizacoes_alvo': hst,
+                    'finalizacoes_totais': hs,
+                    'escanteios': hc,
+                    'faltas_sofridas': af,
+                    'faltas_cometidas': hf,
+                    'cartoes_amarelos': hy,
+                    'cartoes_vermelhos': hr,
+                    'B365H': b365h, 'B365D': b365d, 'B365A': b365a
                 }
                 visitante = {
-                    'data': jogo['Date'],
-                    'time': jogo['AwayTeam'],
-                    'adv': jogo['HomeTeam'],
+                    'data': jogo[col_date],
+                    'time': jogo[col_away],
+                    'adv': jogo[col_home],
                     'mando': 'fora',
-                    'resultado': res_fora(jogo['FTR']),
-                    'gols': int(jogo['FTAG']),
-                    'gols_sofridos': int(jogo['FTHG']),
+                    'resultado': res_fora(jogo[col_ftr]),
+                    'gols': ftag,
+                    'gols_sofridos': fthg,
                     'prat_time': 3, 'prat_adv': 3,
-                    'finalizacoes_alvo': float(jogo['AST']),
-                    'finalizacoes_totais': float(jogo['AS']),
-                    'escanteios': float(jogo['AC']),
-                    'faltas_sofridas': float(jogo['HF']),
-                    'faltas_cometidas': float(jogo['AF']),
-                    'cartoes_amarelos': int(jogo['AY']),
-                    'cartoes_vermelhos': int(jogo['AR']),
-                    'B365H': float(jogo['B365H']),
-                    'B365D': float(jogo['B365D']),
-                    'B365A': float(jogo['B365A'])
+                    'finalizacoes_alvo': ast,
+                    'finalizacoes_totais': as_,
+                    'escanteios': ac,
+                    'faltas_sofridas': hf,
+                    'faltas_cometidas': af,
+                    'cartoes_amarelos': ay,
+                    'cartoes_vermelhos': ar,
+                    'B365H': b365h, 'B365D': b365d, 'B365A': b365a
                 }
                 linhas.append(mandante)
                 linhas.append(visitante)
-            
-            df_final = pd.DataFrame(linhas)
-            st.success(f"Conversão concluída! {len(df_final)} linhas geradas.")
-            st.dataframe(df_final.head(10))
-            csv_exportado = df_final.to_csv(index=False)
-            st.download_button("📥 Baixar meus_jogos.csv", csv_exportado, file_name="meus_jogos.csv")
-            st.info("Após baixar, substitua o arquivo `data/meus_jogos.csv` no GitHub pelo novo conteúdo.")
+
+            if linhas:
+                df_final = pd.DataFrame(linhas)
+                st.success(f"Conversão concluída! {len(df_final)} linhas geradas.")
+                st.dataframe(df_final.head(10))
+                csv_exportado = df_final.to_csv(index=False)
+                st.download_button("📥 Baixar meus_jogos.csv", csv_exportado, file_name="meus_jogos.csv")
+                st.info("Após baixar, substitua o arquivo `data/meus_jogos.csv` no GitHub pelo novo conteúdo.")
+            else:
+                st.error("Nenhuma linha foi convertida. Verifique o conteúdo dos CSVs.")
 
 # ============================================================
-# ANÁLISE DE JOGO
+# ANÁLISE DE JOGO (a mesma funcional)
 # ============================================================
 elif opcao == "Análise de Jogo":
     if not jogos:
@@ -166,7 +235,7 @@ elif opcao == "Análise de Jogo":
     
     times_disponiveis = sorted(set(j['time'] for j in jogos))
     
-    # Atribuir prateleiras com base nas odds B365
+    # Atribuir prateleiras
     odds_por_time = {}
     for j in jogos:
         if j['time'] not in odds_por_time:
@@ -249,7 +318,6 @@ elif opcao == "Análise de Jogo":
         mpv_fora_raw = calcular_MPV_final(time_fora)
         prob_casa, prob_empate, prob_fora = probabilidades_1x2(mpv_casa_raw, mpv_fora_raw)
         
-        # Odds do último encontro entre os times
         odds_jogos = [j for j in jogos if j['time'] == time_casa and j['adv'] == time_fora]
         odd_casa = float(odds_jogos[-1].get('B365H', 2.0)) if odds_jogos else 2.0
         odd_empate = float(odds_jogos[-1].get('B365D', 3.0)) if odds_jogos else 3.0
@@ -266,7 +334,6 @@ elif opcao == "Análise de Jogo":
         mpv_casa = (mpv_casa_raw - 1000) / 10
         mpv_fora = (mpv_fora_raw - 1000) / 10
         
-        # Exibição dos resultados
         st.markdown("---")
         col1, col2, col3 = st.columns([2,1,2])
         with col1:
