@@ -2,8 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import datetime
-import io
-import re
+import requests
 
 # =========================================================================
 # CONFIGURAÇÃO DA PÁGINA - TEMA PRETO E DOURADO
@@ -72,6 +71,16 @@ st.markdown("""
         padding: 15px 25px;
         border-radius: 0 10px 10px 0;
     }
+    .analysis-box {
+        background: linear-gradient(135deg, #1a1a00, #0d0d0d);
+        border: 1px solid #ffd700;
+        border-radius: 15px;
+        padding: 20px;
+        margin: 15px 0;
+        color: #e0e0e0;
+        line-height: 1.6;
+    }
+    .analysis-box h4 { color: #ffd700; margin-top: 0; }
     .streamlit-expanderHeader {
         background: linear-gradient(90deg, #1a1a00, #0d0d0d);
         border: 1px solid #ffd700;
@@ -122,7 +131,9 @@ with col_title:
 st.markdown("<div class='welcome-card'>", unsafe_allow_html=True)
 st.markdown("""
 ### 👋 Bem-vindo ao MyPredict!
-O **MyPredict** é um sistema avançado de análise e previsão de partidas de futebol baseado no **Método FMP (Fator de Modulação de Prateleira)**.
+
+O **MyPredict** é um sistema avançado de análise e previsão de partidas de futebol baseado no **Método FMP (Fator de Modulação de Prateleira)**.  
+Ele cruza estatísticas brutas com um motor matemático que avalia força ofensiva, defensiva, consistência e resposta psicológica, gerando probabilidades para diversos mercados.
 """)
 st.markdown("</div>", unsafe_allow_html=True)
 
@@ -132,10 +143,10 @@ st.markdown("<div class='quote'>\"O futebol é a coisa mais importante entre as 
 # MENU LATERAL
 # =========================================================================
 st.sidebar.title("⚙️ Navegação")
-aba = st.sidebar.radio("", ["🧮 Simulador Manual", "🌐 Dados Automáticos (FBref)", "📊 Backtesting Offline"])
+aba = st.sidebar.radio("", ["🧮 Simulador Manual"])
 
 # =========================================================================
-# FUNÇÕES AUXILIARES
+# FUNÇÕES AUXILIARES (LISTAS)
 # =========================================================================
 def processar_lista_estatistica(texto_lista):
     if not texto_lista or not texto_lista.strip():
@@ -151,7 +162,7 @@ def processar_lista_estatistica(texto_lista):
         return None, None, None
 
 # =========================================================================
-# MOTOR MATEMÁTICO (COMPACTO)
+# MOTOR MATEMÁTICO COMPLETO (FMP)
 # =========================================================================
 def normalizar_por_media(valor_time, referencia, inverter=False):
     if referencia == 0: return 50.0
@@ -159,6 +170,129 @@ def normalizar_por_media(valor_time, referencia, inverter=False):
     nota = razao * 50
     if inverter: nota = 100 - nota
     return max(0.0, min(100.0, nota))
+
+def calcular_fmp(prat_time, prat_rival, tipo):
+    elite = ["Elite Absoluta"]
+    media_alta = ["Alta", "Média"]
+    baixa = ["Baixa", "Crítica"]
+    if prat_time in elite and prat_rival in media_alta + baixa:
+        return 0.60 if tipo == "ataque" else 1.40
+    elif prat_time in baixa and prat_rival in elite:
+        return 1.30 if tipo == "ataque" else 0.70
+    elif prat_time in media_alta and prat_rival in elite:
+        return 1.30 if tipo == "ataque" else 0.70
+    else:
+        return 1.00
+
+def classificar_prateleira(overall):
+    if overall >= 86: return "Elite Absoluta"
+    elif overall >= 78: return "Alta"
+    elif overall >= 70: return "Média"
+    elif overall >= 60: return "Baixa"
+    else: return "Crítica"
+
+def calcular_fvo(estatisticas_time, medias_liga, medianas_time, pesos_ativos):
+    if not pesos_ativos: return 50.0
+    nota_total, peso_total = 0.0, 0.0
+    mapeamento = ['atq', 'atq_perigosos', 'chutes', 'chutes_gol', 'gols', 'xg']
+    for chave in mapeamento:
+        if chave in pesos_ativos and chave in estatisticas_time:
+            val = estatisticas_time[chave]
+            ref = medianas_time.get(chave) if (medianas_time and chave in medianas_time and medianas_time[chave] > 0) else medias_liga.get(chave, 1)
+            nota = normalizar_por_media(val, ref)
+            nota_total += nota * pesos_ativos[chave]
+            peso_total += pesos_ativos[chave]
+    return nota_total / peso_total if peso_total > 0 else 50.0
+
+def calcular_fco(estatisticas_time, medias_liga, medianas_time=None):
+    chutes_gol = estatisticas_time.get('chutes_gol')
+    gols = estatisticas_time.get('gols')
+    ref_cg = medianas_time.get('chutes_gol') if (medianas_time and 'chutes_gol' in medianas_time and medianas_time['chutes_gol'] > 0) else medias_liga.get('chutes_gol', 1)
+    ref_gols = medianas_time.get('gols') if (medianas_time and 'gols' in medianas_time and medianas_time['gols'] > 0) else medias_liga.get('gols', 1)
+    if not chutes_gol or not gols or chutes_gol == 0 or ref_cg == 0: return 50.0
+    media_time = chutes_gol / gols if gols > 0 else 999
+    media_liga = ref_cg / ref_gols if ref_gols > 0 else 1
+    if media_time == 0: return 0.0
+    nota = (media_liga / media_time) * 50
+    return max(0.0, min(100.0, nota))
+
+def calcular_frd(estatisticas_time, medias_liga, medianas_time, pesos_ativos):
+    if not pesos_ativos: return 50.0
+    nota_total, peso_total = 0.0, 0.0
+    mapeamento = ['atq_sofridos', 'atq_perigosos_sofridos', 'chutes_sofridos', 'chutes_gol_sofridos', 'gols_sofridos', 'xg_cedido']
+    for chave in mapeamento:
+        if chave in pesos_ativos and chave in estatisticas_time:
+            val = estatisticas_time[chave]
+            ref = medianas_time.get(chave) if (medianas_time and chave in medianas_time and medianas_time[chave] > 0) else medias_liga.get(chave, 1)
+            nota = normalizar_por_media(val, ref, inverter=True)
+            nota_total += nota * pesos_ativos[chave]
+            peso_total += pesos_ativos[chave]
+    return nota_total / peso_total if peso_total > 0 else 50.0
+
+def calcular_fcd_defensivo(estatisticas_time, medias_liga, medianas_time=None):
+    chutes_gol_sof = estatisticas_time.get('chutes_gol_sofridos')
+    gols_sof = estatisticas_time.get('gols_sofridos')
+    ref_cgs = medianas_time.get('chutes_gol_sofridos') if (medianas_time and 'chutes_gol_sofridos' in medianas_time and medianas_time['chutes_gol_sofridos'] > 0) else medias_liga.get('chutes_gol_sofridos', 1)
+    ref_gs = medianas_time.get('gols_sofridos') if (medianas_time and 'gols_sofridos' in medianas_time and medianas_time['gols_sofridos'] > 0) else medias_liga.get('gols_sofridos', 1)
+    if not chutes_gol_sof or not gols_sof or chutes_gol_sof == 0: return 50.0
+    media_time = chutes_gol_sof / gols_sof if gols_sof > 0 else 999
+    media_liga = ref_cgs / ref_gs if ref_gs > 0 else 1
+    if media_liga == 0: return 50.0
+    nota = (media_time / media_liga) * 50
+    return max(0.0, min(100.0, nota))
+
+def calcular_bloco_consistencia(estatisticas_time, medias_liga, pesos_fdm, historico_im, prat_time, prat_rival):
+    if not pesos_fdm: fdm = 50.0
+    else:
+        desvios = []
+        fmp_mod = calcular_fmp(prat_time, prat_rival, 'defesa')
+        for chave in pesos_fdm:
+            if chave in estatisticas_time and chave in medias_liga:
+                nota = normalizar_por_media(estatisticas_time[chave], medias_liga[chave])
+                desvios.append(nota)
+        if desvios:
+            desvio_padrao = np.std(desvios)
+            fdm = 100 - (desvio_padrao * 2 * fmp_mod)
+            fdm = max(0.0, min(100.0, fdm))
+        else: fdm = 50.0
+    if historico_im and len(historico_im) >= 2:
+        amplitude = max(historico_im) - min(historico_im)
+        ier = 100 - amplitude
+        ier = max(0.0, min(100.0, ier))
+    else: ier = 50.0
+    return (fdm * 0.60) + (ier * 0.40), fdm, ier
+
+def calcular_resistencia_pressao(estatisticas_time, medias_liga, pesos_ativos, prat_time, prat_rival):
+    fcd_res = 50.0
+    if 'chutes_sofridos' in pesos_ativos: fcd_res = normalizar_por_media(estatisticas_time.get('chutes_sofridos', 0), medias_liga.get('chutes_sofridos', 1))
+    egz_res = calcular_fcd_defensivo(estatisticas_time, medias_liga) if 'chutes_gol_sofridos' in pesos_ativos else 50.0
+    fri_res = estatisticas_time.get('pontos_recuperados', 50.0) if 'pontos_recuperados' in pesos_ativos else 50.0
+    fzc_res = estatisticas_time.get('gols_finais', 50.0) if 'gols_finais' in pesos_ativos else 50.0
+    fmp_def = calcular_fmp(prat_time, prat_rival, 'defesa'); fmp_atk = calcular_fmp(prat_time, prat_rival, 'ataque')
+    nota = (fcd_res * 0.30 * fmp_def + egz_res * 0.30 * fmp_def + fri_res * 0.20 * fmp_atk + fzc_res * 0.20 * fmp_atk)
+    return max(0.0, min(100.0, nota)), fcd_res, egz_res, fri_res, fzc_res
+
+def calcular_overall(estatisticas_time, medias_liga, prat_time, prat_rival,
+                     pesos_ataque, pesos_defesa, pesos_fdm, pesos_resist,
+                     historico_im, medianas_time=None):
+    fvo = calcular_fvo(estatisticas_time, medias_liga, medianas_time, pesos_ataque) if pesos_ataque else 50.0
+    fco = calcular_fco(estatisticas_time, medias_liga, medianas_time) if ('chutes_gol' in pesos_ataque and 'gols' in pesos_ataque) else 50.0
+    ataque = (fvo * 0.60) + (fco * 0.40)
+    frd = calcular_frd(estatisticas_time, medias_liga, medianas_time, pesos_defesa) if pesos_defesa else 50.0
+    fcd_def = calcular_fcd_defensivo(estatisticas_time, medias_liga, medianas_time) if ('chutes_gol_sofridos' in pesos_defesa and 'gols_sofridos' in pesos_defesa) else 50.0
+    defesa = (frd * 0.60) + (fcd_def * 0.40)
+    consistencia, fdm, ier = calcular_bloco_consistencia(estatisticas_time, medias_liga, pesos_fdm, historico_im, prat_time, prat_rival)
+    resistencia, fcd_res, egz_res, fri_res, fzc_res = calcular_resistencia_pressao(estatisticas_time, medias_liga, pesos_resist, prat_time, prat_rival)
+    overall = (consistencia * 0.35) + (ataque * 0.25) + (defesa * 0.25) + (resistencia * 0.15)
+    overall = max(0.0, min(100.0, overall))
+    return {
+        'overall': overall,
+        'ataque': ataque, 'fvo': fvo, 'fco': fco,
+        'defesa': defesa, 'frd': frd, 'fcd_def': fcd_def,
+        'consistencia': consistencia, 'fdm': fdm, 'ier': ier,
+        'resistencia': resistencia, 'fcd_res': fcd_res, 'egz_res': egz_res,
+        'fri_res': fri_res, 'fzc_res': fzc_res
+    }
 
 def calcular_im(cc3, cc5, geral_3, geral_5, geral_10, bonus_zebra, tab_din):
     bloco_campo = (cc3 * 0.65) + (cc5 * 0.35)
@@ -190,7 +324,7 @@ def calcular_probabilidades(nota_a, nota_b):
     return prob_a/total*100, prob_empate/total*100, prob_b/total*100
 
 # =========================================================================
-# ABA SIMULADOR MANUAL (COMPLETA E FUNCIONAL)
+# ABA SIMULADOR MANUAL (COM NOVA INTERFACE E ANÁLISE DESCRITIVA)
 # =========================================================================
 if aba == "🧮 Simulador Manual":
     st.header("🧮 Simulador com Estatísticas Brutas e Momento Completo")
@@ -450,34 +584,68 @@ if aba == "🧮 Simulador Manual":
         irc_params = (rodada, nota_posicao, prospeccao, orgulho, revanche,
                       sequencia, pressao, importancia, desfalques, fatores_emp)
         return (estatisticas, medianas, p_atk, p_def, p_fdm, p_res, hist_im, prat,
-                im_params, irc_params, prospeccao)
+                im_params, irc_params, prospeccao, aprov_5j, posicao_real)
 
     (est_a, med_a, p_atk_a, p_def_a, p_fdm_a, p_res_a, hist_im_a, prat_a,
-     im_params_a, irc_params_a, prosp_a) = criar_seletores_time("a", nome_a, "C")
+     im_params_a, irc_params_a, prosp_a, aprov_a, pos_real_a) = criar_seletores_time("a", nome_a, "C")
     st.divider()
     (est_b, med_b, p_atk_b, p_def_b, p_fdm_b, p_res_b, hist_im_b, prat_b,
-     im_params_b, irc_params_b, prosp_b) = criar_seletores_time("b", nome_b, "F")
+     im_params_b, irc_params_b, prosp_b, aprov_b, pos_real_b) = criar_seletores_time("b", nome_b, "F")
 
     if st.button("⚡ GERAR MYPREDICT", use_container_width=True):
-        def calc_overall_simples(est, med_liga):
-            fvo = normalizar_por_media(est.get('gols', 1.4), med_liga.get('gols', 1.4))
-            frd = normalizar_por_media(est.get('gols_sofridos', 1.2), med_liga.get('gols_sofridos', 1.2), inverter=True)
-            return (fvo * 0.5) + (frd * 0.5)
-        ovr_a = calc_overall_simples(est_a, med_liga)
-        ovr_b = calc_overall_simples(est_b, med_liga)
+        res_a = calcular_overall(est_a, med_liga, prat_a, prat_b,
+                                 p_atk_a, p_def_a, p_fdm_a, p_res_a, hist_im_a, med_a)
+        res_b = calcular_overall(est_b, med_liga, prat_b, prat_a,
+                                 p_atk_b, p_def_b, p_fdm_b, p_res_b, hist_im_b, med_b)
         im_a, _, _, _, _ = calcular_im(*im_params_a)
         im_b, _, _, _, _ = calcular_im(*im_params_b)
         irc_a, _, _, _, _, _, _, _, _ = calcular_irc(*irc_params_a)
         irc_b, _, _, _, _, _, _, _, _ = calcular_irc(*irc_params_b)
-        imp_a = calcular_imp(ovr_a, im_a, irc_a)
-        imp_b = calcular_imp(ovr_b, im_b, irc_b)
+
+        imp_a = calcular_imp(res_a['overall'], im_a, irc_a)
+        imp_b = calcular_imp(res_b['overall'], im_b, irc_b)
         prob_a, prob_e, prob_b = calcular_probabilidades(imp_a, imp_b)
 
+        # --- BLOCO DE APRESENTAÇÃO E ANÁLISE DESCRITIVA ---
+        st.markdown("---")
+        st.header("📋 Análise Pré‑Confronto")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(f"### 🏠 {nome_a}")
+            st.markdown(f"""
+            <div class='analysis-box'>
+            <h4>Posicionamento</h4>
+            <p><b>Posição atual na tabela:</b> {pos_real_a}º lugar<br>
+            <b>Aproveitamento recente (5 jogos):</b> {aprov_a}%<br>
+            <b>Prospecção inicial (prateleira esperada):</b> {prosp_a}</p>
+            <h4>Análise Técnica</h4>
+            <p>Com base nos indicadores informados, o {nome_a} apresenta um Overall de <b>{res_a['overall']:.1f}</b>. Seu setor ofensivo possui nota <b>{res_a['ataque']:.1f}</b> (FVO {res_a['fvo']:.1f}, FCO {res_a['fco']:.1f}), enquanto a defesa registra <b>{res_a['defesa']:.1f}</b> (FRD {res_a['frd']:.1f}, FCD def {res_a['fcd_def']:.1f}). A consistência tática está avaliada em <b>{res_a['consistencia']:.1f}</b> e a resistência à pressão em <b>{res_a['resistencia']:.1f}</b>.</p>
+            <p>O Índice de Momento (IM) atual é de <b>{im_a:.1f}</b>, refletindo a forma recente. O Índice de Resposta Competitiva (IRC) calculado é de <b>{irc_a:.1f}</b>, considerando fatores como urgência, orgulho ferido e revanche.</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col2:
+            st.markdown(f"### 🚌 {nome_b}")
+            st.markdown(f"""
+            <div class='analysis-box'>
+            <h4>Posicionamento</h4>
+            <p><b>Posição atual na tabela:</b> {pos_real_b}º lugar<br>
+            <b>Aproveitamento recente (5 jogos):</b> {aprov_b}%<br>
+            <b>Prospecção inicial (prateleira esperada):</b> {prosp_b}</p>
+            <h4>Análise Técnica</h4>
+            <p>Com base nos indicadores informados, o {nome_b} apresenta um Overall de <b>{res_b['overall']:.1f}</b>. Seu setor ofensivo possui nota <b>{res_b['ataque']:.1f}</b> (FVO {res_b['fvo']:.1f}, FCO {res_b['fco']:.1f}), enquanto a defesa registra <b>{res_b['defesa']:.1f}</b> (FRD {res_b['frd']:.1f}, FCD def {res_b['fcd_def']:.1f}). A consistência tática está avaliada em <b>{res_b['consistencia']:.1f}</b> e a resistência à pressão em <b>{res_b['resistencia']:.1f}</b>.</p>
+            <p>O Índice de Momento (IM) atual é de <b>{im_b:.1f}</b>, refletindo a forma recente. O Índice de Resposta Competitiva (IRC) calculado é de <b>{irc_b:.1f}</b>, considerando fatores como urgência, orgulho ferido e revanche.</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # --- RESULTADOS NUMÉRICOS ---
+        st.markdown("---")
         st.header("📊 Resultado MyPredict")
         col1, col2, col3 = st.columns(3)
-        col1.metric(f"🏠 {nome_a}", f"{imp_a:.1f}", f"OVR: {ovr_a:.1f}")
+        col1.metric(f"🏠 {nome_a}", f"{imp_a:.1f}", f"OVR: {res_a['overall']:.1f}")
         col2.metric("⚖️ Diferença", f"{imp_a - imp_b:+.1f}")
-        col3.metric(f"🚌 {nome_b}", f"{imp_b:.1f}", f"OVR: {ovr_b:.1f}")
+        col3.metric(f"🚌 {nome_b}", f"{imp_b:.1f}", f"OVR: {res_b['overall']:.1f}")
         st.subheader("🎯 Probabilidades de Resultado")
         c1, c2, c3 = st.columns(3)
         c1.metric(f"Vitória {nome_a}", f"{prob_a:.1f}%")
@@ -489,434 +657,6 @@ if aba == "🧮 Simulador Manual":
             st.success(f"🏆 Previsão: Vitória do {nome_b}")
         else:
             st.warning("🤝 Previsão: Empate")
-
-# =========================================================================
-# ABA DADOS AUTOMÁTICOS VIA CSV DO FBREF
-# =========================================================================
-elif aba == "🌐 Dados Automáticos (FBref)":
-    st.header("🌐 Dados Automáticos – FBref (CSV direto)")
-    st.caption("Selecione o time. O sistema buscará as médias automaticamente via CSV (sem Cloudflare).")
-
-    # Mapeamento de times da Premier League 2024/25 para IDs do FBref
-    TIMES_PREMIER = {
-        "Arsenal": "18bb7c10",
-        "Aston Villa": "8602292d",
-        "Bournemouth": "4ba7cbea",
-        "Brentford": "cd051869",
-        "Brighton & Hove Albion": "d07537b9",
-        "Chelsea": "cff3d9bb",
-        "Crystal Palace": "47c64c55",
-        "Everton": "d3fd31cc",
-        "Fulham": "fd962109",
-        "Ipswich Town": "c5a5e62a",
-        "Leicester City": "a2d435b3",
-        "Liverpool": "822bd0ba",
-        "Manchester City": "b8fd03ef",
-        "Manchester United": "19538871",
-        "Newcastle United": "b2b47a98",
-        "Nottingham Forest": "e4a775cb",
-        "Southampton": "33c895d4",
-        "Tottenham Hotspur": "361ca564",
-        "West Ham United": "7c21e445",
-        "Wolverhampton Wanderers": "8cec06e1"
-    }
-
-    col1, col2 = st.columns(2)
-    with col1:
-        nome_a = st.selectbox("Time A (Mandante)", list(TIMES_PREMIER.keys()), key="ta_auto")
-    with col2:
-        nome_b = st.selectbox("Time B (Visitante)", list(TIMES_PREMIER.keys()), key="tb_auto")
-
-    if st.button("🔎 Buscar Dados Automáticos"):
-        id_a = TIMES_PREMIER.get(nome_a)
-        id_b = TIMES_PREMIER.get(nome_b)
-        if not id_a or not id_b:
-            st.error("ID do time não encontrado.")
-        else:
-            season = "2024-2025"
-            base_a = f"https://fbref.com/en/squads/{id_a}/{season}"
-            base_b = f"https://fbref.com/en/squads/{id_b}/{season}"
-            url_std_a = f"{base_a}/stats/{id_a}-{season}-Premier-League-Stats.csv"
-            url_shoot_a = f"{base_a}/shooting/{id_a}-{season}-Premier-League-Shooting.csv"
-            url_std_b = f"{base_b}/stats/{id_b}-{season}-Premier-League-Stats.csv"
-            url_shoot_b = f"{base_b}/shooting/{id_b}-{season}-Premier-League-Shooting.csv"
-
-            def baixar_medias(url_std, url_shoot):
-                try:
-                    df_std = pd.read_csv(url_std, header=1)
-                    df_shoot = pd.read_csv(url_shoot, header=1)
-                    jogos = df_std['MP'].max() if 'MP' in df_std.columns else 38
-                    medias = {}
-                    if 'Gls' in df_std.columns:
-                        medias['gols'] = df_std['Gls'].sum() / jogos
-                    if 'Sh' in df_std.columns:
-                        medias['chutes'] = df_std['Sh'].sum() / jogos
-                    if 'SoT' in df_std.columns:
-                        medias['chutes_gol'] = df_std['SoT'].sum() / jogos
-                    if 'xG' in df_shoot.columns:
-                        medias['xg'] = df_shoot['xG'].sum() / jogos
-                    elif 'xG' in df_std.columns:
-                        medias['xg'] = df_std['xG'].sum() / jogos
-                    return medias
-                except Exception as e:
-                    st.error(f"Erro ao baixar CSVs: {e}")
-                    return None
-
-            with st.spinner("Baixando dados do FBref..."):
-                med_a = baixar_medias(url_std_a, url_shoot_a)
-                med_b = baixar_medias(url_std_b, url_shoot_b)
-
-            if med_a and med_b:
-                st.session_state.fbref_data_a = med_a
-                st.session_state.fbref_data_b = med_b
-                st.session_state.fbref_nomes = (nome_a, nome_b)
-                st.success("Dados extraídos com sucesso!")
-            else:
-                st.error("Falha ao obter dados de um dos times.")
-
-    if 'fbref_data_a' in st.session_state and 'fbref_data_b' in st.session_state:
-        med_a = st.session_state.fbref_data_a
-        med_b = st.session_state.fbref_data_b
-        nome_a, nome_b = st.session_state.fbref_nomes
-        st.markdown("---")
-        st.subheader("📊 Dados Extraídos (médias por jogo)")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write(f"**{nome_a}**")
-            st.write(med_a)
-        with col2:
-            st.write(f"**{nome_b}**")
-            st.write(med_b)
-
-        with st.expander("🛡️ Completar dados defensivos (se necessário)"):
-            med_a['gols_sofridos'] = st.number_input(f"Gols Sofridos {nome_a}", 0.0, 10.0, 1.0, key="fa_gs")
-            med_a['chutes_sofridos'] = st.number_input(f"Chutes Sofridos {nome_a}", 0.0, 50.0, 10.0, key="fa_cs")
-            med_b['gols_sofridos'] = st.number_input(f"Gols Sofridos {nome_b}", 0.0, 10.0, 1.0, key="fb_gs")
-            med_b['chutes_sofridos'] = st.number_input(f"Chutes Sofridos {nome_b}", 0.0, 50.0, 10.0, key="fb_cs")
-
-        st.markdown("### 🧠 Fatores Psicológicos e Momento")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write(f"**{nome_a}**")
-            rod_a = st.number_input("Rodada A", 1, 38, 20, key="ra")
-            pos_a = st.slider("Posição A (0-100)", 0, 100, 60, key="pa")
-            org_a = st.slider("Orgulho A", 0, 30, 0, key="oa")
-        with col2:
-            st.write(f"**{nome_b}**")
-            rod_b = st.number_input("Rodada B", 1, 38, 20, key="rb")
-            pos_b = st.slider("Posição B (0-100)", 0, 100, 40, key="pb")
-            org_b = st.slider("Orgulho B", 0, 30, 0, key="ob")
-
-        if st.button("⚡ GERAR MYPREDICT (Automático)", use_container_width=True):
-            # Montar estatísticas
-            estatisticas_a = {k: v for k, v in med_a.items() if v is not None}
-            estatisticas_b = {k: v for k, v in med_b.items() if v is not None}
-            # Preencher valores padrão
-            estatisticas_a.setdefault('gols', 1.4)
-            estatisticas_a.setdefault('chutes', 12.0)
-            estatisticas_a.setdefault('chutes_gol', 4.5)
-            estatisticas_a.setdefault('xg', 1.4)
-            estatisticas_b.setdefault('gols', 1.4)
-            estatisticas_b.setdefault('chutes', 12.0)
-            estatisticas_b.setdefault('chutes_gol', 4.5)
-            estatisticas_b.setdefault('xg', 1.4)
-
-            # Médias da liga (referência)
-            medias_liga = {'gols': 1.4, 'chutes': 14.0, 'chutes_gol': 5.0, 'xg': 1.5,
-                           'gols_sofridos': 1.2, 'chutes_sofridos': 12.0}
-
-            def calc_overall_avancado(est, medias_liga):
-                fvo = normalizar_por_media(est.get('gols', 1.4), medias_liga['gols'])
-                fco = normalizar_por_media(est.get('chutes_gol', 4.5) / max(est.get('gols', 1.0), 0.1), medias_liga['chutes_gol'] / medias_liga['gols'])
-                ataque = (fvo * 0.6) + (fco * 0.4)
-                frd = normalizar_por_media(est.get('gols_sofridos', 1.2), medias_liga['gols_sofridos'], inverter=True)
-                defesa = frd
-                consistencia = 50.0  # simplificado
-                resistencia = 50.0
-                overall = (consistencia * 0.35) + (ataque * 0.25) + (defesa * 0.25) + (resistencia * 0.15)
-                return max(0.0, min(100.0, overall))
-
-            ovr_a = calc_overall_avancado(estatisticas_a, medias_liga)
-            ovr_b = calc_overall_avancado(estatisticas_b, medias_liga)
-            im_a, _, _, _, _ = calcular_im(50, 50, 50, 50, 50, 0, 50)
-            im_b, _, _, _, _ = calcular_im(50, 50, 50, 50, 50, 0, 50)
-            irc_a, _, _, _, _, _, _, _, _ = calcular_irc(rod_a, pos_a, "Média", org_a, 0, 0, 0, 0, 0)
-            irc_b, _, _, _, _, _, _, _, _ = calcular_irc(rod_b, pos_b, "Média", org_b, 0, 0, 0, 0, 0)
-            imp_a = calcular_imp(ovr_a, im_a, irc_a)
-            imp_b = calcular_imp(ovr_b, im_b, irc_b)
-            prob_a, prob_e, prob_b = calcular_probabilidades(imp_a, imp_b)
-
-            st.header("📊 Resultado MyPredict")
-            col1, col2, col3 = st.columns(3)
-            col1.metric(f"🏠 {nome_a}", f"{imp_a:.1f}", f"OVR: {ovr_a:.1f}")
-            col2.metric("⚖️ Diferença", f"{imp_a - imp_b:+.1f}")
-            col3.metric(f"🚌 {nome_b}", f"{imp_b:.1f}", f"OVR: {ovr_b:.1f}")
-            st.subheader("🎯 Probabilidades de Resultado")
-            c1, c2, c3 = st.columns(3)
-            c1.metric(f"Vitória {nome_a}", f"{prob_a:.1f}%")
-            c2.metric("Empate", f"{prob_e:.1f}%")
-            c3.metric(f"Vitória {nome_b}", f"{prob_b:.1f}%")
-            if prob_a > prob_b and prob_a > prob_e:
-                st.success(f"🏆 Previsão: Vitória do {nome_a}")
-            elif prob_b > prob_a and prob_b > prob_e:
-                st.success(f"🏆 Previsão: Vitória do {nome_b}")
-            else:
-                st.warning("🤝 Previsão: Empate")
-
-# =========================================================================
-# ABA BACKTESTING OFFLINE (FUNCIONAL)
-# =========================================================================
-elif aba == "📊 Backtesting Offline":
-    st.header("📊 Backtesting Walk‑Forward – Leitura Robusta de CSV")
-    st.caption("Cole todo o conteúdo do CSV (vírgulas ou tabulações). O sistema limpa os nomes automaticamente.")
-
-    texto_dados = st.text_area("Cole os dados da temporada", height=250,
-                               placeholder="Div,Date,Time,HomeTeam,AwayTeam,FTHG,FTAG,...")
-
-    if st.button("▶️ Iniciar Simulação Completa"):
-        if not texto_dados.strip():
-            st.error("Insira os dados dos jogos.")
-        else:
-            try:
-                # Auto-detecção de separador
-                df = pd.read_csv(io.StringIO(texto_dados), sep=None, engine='python')
-                df.columns = [c.strip().lower().replace('"', '').replace("'", '') for c in df.columns]
-
-                obrigatorias = ['hometeam', 'awayteam', 'fthg', 'ftag']
-                if any(c not in df.columns for c in obrigatorias):
-                    st.error(f"Colunas obrigatórias não encontradas. Disponíveis: {list(df.columns)}")
-                else:
-                    # Limpeza agressiva dos nomes
-                    for col in ['hometeam', 'awayteam']:
-                        df[col] = df[col].astype(str).str.strip().str.replace('"', '').str.replace("'", '')
-                        df[col] = df[col].str.replace(r'[^\w\s]', '', regex=True).str.strip()
-
-                    st.success(f"CSV lido! {len(df)} jogos encontrados.")
-                    st.write("**Exemplos de nomes limpos:**", df['hometeam'].head(3).tolist())
-
-                    # Estruturas da simulação
-                    times_stats = {}
-                    resultados = []
-                    progresso = st.progress(0)
-                    total_jogos = len(df)
-
-                    # Contadores de desempenho
-                    st.session_state.acertos_por_mercado = {merc: 0 for merc in ['1X2', 'Gol HT', 'Over 1.5 FT', 'Over 2.5 FT', 'Ambas Marcam', 'Over 1.5 HT', 'Escanteios (média)']}
-                    st.session_state.total_por_mercado = {merc: 0 for merc in st.session_state.acertos_por_mercado}
-                    st.session_state.lucro_por_mercado = {merc: 0.0 for merc in st.session_state.acertos_por_mercado}
-
-                    for idx, row in df.iterrows():
-                        mandante = row['hometeam']
-                        visitante = row['awayteam']
-                        gols_m = int(row['fthg'])
-                        gols_v = int(row['ftag'])
-
-                        # Colunas opcionais
-                        gols_ht_m = int(row['hthg']) if 'hthg' in df.columns and not pd.isna(row['hthg']) else None
-                        gols_ht_v = int(row['htag']) if 'htag' in df.columns and not pd.isna(row['htag']) else None
-                        chutes_m = float(row['hs']) if 'hs' in df.columns and not pd.isna(row['hs']) else None
-                        chutes_v = float(row['as']) if 'as' in df.columns and not pd.isna(row['as']) else None
-                        chutes_gol_m = float(row['hst']) if 'hst' in df.columns and not pd.isna(row['hst']) else None
-                        chutes_gol_v = float(row['ast']) if 'ast' in df.columns and not pd.isna(row['ast']) else None
-                        escanteios_m = float(row['hc']) if 'hc' in df.columns and not pd.isna(row['hc']) else None
-                        escanteios_v = float(row['ac']) if 'ac' in df.columns and not pd.isna(row['ac']) else None
-
-                        # Funções get_stats / update_stats (idênticas)
-                        def get_stats(time_name):
-                            if time_name not in times_stats:
-                                return {
-                                    'gols': 1.4, 'gols_sofridos': 1.2,
-                                    'gols_ht': 0.6, 'gols_sofridos_ht': 0.5,
-                                    'chutes': 12.0, 'chutes_sofridos': 12.0,
-                                    'chutes_gol': 4.5, 'chutes_gol_sofridos': 4.5,
-                                    'escanteios': 5.0, 'escanteios_sofridos': 5.0,
-                                    'jogos': 0,
-                                    'hist_gols': [], 'hist_gols_sofridos': [],
-                                    'hist_gols_ht': [], 'hist_gols_sofridos_ht': [],
-                                    'hist_chutes': [], 'hist_chutes_sofridos': [],
-                                    'hist_chutes_gol': [], 'hist_chutes_gol_sofridos': [],
-                                    'hist_escanteios': [], 'hist_escanteios_sofridos': [],
-                                    'hist_ambas': [], 'hist_over25': [], 'hist_over15': [],
-                                    'hist_over15_ht': [], 'hist_gol_ht': []
-                                }
-                            return times_stats[time_name]
-
-                        stats_a = get_stats(mandante)
-                        stats_b = get_stats(visitante)
-
-                        # Cálculo do Overall simplificado (apenas gols)
-                        est_a = {'gols': stats_a['gols'], 'gols_sofridos': stats_b['gols']}
-                        est_b = {'gols': stats_b['gols'], 'gols_sofridos': stats_a['gols']}
-                        medias_liga = {'gols': 1.4, 'gols_sofridos': 1.2}
-                        def calc_overall(est):
-                            fvo = normalizar_por_media(est['gols'], medias_liga['gols'])
-                            frd = normalizar_por_media(est['gols_sofridos'], medias_liga['gols_sofridos'], inverter=True)
-                            return (fvo * 0.5) + (frd * 0.5)
-                        ovr_a = calc_overall(est_a)
-                        ovr_b = calc_overall(est_b)
-                        im_a, _, _, _, _ = calcular_im(50, 50, 50, 50, 50, 0, 50)
-                        im_b, _, _, _, _ = calcular_im(50, 50, 50, 50, 50, 0, 50)
-                        irc_a, _, _, _, _, _, _, _, _ = calcular_irc(20, 50, "Média", 0, 0, 0, 0, 0, 0)
-                        irc_b, _, _, _, _, _, _, _, _ = calcular_irc(20, 50, "Média", 0, 0, 0, 0, 0, 0)
-                        imp_a = calcular_imp(ovr_a, im_a, irc_a)
-                        imp_b = calcular_imp(ovr_b, im_b, irc_b)
-                        prob_1x2 = calcular_probabilidades(imp_a, imp_b)
-
-                        # Mercados (frequência)
-                        def prob_mercado(lista_a, lista_b):
-                            if not lista_a or not lista_b: return None
-                            return (sum(lista_a)/len(lista_a) + sum(lista_b)/len(lista_b)) / 2.0
-
-                        mercados = {}
-                        if stats_a['hist_gol_ht'] and stats_b['hist_gol_ht']:
-                            mercados['Gol HT'] = prob_mercado(stats_a['hist_gol_ht'], stats_b['hist_gol_ht'])
-                        if stats_a['hist_over15'] and stats_b['hist_over15']:
-                            mercados['Over 1.5 FT'] = prob_mercado(stats_a['hist_over15'], stats_b['hist_over15'])
-                        if stats_a['hist_over25'] and stats_b['hist_over25']:
-                            mercados['Over 2.5 FT'] = prob_mercado(stats_a['hist_over25'], stats_b['hist_over25'])
-                        if stats_a['hist_ambas'] and stats_b['hist_ambas']:
-                            mercados['Ambas Marcam'] = prob_mercado(stats_a['hist_ambas'], stats_b['hist_ambas'])
-                        if stats_a['hist_over15_ht'] and stats_b['hist_over15_ht']:
-                            mercados['Over 1.5 HT'] = prob_mercado(stats_a['hist_over15_ht'], stats_b['hist_over15_ht'])
-                        if stats_a['hist_escanteios'] and stats_b['hist_escanteios']:
-                            media_esc_a = np.mean(stats_a['hist_escanteios']) if stats_a['hist_escanteios'] else 0
-                            media_esc_b = np.mean(stats_b['hist_escanteios']) if stats_b['hist_escanteios'] else 0
-                            mercados['Escanteios (média)'] = (media_esc_a + media_esc_b) / 2.0
-
-                        # Resultados reais
-                        real_1x2 = "Vitória Mandante" if gols_m > gols_v else ("Vitória Visitante" if gols_m < gols_v else "Empate")
-                        real_gol_ht = (gols_ht_m + gols_ht_v) > 0 if (gols_ht_m is not None and gols_ht_v is not None) else None
-                        real_over15_ft = (gols_m + gols_v) > 1
-                        real_over25_ft = (gols_m + gols_v) > 2
-                        real_ambas = (gols_m > 0 and gols_v > 0)
-                        real_over15_ht = (gols_ht_m + gols_ht_v) > 1 if (gols_ht_m is not None and gols_ht_v is not None) else None
-                        real_escanteios = (escanteios_m + escanteios_v) if (escanteios_m is not None and escanteios_v is not None) else None
-
-                        previsao_1x2 = "Vitória Mandante" if prob_1x2[0] > prob_1x2[1] and prob_1x2[0] > prob_1x2[2] else ("Vitória Visitante" if prob_1x2[1] > prob_1x2[0] and prob_1x2[1] > prob_1x2[2] else "Empate")
-                        acerto_1x2 = "Sim" if previsao_1x2 == real_1x2 else "Não"
-
-                        resultados.append({
-                            'Jogo': f"{mandante} vs {visitante}",
-                            'Placar': f"{gols_m}x{gols_v}",
-                            'Prob 1X2': f"{prob_1x2[0]:.1f}%/{prob_1x2[2]:.1f}%/{prob_1x2[1]:.1f}%",
-                            'Previsão 1X2': previsao_1x2,
-                            'Real 1X2': real_1x2,
-                            'Acerto 1X2': acerto_1x2
-                        })
-
-                        # Atualiza contadores
-                        st.session_state.total_por_mercado['1X2'] += 1
-                        if acerto_1x2 == "Sim":
-                            st.session_state.acertos_por_mercado['1X2'] += 1
-                            st.session_state.lucro_por_mercado['1X2'] += (1.0 / (prob_1x2[0]/100) - 1) if previsao_1x2 == "Vitória Mandante" else ((1.0 / (prob_1x2[1]/100) - 1) if previsao_1x2 == "Vitória Visitante" else (1.0 / (prob_1x2[2]/100) - 1))
-                        else:
-                            st.session_state.lucro_por_mercado['1X2'] -= 1
-
-                        for nome, prob in mercados.items():
-                            if prob is None: continue
-                            st.session_state.total_por_mercado[nome] += 1
-                            if nome == 'Escanteios (média)':
-                                if real_escanteios and abs(prob - real_escanteios) <= 1.5:
-                                    st.session_state.acertos_por_mercado[nome] += 1
-                                    st.session_state.lucro_por_mercado[nome] += 0.8
-                                else:
-                                    st.session_state.lucro_por_mercado[nome] -= 1
-                            else:
-                                if (nome == 'Gol HT' and real_gol_ht == (prob > 0.5)) or \
-                                   (nome == 'Over 1.5 FT' and real_over15_ft == (prob > 0.5)) or \
-                                   (nome == 'Over 2.5 FT' and real_over25_ft == (prob > 0.5)) or \
-                                   (nome == 'Ambas Marcam' and real_ambas == (prob > 0.5)) or \
-                                   (nome == 'Over 1.5 HT' and real_over15_ht == (prob > 0.5)):
-                                    st.session_state.acertos_por_mercado[nome] += 1
-                                    st.session_state.lucro_por_mercado[nome] += (1.0 / max(prob, 0.01)) - 1
-                                else:
-                                    st.session_state.lucro_por_mercado[nome] -= 1
-
-                        # Atualiza históricos
-                        def update_stats(time, gf, gc, gf_ht=None, gc_ht=None, chutes=None, chutes_sof=None,
-                                         chutes_gol=None, chutes_gol_sof=None, escanteios=None, escanteios_sof=None):
-                            if time not in times_stats: get_stats(time)
-                            s = times_stats[time]
-                            s['jogos'] += 1
-                            s['hist_gols'].append(gf); s['hist_gols_sofridos'].append(gc)
-                            if len(s['hist_gols']) > 10: s['hist_gols'].pop(0)
-                            if len(s['hist_gols_sofridos']) > 10: s['hist_gols_sofridos'].pop(0)
-                            s['gols'] = np.mean(s['hist_gols'])
-                            s['gols_sofridos'] = np.mean(s['hist_gols_sofridos'])
-                            if gf_ht is not None and gc_ht is not None:
-                                s['hist_gols_ht'].append(gf_ht); s['hist_gols_sofridos_ht'].append(gc_ht)
-                                if len(s['hist_gols_ht']) > 10: s['hist_gols_ht'].pop(0)
-                                if len(s['hist_gols_sofridos_ht']) > 10: s['hist_gols_sofridos_ht'].pop(0)
-                                s['gols_ht'] = np.mean(s['hist_gols_ht'])
-                                s['gols_sofridos_ht'] = np.mean(s['hist_gols_sofridos_ht'])
-                            if chutes is not None:
-                                s['hist_chutes'].append(chutes)
-                                if len(s['hist_chutes']) > 10: s['hist_chutes'].pop(0)
-                                s['chutes'] = np.mean(s['hist_chutes'])
-                            if chutes_sof is not None:
-                                s['hist_chutes_sofridos'].append(chutes_sof)
-                                if len(s['hist_chutes_sofridos']) > 10: s['hist_chutes_sofridos'].pop(0)
-                                s['chutes_sofridos'] = np.mean(s['hist_chutes_sofridos'])
-                            if chutes_gol is not None:
-                                s['hist_chutes_gol'].append(chutes_gol)
-                                if len(s['hist_chutes_gol']) > 10: s['hist_chutes_gol'].pop(0)
-                                s['chutes_gol'] = np.mean(s['hist_chutes_gol'])
-                            if chutes_gol_sof is not None:
-                                s['hist_chutes_gol_sofridos'].append(chutes_gol_sof)
-                                if len(s['hist_chutes_gol_sofridos']) > 10: s['hist_chutes_gol_sofridos'].pop(0)
-                                s['chutes_gol_sofridos'] = np.mean(s['hist_chutes_gol_sofridos'])
-                            if escanteios is not None:
-                                s['hist_escanteios'].append(escanteios)
-                                if len(s['hist_escanteios']) > 10: s['hist_escanteios'].pop(0)
-                                s['escanteios'] = np.mean(s['hist_escanteios'])
-                            if escanteios_sof is not None:
-                                s['hist_escanteios_sofridos'].append(escanteios_sof)
-                                if len(s['hist_escanteios_sofridos']) > 10: s['hist_escanteios_sofridos'].pop(0)
-                                s['escanteios_sofridos'] = np.mean(s['hist_escanteios_sofridos'])
-                            s['hist_ambas'].append(1 if (gf > 0 and gc > 0) else 0)
-                            s['hist_over25'].append(1 if (gf + gc) > 2 else 0)
-                            s['hist_over15'].append(1 if (gf + gc) > 1 else 0)
-                            if gf_ht is not None and gc_ht is not None:
-                                s['hist_gol_ht'].append(1 if (gf_ht + gc_ht) > 0 else 0)
-                                s['hist_over15_ht'].append(1 if (gf_ht + gc_ht) > 1 else 0)
-                            for lista in ['hist_ambas', 'hist_over25', 'hist_over15', 'hist_gol_ht', 'hist_over15_ht']:
-                                if len(s[lista]) > 10: s[lista].pop(0)
-
-                        update_stats(mandante, gols_m, gols_v, gols_ht_m, gols_ht_v, chutes_m, chutes_v, chutes_gol_m, chutes_gol_v, escanteios_m, escanteios_v)
-                        update_stats(visitante, gols_v, gols_m, gols_ht_v, gols_ht_m, chutes_v, chutes_m, chutes_gol_v, chutes_gol_m, escanteios_v, escanteios_m)
-
-                        progresso.progress((idx + 1) / total_jogos)
-
-                    # Exibição
-                    df_res = pd.DataFrame(resultados)
-                    st.subheader("📋 Resultados dos Jogos")
-                    st.dataframe(df_res, use_container_width=True, hide_index=True)
-
-                    st.subheader("📈 Desempenho por Mercado")
-                    resumo = []
-                    for mercado in st.session_state.acertos_por_mercado:
-                        total = st.session_state.total_por_mercado[mercado]
-                        if total > 0:
-                            acertos = st.session_state.acertos_por_mercado[mercado]
-                            lucro = st.session_state.lucro_por_mercado[mercado]
-                            roi = (lucro / total) * 100
-                            resumo.append({
-                                'Mercado': mercado,
-                                'Apostas': total,
-                                'Acertos': acertos,
-                                'Taxa de Acerto': f"{acertos/total*100:.1f}%",
-                                'Lucro/Prejuízo': f"{lucro:.2f} u",
-                                'ROI': f"{roi:.1f}%"
-                            })
-                    if resumo:
-                        df_resumo = pd.DataFrame(resumo)
-                        st.dataframe(df_resumo, use_container_width=True, hide_index=True)
-                    else:
-                        st.info("Nenhum mercado pôde ser avaliado com os dados fornecidos.")
-                    st.success("Simulação concluída!")
-
-            except Exception as e:
-                st.error(f"Erro ao processar os dados: {e}")
 
 # =========================================================================
 # RODAPÉ
