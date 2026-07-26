@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 - Aplicativo Completo (Conversor Robusto com Data Corrigida)
+MyPredict 2.0 - Aplicativo Completo (Conversor Inteligente e Robusto)
 """
 import streamlit as st
 import pandas as pd
@@ -76,7 +76,7 @@ if opcao == "Converter Dados Brutos":
             if dfs:
                 df = pd.concat(dfs, ignore_index=True)
 
-                # Identificar coluna de data
+                # Identificar coluna de data (contém 'date')
                 col_data = None
                 for c in df.columns:
                     if 'date' in c.lower():
@@ -88,97 +88,129 @@ if opcao == "Converter Dados Brutos":
 
                 # Converter data: extrai apenas a parte da data (dd/mm/aaaa) e força o formato
                 try:
-                    # Remove hora se existir (ex: "15/08/2025 20:00" -> "15/08/2025")
                     df[col_data] = df[col_data].astype(str).str.split(' ').str[0]
                     df[col_data] = pd.to_datetime(df[col_data], format='%d/%m/%Y', exact=False).dt.strftime('%Y-%m-%d')
                 except Exception as e:
                     st.error(f"Erro ao processar datas: {e}. Tente outro formato ou verifique o CSV.")
                     st.stop()
 
-                # Função para pegar coluna flexível
-                def get_col(df, possiveis, tipo=float, padrao=0):
-                    for p in possiveis:
-                        if p in df.columns:
-                            return df[p].astype(tipo)
-                    return pd.Series([padrao]*len(df))
+                # Mapeamento inteligente de colunas (variações comuns)
+                col_map = {
+                    'HomeTeam': ['HomeTeam', 'home_team', 'Home', 'HT'],
+                    'AwayTeam': ['AwayTeam', 'away_team', 'Away', 'AT'],
+                    'FTR': ['FTR', 'Result', 'R'],
+                    'FTHG': ['FTHG', 'HG', 'HomeGoals'],
+                    'FTAG': ['FTAG', 'AG', 'AwayGoals'],
+                    'HST': ['HST', 'HomeShotsOnTarget', 'HSOT'],
+                    'AST': ['AST', 'AwayShotsOnTarget', 'ASOT'],
+                    'HS': ['HS', 'HomeShots', 'HomeShotsTotal'],
+                    'AS': ['AS', 'AwayShots', 'AwayShotsTotal'],
+                    'HC': ['HC', 'HomeCorners'],
+                    'AC': ['AC', 'AwayCorners'],
+                    'HF': ['HF', 'HomeFouls'],
+                    'AF': ['AF', 'AwayFouls'],
+                    'HY': ['HY', 'HomeYellow'],
+                    'AY': ['AY', 'AwayYellow'],
+                    'HR': ['HR', 'HomeRed'],
+                    'AR': ['AR', 'AwayRed'],
+                    'B365H': ['B365H', 'Bet365H', 'B365H'],
+                    'B365D': ['B365D', 'Bet365D', 'B365D'],
+                    'B365A': ['B365A', 'Bet365A', 'B365A']
+                }
 
-                FTR = get_col(df, ['FTR'], str, '')
-                FTHG = get_col(df, ['FTHG', 'HG'], int, 0)
-                FTAG = get_col(df, ['FTAG', 'AG'], int, 0)
-                HST = get_col(df, ['HST'], float, 0)
-                AST = get_col(df, ['AST'], float, 0)
-                HS = get_col(df, ['HS'], float, 0)
-                AS = get_col(df, ['AS'], float, 0)
-                HC = get_col(df, ['HC'], float, 0)
-                AC = get_col(df, ['AC'], float, 0)
-                HF = get_col(df, ['HF'], float, 0)
-                AF = get_col(df, ['AF'], float, 0)
-                HY = get_col(df, ['HY'], int, 0)
-                AY = get_col(df, ['AY'], int, 0)
-                HR = get_col(df, ['HR'], int, 0)
-                AR = get_col(df, ['AR'], int, 0)
-                B365H = get_col(df, ['B365H'], float, 2.0)
-                B365D = get_col(df, ['B365D'], float, 3.0)
-                B365A = get_col(df, ['B365A'], float, 3.0)
+                def get_col(df, mapa, padrao=None):
+                    for nome in mapa:
+                        if nome in df.columns:
+                            return df[nome]
+                    # Se não encontrou, retorna coluna vazia com padrão
+                    return pd.Series([padrao] * len(df))
 
-                def res_casa(ftr):
-                    if ftr == 'H': return 'V'
-                    elif ftr == 'A': return 'D'
+                # Verificar colunas essenciais
+                essenciais = ['HomeTeam', 'AwayTeam', 'FTR', 'FTHG', 'FTAG']
+                for e in essenciais:
+                    if not any(c in df.columns for c in col_map[e]):
+                        st.error(f"Coluna essencial não encontrada: {e}. Mapeamentos tentados: {col_map[e]}")
+                        st.stop()
+
+                home_team = get_col(df, col_map['HomeTeam'], '')
+                away_team = get_col(df, col_map['AwayTeam'], '')
+                ftr = get_col(df, col_map['FTR'], '')
+                fthg = get_col(df, col_map['FTHG'], 0).astype(int)
+                ftag = get_col(df, col_map['FTAG'], 0).astype(int)
+
+                hst = get_col(df, col_map['HST'], 0).astype(float)
+                ast = get_col(df, col_map['AST'], 0).astype(float)
+                hs = get_col(df, col_map['HS'], 0).astype(float)
+                as_ = get_col(df, col_map['AS'], 0).astype(float)
+                hc = get_col(df, col_map['HC'], 0).astype(float)
+                ac = get_col(df, col_map['AC'], 0).astype(float)
+                hf = get_col(df, col_map['HF'], 0).astype(float)
+                af = get_col(df, col_map['AF'], 0).astype(float)
+                hy = get_col(df, col_map['HY'], 0).astype(int)
+                ay = get_col(df, col_map['AY'], 0).astype(int)
+                hr = get_col(df, col_map['HR'], 0).astype(int)
+                ar = get_col(df, col_map['AR'], 0).astype(int)
+                b365h = get_col(df, col_map['B365H'], 2.0).astype(float)
+                b365d = get_col(df, col_map['B365D'], 3.0).astype(float)
+                b365a = get_col(df, col_map['B365A'], 3.0).astype(float)
+
+                def res_casa(ftr_val):
+                    if ftr_val == 'H': return 'V'
+                    elif ftr_val == 'A': return 'D'
                     else: return 'E'
 
-                def res_fora(ftr):
-                    if ftr == 'A': return 'V'
-                    elif ftr == 'H': return 'D'
+                def res_fora(ftr_val):
+                    if ftr_val == 'A': return 'V'
+                    elif ftr_val == 'H': return 'D'
                     else: return 'E'
 
                 linhas = []
                 for i in range(len(df)):
-                    jogo = df.iloc[i]
-                    data = jogo[col_data]
-                    home = jogo['HomeTeam']
-                    away = jogo['AwayTeam']
+                    data = df[col_data].iloc[i]
+                    home = home_team.iloc[i]
+                    away = away_team.iloc[i]
 
                     mandante = {
                         'data': data,
                         'time': home,
                         'adv': away,
                         'mando': 'casa',
-                        'resultado': res_casa(FTR.iloc[i]),
-                        'gols': int(FTHG.iloc[i]),
-                        'gols_sofridos': int(FTAG.iloc[i]),
+                        'resultado': res_casa(ftr.iloc[i]),
+                        'gols': int(fthg.iloc[i]),
+                        'gols_sofridos': int(ftag.iloc[i]),
                         'prat_time': 3,
                         'prat_adv': 3,
-                        'finalizacoes_alvo': float(HST.iloc[i]),
-                        'finalizacoes_totais': float(HS.iloc[i]),
-                        'escanteios': float(HC.iloc[i]),
-                        'faltas_sofridas': float(AF.iloc[i]),
-                        'faltas_cometidas': float(HF.iloc[i]),
-                        'cartoes_amarelos': int(HY.iloc[i]),
-                        'cartoes_vermelhos': int(HR.iloc[i]),
-                        'B365H': float(B365H.iloc[i]) if not pd.isna(B365H.iloc[i]) else 2.0,
-                        'B365D': float(B365D.iloc[i]) if not pd.isna(B365D.iloc[i]) else 3.0,
-                        'B365A': float(B365A.iloc[i]) if not pd.isna(B365A.iloc[i]) else 3.0
+                        'finalizacoes_alvo': float(hst.iloc[i]) if not pd.isna(hst.iloc[i]) else 0,
+                        'finalizacoes_totais': float(hs.iloc[i]) if not pd.isna(hs.iloc[i]) else 0,
+                        'escanteios': float(hc.iloc[i]) if not pd.isna(hc.iloc[i]) else 0,
+                        'faltas_sofridas': float(af.iloc[i]) if not pd.isna(af.iloc[i]) else 0,
+                        'faltas_cometidas': float(hf.iloc[i]) if not pd.isna(hf.iloc[i]) else 0,
+                        'cartoes_amarelos': int(hy.iloc[i]) if not pd.isna(hy.iloc[i]) else 0,
+                        'cartoes_vermelhos': int(hr.iloc[i]) if not pd.isna(hr.iloc[i]) else 0,
+                        'B365H': float(b365h.iloc[i]) if not pd.isna(b365h.iloc[i]) else 2.0,
+                        'B365D': float(b365d.iloc[i]) if not pd.isna(b365d.iloc[i]) else 3.0,
+                        'B365A': float(b365a.iloc[i]) if not pd.isna(b365a.iloc[i]) else 3.0
                     }
                     visitante = {
                         'data': data,
                         'time': away,
                         'adv': home,
                         'mando': 'fora',
-                        'resultado': res_fora(FTR.iloc[i]),
-                        'gols': int(FTAG.iloc[i]),
-                        'gols_sofridos': int(FTHG.iloc[i]),
+                        'resultado': res_fora(ftr.iloc[i]),
+                        'gols': int(ftag.iloc[i]),
+                        'gols_sofridos': int(fthg.iloc[i]),
                         'prat_time': 3,
                         'prat_adv': 3,
-                        'finalizacoes_alvo': float(AST.iloc[i]),
-                        'finalizacoes_totais': float(AS.iloc[i]),
-                        'escanteios': float(AC.iloc[i]),
-                        'faltas_sofridas': float(HF.iloc[i]),
-                        'faltas_cometidas': float(AF.iloc[i]),
-                        'cartoes_amarelos': int(AY.iloc[i]),
-                        'cartoes_vermelhos': int(AR.iloc[i]),
-                        'B365H': float(B365H.iloc[i]) if not pd.isna(B365H.iloc[i]) else 2.0,
-                        'B365D': float(B365D.iloc[i]) if not pd.isna(B365D.iloc[i]) else 3.0,
-                        'B365A': float(B365A.iloc[i]) if not pd.isna(B365A.iloc[i]) else 3.0
+                        'finalizacoes_alvo': float(ast.iloc[i]) if not pd.isna(ast.iloc[i]) else 0,
+                        'finalizacoes_totais': float(as_.iloc[i]) if not pd.isna(as_.iloc[i]) else 0,
+                        'escanteios': float(ac.iloc[i]) if not pd.isna(ac.iloc[i]) else 0,
+                        'faltas_sofridas': float(hf.iloc[i]) if not pd.isna(hf.iloc[i]) else 0,
+                        'faltas_cometidas': float(af.iloc[i]) if not pd.isna(af.iloc[i]) else 0,
+                        'cartoes_amarelos': int(ay.iloc[i]) if not pd.isna(ay.iloc[i]) else 0,
+                        'cartoes_vermelhos': int(ar.iloc[i]) if not pd.isna(ar.iloc[i]) else 0,
+                        'B365H': float(b365h.iloc[i]) if not pd.isna(b365h.iloc[i]) else 2.0,
+                        'B365D': float(b365d.iloc[i]) if not pd.isna(b365d.iloc[i]) else 3.0,
+                        'B365A': float(b365a.iloc[i]) if not pd.isna(b365a.iloc[i]) else 3.0
                     }
                     linhas.append(mandante)
                     linhas.append(visitante)
