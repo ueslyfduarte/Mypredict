@@ -36,12 +36,6 @@ st.markdown("""
     }
     .positivo { color: #00C853; font-weight: bold; }
     .negativo { color: #FF1744; font-weight: bold; }
-    .barra-bg { background-color: #333; border-radius: 5px; height: 22px; width: 100%; margin: 4px 0; }
-    .barra-preenchimento {
-        background-color: #DAA520; height: 22px; border-radius: 5px;
-        text-align: right; padding-right: 6px; color: #000;
-        font-weight: bold; font-size: 0.8rem; line-height: 22px;
-    }
     .mpv-destaque { font-size: 3rem; font-weight: bold; color: #DAA520; text-align: center; }
     .metrica-row {
         display: flex; align-items: center; margin-bottom: 16px;
@@ -56,6 +50,16 @@ st.markdown("""
     .metrica-desc {
         flex: 1; color: #BBBBBB; font-size: 0.9rem;
     }
+    /* Barra de comparação horizontal */
+    .barra-comparacao {
+        display: flex; align-items: center; margin: 8px 0;
+    }
+    .barra-lado {
+        height: 20px; border-radius: 4px;
+    }
+    .time-nome {
+        width: 100px; font-weight: bold;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -68,19 +72,10 @@ def carregar_dados():
         df = pd.read_csv("data/meus_jogos.csv", parse_dates=["data"])
         jogos = []
         for _, row in df.iterrows():
-            jogos.append({
-                'data': row['data'],
-                'time': row['time'],
-                'adv': row['adv'],
-                'mando': row['mando'],
-                'resultado': row['resultado'],
-                'gols': row['gols'],
-                'prat_time': row['prat_time'],
-                'prat_adv': row['prat_adv']
-            })
+            jogos.append(row.to_dict())
         return jogos
     except FileNotFoundError:
-        st.error("Arquivo 'data/exemplo_jogos.csv' não encontrado.")
+        st.error("Arquivo 'data/meus_jogos.csv' não encontrado.")
         return []
 
 jogos = carregar_dados()
@@ -198,7 +193,7 @@ if gerar:
     seta_fora = seta_ima(ima_fora, prat_fora)
 
     # ============================================================
-    # 1. CONTEXTO DA LIGA (APÓS GERAR)
+    # 1. CONTEXTO DA LIGA
     # ============================================================
     st.markdown("---")
     st.markdown("### 🏆 Contexto na Liga")
@@ -255,7 +250,7 @@ if gerar:
         st.markdown(f"**{seta_fora}** em relação à expectativa da prateleira")
 
     # ============================================================
-    # 3. MÉTRICAS DETALHADAS
+    # 3. MÉTRICAS DETALHADAS (COM BARRAS DE COMPARAÇÃO)
     # ============================================================
     st.markdown("---")
     st.markdown("### 🔍 Métricas Detalhadas do Modelo")
@@ -280,16 +275,61 @@ if gerar:
                 <div class="metrica-desc">{desc}</div>
             </div>
             """, unsafe_allow_html=True)
-            col_bar1, col_bar2 = st.columns(2)
-            with col_bar1:
-                st.markdown(f"<div class='barra-bg'><div class='barra-preenchimento' style='width:{valores_casa[i]}%;'>{valores_casa[i]:.0f}</div></div>", unsafe_allow_html=True)
-                st.markdown(f"<p style='text-align: center;'>{time_casa}: {valores_casa[i]:.1f}</p>", unsafe_allow_html=True)
-            with col_bar2:
-                st.markdown(f"<div class='barra-bg'><div class='barra-preenchimento' style='width:{valores_fora[i]}%;'>{valores_fora[i]:.0f}</div></div>", unsafe_allow_html=True)
-                st.markdown(f"<p style='text-align: center;'>{time_fora}: {valores_fora[i]:.1f}</p>", unsafe_allow_html=True)
+            # Barra de comparação horizontal
+            v_casa = valores_casa[i]
+            v_fora = valores_fora[i]
+            soma = v_casa + v_fora
+            if soma == 0:
+                perc_casa = 50
+                perc_fora = 50
+            else:
+                perc_casa = (v_casa / soma) * 100
+                perc_fora = 100 - perc_casa
+
+            st.markdown(f"""
+            <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                <span style="width: 80px; color: #DAA520; font-weight: bold;">{time_casa}</span>
+                <div style="flex: 1; background: #333; height: 20px; border-radius: 10px; overflow: hidden; display: flex;">
+                    <div style="width: {perc_casa}%; background: #DAA520; height: 100%;"></div>
+                    <div style="width: {perc_fora}%; background: #888; height: 100%;"></div>
+                </div>
+                <span style="width: 80px; text-align: right; color: #DAA520; font-weight: bold;">{time_fora}</span>
+            </div>
+            <p style="text-align: center; margin-top: 0;">{time_casa}: {v_casa:.1f}  |  {time_fora}: {v_fora:.1f}</p>
+            """, unsafe_allow_html=True)
 
     # ============================================================
-    # 4. ANÁLISE DO CONFRONTO
+    # 4. MPV EM DESTAQUE (COM FRASE DE DIFERENÇA)
+    # ============================================================
+    st.markdown("---")
+    st.markdown("### 💎 MyPredict Value (MPV)")
+    col_mpv1, col_mpv2 = st.columns(2)
+    with col_mpv1:
+        st.markdown(f"<div class='mpv-destaque'>{mpv_casa:.1f}</div>", unsafe_allow_html=True)
+        st.markdown(f"<p style='text-align: center;'>{time_casa}</p>", unsafe_allow_html=True)
+    with col_mpv2:
+        st.markdown(f"<div class='mpv-destaque'>{mpv_fora:.1f}</div>", unsafe_allow_html=True)
+        st.markdown(f"<p style='text-align: center;'>{time_fora}</p>", unsafe_allow_html=True)
+
+    diff_mpv = abs(mpv_casa - mpv_fora)
+    melhor = time_casa if mpv_casa > mpv_fora else time_fora
+
+    # Frases qualitativas
+    if diff_mpv < 5:
+        frase = "Equilíbrio total"
+    elif diff_mpv < 10:
+        frase = "Leve vantagem"
+    elif diff_mpv < 20:
+        frase = "Vantagem clara"
+    elif diff_mpv < 30:
+        frase = "Grande vantagem"
+    else:
+        frase = "Domínio absoluto"
+
+    st.markdown(f"<p style='text-align: center; color: #DAA520; font-size: 1.2rem;'>{frase} a favor do <b>{melhor}</b> (diferença de {diff_mpv:.1f} pontos)</p>", unsafe_allow_html=True)
+
+    # ============================================================
+    # 5. ANÁLISE DO CONFRONTO (MOVIDA PARA DEPOIS DO MPV)
     # ============================================================
     st.markdown("---")
     st.markdown("### 📝 Análise do Confronto")
@@ -323,22 +363,6 @@ if gerar:
     if prob_empate > 0.30:
         justificativa += "A alta probabilidade de empate indica equilíbrio tático. "
     st.markdown(justificativa)
-
-    # ============================================================
-    # 5. MPV EM DESTAQUE (ACIMA DAS PROBABILIDADES)
-    # ============================================================
-    st.markdown("---")
-    st.markdown("### 💎 MyPredict Value (MPV)")
-    col_mpv1, col_mpv2 = st.columns(2)
-    with col_mpv1:
-        st.markdown(f"<div class='mpv-destaque'>{mpv_casa:.1f}</div>", unsafe_allow_html=True)
-        st.markdown(f"<p style='text-align: center;'>{time_casa}</p>", unsafe_allow_html=True)
-    with col_mpv2:
-        st.markdown(f"<div class='mpv-destaque'>{mpv_fora:.1f}</div>", unsafe_allow_html=True)
-        st.markdown(f"<p style='text-align: center;'>{time_fora}</p>", unsafe_allow_html=True)
-    diff_mpv = abs(mpv_casa - mpv_fora)
-    melhor = time_casa if mpv_casa > mpv_fora else time_fora
-    st.markdown(f"<p style='text-align: center; color: #DAA520;'>Diferença: {diff_mpv:.1f} pontos a favor do <b>{melhor}</b></p>", unsafe_allow_html=True)
 
     # ============================================================
     # 6. PROBABILIDADES E VALOR
