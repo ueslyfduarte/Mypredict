@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 - Motor de Cálculo (versão real)
+MyPredict 2.0 - Motor de Cálculo (com estatísticas expandidas e fallback)
 """
 import statistics
 
@@ -76,7 +76,7 @@ def calcular_IMA(jogos, time, data_ref, mando_proximo=None):
         desvio = 10.0
     return ima, desvio
 
-# ---------- OVRALL (agora com dados reais) ----------
+# ---------- FUNÇÕES AUXILIARES ----------
 def media_ponderada_38_10(serie):
     if not serie:
         return 0.0
@@ -84,49 +84,126 @@ def media_ponderada_38_10(serie):
     curta = sum(serie[-10:]) / len(serie[-10:]) if len(serie) >= 10 else sum(serie)/len(serie)
     return 0.6 * longa + 0.4 * curta
 
+# ---------- OVRall expandido ----------
 def calcular_ATA(jogos, time, data_ref):
     jogos_time = [j for j in jogos if j['time'] == time and j['data'] <= data_ref]
     if not jogos_time:
         return 50.0
+    # Componentes obrigatórios: gols
     gols = [j.get('gols', 0) for j in jogos_time]
-    alvo = [j.get('finalizacoes_alvo', 0) for j in jogos_time]
     media_gols = media_ponderada_38_10(gols)
-    soma_alvo = sum(alvo[-10:]) if alvo else 0
-    conv = sum(gols[-10:]) / soma_alvo if soma_alvo > 0 else 0.1
     nota_gols = min(100, max(0, (media_gols / 3) * 100))
-    nota_conv = min(100, max(0, (conv / 0.5) * 100)) if conv else 50
-    return 0.6 * nota_gols + 0.4 * nota_conv
+
+    # Opcionais: finalizações no alvo (SoT), chutes totais (ST)
+    tem_sot = any('finalizacoes_alvo' in j for j in jogos_time)
+    tem_st = any('finalizacoes_totais' in j for j in jogos_time)
+
+    pesos = [1.0]  # peso do componente gols (sempre presente)
+    notas = [nota_gols]
+
+    if tem_sot:
+        sot = [j.get('finalizacoes_alvo', 0) for j in jogos_time]
+        conv = sum(gols[-10:]) / sum(sot[-10:]) if sum(sot[-10:]) > 0 else 0
+        nota_conv = min(100, max(0, (conv / 0.5) * 100))
+        notas.append(nota_conv)
+        pesos.append(0.6)  # peso do SoT
+    else:
+        pesos[0] += 0.6  # redistribui para gols
+
+    if tem_st:
+        st = [j.get('finalizacoes_totais', 0) for j in jogos_time]
+        # Índice de precipitação: chutes/gol
+        razao = sum(st[-10:]) / sum(gols[-10:]) if sum(gols[-10:]) > 0 else 0
+        # Quanto menor a razão, melhor (mais cirúrgico)
+        nota_razao = min(100, max(0, 100 - (razao / 20) * 100))  # 0 a 100
+        notas.append(nota_razao)
+        pesos.append(0.4)  # peso do volume de chutes
+    else:
+        pesos[0] += 0.4  # redistribui
+
+    # Média ponderada com pesos ajustados
+    soma_pesos = sum(pesos)
+    return sum(n * p / soma_pesos for n, p in zip(notas, pesos))
 
 def calcular_DEF(jogos, time, data_ref):
     jogos_time = [j for j in jogos if j['time'] == time and j['data'] <= data_ref]
     if not jogos_time:
         return 50.0
+    # Componentes obrigatórios: gols sofridos e clean sheets
     sofridos = [j.get('gols_sofridos', 0) for j in jogos_time]
     media_sofridos = media_ponderada_38_10(sofridos)
-    clean = sum(1 for g in sofridos[-10:] if g == 0) / len(sofridos[-10:]) if sofridos else 0
     nota_sofridos = min(100, max(0, 100 - (media_sofridos / 3) * 100))
+    clean = sum(1 for g in sofridos[-10:] if g == 0) / len(sofridos[-10:]) if sofridos else 0
     nota_clean = clean * 100
-    return 0.6 * nota_sofridos + 0.4 * nota_clean
+
+    pesos = [0.6, 0.4]  # gols sofridos, clean sheets
+    notas = [nota_sofridos, nota_clean]
+
+    # Opcional: faltas cometidas (disciplina) – se disponível
+    tem_faltas = any('faltas_cometidas' in j for j in jogos_time)
+    if tem_faltas:
+        faltas = [j.get('faltas_cometidas', 0) for j in jogos_time]
+        media_faltas = media_ponderada_38_10(faltas)
+        nota_faltas = min(100, max(0, 100 - (media_faltas / 15) * 100))  # muitas faltas = pior
+        notas.append(nota_faltas)
+        pesos.append(0.3)
+        # Ajustar pesos anteriores
+        pesos[0] *= 0.7
+        pesos[1] *= 0.7
+        soma_pesos = sum(pesos)
+        return sum(n * p / soma_pesos for n, p in zip(notas, pesos))
+    else:
+        # Sem faltas, mantém apenas os dois componentes
+        soma_pesos = sum(pesos)
+        return sum(n * p / soma_pesos for n, p in zip(notas, pesos))
 
 def calcular_MEI(jogos, time, data_ref):
     jogos_time = [j for j in jogos if j['time'] == time and j['data'] <= data_ref]
     if not jogos_time:
         return 50.0
-    escanteios = [j.get('escanteios', 0) for j in jogos_time]
+    # Escanteios a favor (já temos)
+    esc = [j.get('escanteios', 0) for j in jogos_time]
+    media_esc = sum(esc[-10:]) / len(esc[-10:]) if esc else 3
+    nota_esc = min(100, max(0, (media_esc / 8) * 100))
+
+    # Faltas sofridas (já temos)
     faltas = [j.get('faltas_sofridas', 0) for j in jogos_time]
-    media_esc = sum(escanteios[-10:])/len(escanteios[-10:]) if escanteios else 3
-    media_faltas = sum(faltas[-10:])/len(faltas[-10:]) if faltas else 10
-    nota_esc = min(100, max(0, (media_esc/8)*100))
-    nota_faltas = min(100, max(0, (media_faltas/15)*100))
-    return 0.5*nota_esc + 0.5*nota_faltas
+    media_faltas = sum(faltas[-10:]) / len(faltas[-10:]) if faltas else 10
+    nota_faltas = min(100, max(0, (media_faltas / 15) * 100))
+
+    # Opcional: índice de precipitação (chutes/gols) – se tivermos finalizações totais
+    tem_st = any('finalizacoes_totais' in j for j in jogos_time)
+    if tem_st:
+        st = [j.get('finalizacoes_totais', 0) for j in jogos_time]
+        gols = [j.get('gols', 0) for j in jogos_time]
+        razao = sum(st[-10:]) / sum(gols[-10:]) if sum(gols[-10:]) > 0 else 0
+        nota_razao = min(100, max(0, 100 - (razao / 20) * 100))
+        # Combina com esc e faltas: pesos 0.4, 0.3, 0.3
+        return 0.4 * nota_esc + 0.3 * nota_faltas + 0.3 * nota_razao
+    else:
+        # Sem finalizações, peso maior para esc e faltas
+        return 0.5 * nota_esc + 0.5 * nota_faltas
 
 def calcular_FOR(jogos, time, data_ref):
     jogos_time = [j for j in jogos if j['time'] == time and j['data'] <= data_ref]
     if not jogos_time:
         return 50.0
-    escanteios = [j.get('escanteios', 0) for j in jogos_time]
-    media_esc = sum(escanteios[-10:])/len(escanteios[-10:]) if escanteios else 3
-    return min(100, max(0, (media_esc/8)*100))
+    # Escanteios a favor (proxy de imposição ofensiva)
+    esc = [j.get('escanteios', 0) for j in jogos_time]
+    media_esc = sum(esc[-10:]) / len(esc[-10:]) if esc else 3
+    nota_esc = min(100, max(0, (media_esc / 8) * 100))
+
+    # Opcionais: cartões amarelos/vermelhos (se disponíveis)
+    tem_cartoes = any('cartoes_amarelos' in j or 'cartoes_vermelhos' in j for j in jogos_time)
+    if tem_cartoes:
+        amar = [j.get('cartoes_amarelos', 0) for j in jogos_time]
+        verm = [j.get('cartoes_vermelhos', 0) for j in jogos_time]
+        total_cartoes = [a + 2*v for a,v in zip(amar, verm)]  # vermelho = 2x
+        media_cartoes = sum(total_cartoes[-10:]) / len(total_cartoes[-10:]) if total_cartoes else 0
+        nota_cartoes = min(100, max(0, (media_cartoes / 3) * 100))  # muitos cartões = mais força
+        return 0.6 * nota_esc + 0.4 * nota_cartoes
+    else:
+        return nota_esc
 
 def calcular_CONS(jogos, time, data_ref):
     return 50.0
