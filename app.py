@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 - Aplicativo Completo (Conversor com Diagnóstico)
+MyPredict 2.0 - Aplicativo Completo (Mapeamento por Posição)
 """
 import streamlit as st
 import pandas as pd
@@ -7,7 +7,6 @@ from datetime import datetime
 from mypredict.core import *
 from math import exp, factorial
 import os
-import re
 
 # ============================================================
 # CONFIGURAÇÃO
@@ -58,7 +57,7 @@ st.sidebar.markdown("<h2 style='color:#DAA520;'>⚽ MyPredict 2.0</h2>", unsafe_
 opcao = st.sidebar.radio("Modo", ["Análise de Jogo", "Backtest", "Converter Dados Brutos"])
 
 # ============================================================
-# CONVERSOR ROBUSTO COM DIAGNÓSTICO
+# CONVERSOR POR POSIÇÃO FIXA
 # ============================================================
 if opcao == "Converter Dados Brutos":
     st.markdown("<h1 style='text-align:center;'>🔄 Conversor de CSV</h1>", unsafe_allow_html=True)
@@ -80,10 +79,8 @@ if opcao == "Converter Dados Brutos":
             for arquivo in arquivos_raw:
                 caminho = os.path.join(raw_path, arquivo)
                 try:
-                    # Lê o CSV sem forçar colunas, detectando separador
-                    df_temp = pd.read_csv(caminho, encoding='utf-8-sig', sep=None, engine='python')
-                    # Remove espaços dos nomes das colunas
-                    df_temp.columns = df_temp.columns.str.strip()
+                    # Lê o CSV sem cabeçalho, pois vamos usar índices fixos
+                    df_temp = pd.read_csv(caminho, header=None, skiprows=1, encoding='utf-8-sig', sep=None, engine='python')
                     dfs.append(df_temp)
                 except Exception as e:
                     st.error(f"Erro ao ler {arquivo}: {e}")
@@ -93,98 +90,76 @@ if opcao == "Converter Dados Brutos":
 
             df = pd.concat(dfs, ignore_index=True)
 
-            # Mostrar colunas disponíveis
-            st.write("Colunas encontradas no CSV original:", list(df.columns))
-
-            # Função para encontrar coluna por palavras-chave (regex)
-            def find_col(patterns):
-                for col in df.columns:
-                    col_lower = col.lower()
-                    for pat in patterns:
-                        if re.search(pat, col_lower):
-                            return col
-                return None
-
-            # Mapeamento necessário com expressões regulares flexíveis
-            col_date = find_col([r'date', r'dia', r'data'])
-            col_home = find_col([r'hometeam', r'home', r'ht', r'casa', r'mandante'])
-            col_away = find_col([r'awayteam', r'away', r'at', r'fora', r'visitante'])
-            col_ftr = find_col([r'ftr', r'result', r'resultado'])
-            col_fthg = find_col([r'fthg', r'homegoals', r'hg', r'golsmandante'])
-            col_ftag = find_col([r'ftag', r'awaygoals', r'ag', r'golsvisitante'])
-            col_hs = find_col([r'hs', r'homeshots', r'chutesmandante'])
-            col_as_ = find_col([r'as', r'awayshots', r'chutesvisitante'])
-            col_hst = find_col([r'hst', r'homeshotsontarget', r'shotsonmandante'])
-            col_ast = find_col([r'ast', r'awayshotsontarget', r'shotsonvisitante'])
-            col_hf = find_col([r'hf', r'homefouls', r'faltasmandante'])
-            col_af = find_col([r'af', r'awayfouls', r'faltasvisitante'])
-            col_hc = find_col([r'hc', r'homecorners', r'escanteiosmandante'])
-            col_ac = find_col([r'ac', r'awaycorners', r'escanteiosvisitante'])
-            col_hy = find_col([r'hy', r'homeyellow', r'amarelosmandante'])
-            col_ay = find_col([r'ay', r'awayyellow', r'amarelosvisitante'])
-            col_hr = find_col([r'hr', r'homered', r'vermelhosmandante'])
-            col_ar = find_col([r'ar', r'awayred', r'vermelhosvisitante'])
-            col_b365h = find_col([r'b365h', r'bet365h'])
-            col_b365d = find_col([r'b365d', r'bet365d'])
-            col_b365a = find_col([r'b365a', r'bet365a'])
-
-            # Verifica se todas as colunas essenciais foram encontradas
-            erros = []
-            if not col_date: erros.append("Data (Date)")
-            if not col_home: erros.append("Time Mandante (HomeTeam)")
-            if not col_away: erros.append("Time Visitante (AwayTeam)")
-            if not col_ftr: erros.append("Resultado (FTR)")
-            if not col_fthg: erros.append("Gols Mandante (FTHG)")
-            if not col_ftag: erros.append("Gols Visitante (FTAG)")
-
-            if erros:
-                st.error(f"Colunas essenciais não encontradas: {', '.join(erros)}.")
-                st.stop()
-
-            # Converter data
-            try:
-                df[col_date] = df[col_date].astype(str).str.split(' ').str[0]
-                df[col_date] = pd.to_datetime(df[col_date], format='%d/%m/%Y', exact=False).dt.strftime('%Y-%m-%d')
-            except Exception as e:
-                st.error(f"Erro ao processar datas: {e}")
-                st.stop()
-
-            # Funções de resultado
-            def res_casa(r):
-                return 'V' if r == 'H' else ('D' if r == 'A' else 'E')
-            def res_fora(r):
-                return 'V' if r == 'A' else ('D' if r == 'H' else 'E')
+            # Índices fixos baseados no cabeçalho que você enviou:
+            # 0: Div, 1: Date, 2: Time, 3: HomeTeam, 4: AwayTeam, 5: FTHG, 6: FTAG, 7: FTR,
+            # 8: HTHG, 9: HTAG, 10: HTR, 11: Referee, 12: HS, 13: AS, 14: HST, 15: AST,
+            # 16: HF, 17: AF, 18: HC, 19: AC, 20: HY, 21: AY, 22: HR, 23: AR,
+            # 24: B365H, 25: B365D, 26: B365A, ... (demais colunas de odds podem variar)
+            # Para os nossos propósitos, usaremos apenas até o índice 26 e depois mapeamos as odds fixas.
+            COL_DATE = 1
+            COL_HOME = 3
+            COL_AWAY = 4
+            COL_FTHG = 5
+            COL_FTAG = 6
+            COL_FTR = 7
+            COL_HS = 12
+            COL_AS = 13
+            COL_HST = 14
+            COL_AST = 15
+            COL_HF = 16
+            COL_AF = 17
+            COL_HC = 18
+            COL_AC = 19
+            COL_HY = 20
+            COL_AY = 21
+            COL_HR = 22
+            COL_AR = 23
+            COL_B365H = 24
+            COL_B365D = 25
+            COL_B365A = 26
 
             linhas = []
             for _, jogo in df.iterrows():
                 try:
-                    fthg = int(jogo[col_fthg])
-                    ftag = int(jogo[col_ftag])
-                    hst = float(jogo.get(col_hst, 0)) if col_hst else 0.0
-                    ast = float(jogo.get(col_ast, 0)) if col_ast else 0.0
-                    hs  = float(jogo.get(col_hs, 0)) if col_hs else 0.0
-                    as_ = float(jogo.get(col_as_, 0)) if col_as_ else 0.0
-                    hc  = float(jogo.get(col_hc, 0)) if col_hc else 0.0
-                    ac  = float(jogo.get(col_ac, 0)) if col_ac else 0.0
-                    hf  = float(jogo.get(col_hf, 0)) if col_hf else 0.0
-                    af  = float(jogo.get(col_af, 0)) if col_af else 0.0
-                    hy  = int(jogo.get(col_hy, 0)) if col_hy else 0
-                    ay  = int(jogo.get(col_ay, 0)) if col_ay else 0
-                    hr  = int(jogo.get(col_hr, 0)) if col_hr else 0
-                    ar  = int(jogo.get(col_ar, 0)) if col_ar else 0
-                    b365h = float(jogo.get(col_b365h, 2.0)) if col_b365h else 2.0
-                    b365d = float(jogo.get(col_b365d, 3.0)) if col_b365d else 3.0
-                    b365a = float(jogo.get(col_b365a, 3.0)) if col_b365a else 3.0
-                except Exception as e:
-                    st.warning(f"Erro em uma linha: {e}")
+                    data_str = str(jogo.iloc[COL_DATE]).split(' ')[0]  # Remove hora
+                    data = pd.to_datetime(data_str, format='%d/%m/%Y', exact=False).strftime('%Y-%m-%d')
+                    home = str(jogo.iloc[COL_HOME])
+                    away = str(jogo.iloc[COL_AWAY])
+                    fthg = int(jogo.iloc[COL_FTHG])
+                    ftag = int(jogo.iloc[COL_FTAG])
+                    ftr = str(jogo.iloc[COL_FTR])
+                    
+                    # Funções de resultado
+                    def res_casa(r): return 'V' if r == 'H' else ('D' if r == 'A' else 'E')
+                    def res_fora(r): return 'V' if r == 'A' else ('D' if r == 'H' else 'E')
+                    
+                    # Estatísticas com fallback 0
+                    hst = float(jogo.iloc[COL_HST]) if not pd.isna(jogo.iloc[COL_HST]) else 0
+                    ast = float(jogo.iloc[COL_AST]) if not pd.isna(jogo.iloc[COL_AST]) else 0
+                    hs  = float(jogo.iloc[COL_HS]) if not pd.isna(jogo.iloc[COL_HS]) else 0
+                    as_ = float(jogo.iloc[COL_AS]) if not pd.isna(jogo.iloc[COL_AS]) else 0
+                    hc  = float(jogo.iloc[COL_HC]) if not pd.isna(jogo.iloc[COL_HC]) else 0
+                    ac  = float(jogo.iloc[COL_AC]) if not pd.isna(jogo.iloc[COL_AC]) else 0
+                    hf  = float(jogo.iloc[COL_HF]) if not pd.isna(jogo.iloc[COL_HF]) else 0
+                    af  = float(jogo.iloc[COL_AF]) if not pd.isna(jogo.iloc[COL_AF]) else 0
+                    hy  = int(jogo.iloc[COL_HY]) if not pd.isna(jogo.iloc[COL_HY]) else 0
+                    ay  = int(jogo.iloc[COL_AY]) if not pd.isna(jogo.iloc[COL_AY]) else 0
+                    hr  = int(jogo.iloc[COL_HR]) if not pd.isna(jogo.iloc[COL_HR]) else 0
+                    ar  = int(jogo.iloc[COL_AR]) if not pd.isna(jogo.iloc[COL_AR]) else 0
+                    b365h = float(jogo.iloc[COL_B365H]) if not pd.isna(jogo.iloc[COL_B365H]) else 2.0
+                    b365d = float(jogo.iloc[COL_B365D]) if not pd.isna(jogo.iloc[COL_B365D]) else 3.0
+                    b365a = float(jogo.iloc[COL_B365A]) if not pd.isna(jogo.iloc[COL_B365A]) else 3.0
+                except Exception:
+                    # Pula linhas com dados inválidos
                     continue
 
-                mandante = {
-                    'data': jogo[col_date],
-                    'time': jogo[col_home],
-                    'adv': jogo[col_away],
+                # Mandante
+                linhas.append({
+                    'data': data,
+                    'time': home,
+                    'adv': away,
                     'mando': 'casa',
-                    'resultado': res_casa(jogo[col_ftr]),
+                    'resultado': res_casa(ftr),
                     'gols': fthg,
                     'gols_sofridos': ftag,
                     'prat_time': 3, 'prat_adv': 3,
@@ -196,13 +171,14 @@ if opcao == "Converter Dados Brutos":
                     'cartoes_amarelos': hy,
                     'cartoes_vermelhos': hr,
                     'B365H': b365h, 'B365D': b365d, 'B365A': b365a
-                }
-                visitante = {
-                    'data': jogo[col_date],
-                    'time': jogo[col_away],
-                    'adv': jogo[col_home],
+                })
+                # Visitante
+                linhas.append({
+                    'data': data,
+                    'time': away,
+                    'adv': home,
                     'mando': 'fora',
-                    'resultado': res_fora(jogo[col_ftr]),
+                    'resultado': res_fora(ftr),
                     'gols': ftag,
                     'gols_sofridos': fthg,
                     'prat_time': 3, 'prat_adv': 3,
@@ -214,9 +190,7 @@ if opcao == "Converter Dados Brutos":
                     'cartoes_amarelos': ay,
                     'cartoes_vermelhos': ar,
                     'B365H': b365h, 'B365D': b365d, 'B365A': b365a
-                }
-                linhas.append(mandante)
-                linhas.append(visitante)
+                })
 
             if linhas:
                 df_final = pd.DataFrame(linhas)
@@ -238,7 +212,6 @@ elif opcao == "Análise de Jogo":
     
     times_disponiveis = sorted(set(j['time'] for j in jogos))
     
-    # Atribuir prateleiras
     odds_por_time = {}
     for j in jogos:
         if j['time'] not in odds_por_time:
