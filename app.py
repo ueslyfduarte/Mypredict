@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 - Aplicativo Completo (Conversor Robusto)
+MyPredict 2.0 - Aplicativo Completo (Conversor com Diagnóstico)
 """
 import streamlit as st
 import pandas as pd
@@ -7,6 +7,7 @@ from datetime import datetime
 from mypredict.core import *
 from math import exp, factorial
 import os
+import re
 
 # ============================================================
 # CONFIGURAÇÃO
@@ -57,7 +58,7 @@ st.sidebar.markdown("<h2 style='color:#DAA520;'>⚽ MyPredict 2.0</h2>", unsafe_
 opcao = st.sidebar.radio("Modo", ["Análise de Jogo", "Backtest", "Converter Dados Brutos"])
 
 # ============================================================
-# CONVERSOR ROBUSTO
+# CONVERSOR ROBUSTO COM DIAGNÓSTICO
 # ============================================================
 if opcao == "Converter Dados Brutos":
     st.markdown("<h1 style='text-align:center;'>🔄 Conversor de CSV</h1>", unsafe_allow_html=True)
@@ -92,37 +93,40 @@ if opcao == "Converter Dados Brutos":
 
             df = pd.concat(dfs, ignore_index=True)
 
-            # Função para encontrar coluna por palavras-chave
-            def find_col(keywords):
+            # Mostrar colunas disponíveis
+            st.write("Colunas encontradas no CSV original:", list(df.columns))
+
+            # Função para encontrar coluna por palavras-chave (regex)
+            def find_col(patterns):
                 for col in df.columns:
-                    col_lower = col.lower().replace(' ', '')
-                    for kw in keywords:
-                        if kw in col_lower:
+                    col_lower = col.lower()
+                    for pat in patterns:
+                        if re.search(pat, col_lower):
                             return col
                 return None
 
-            # Mapeamento necessário
-            col_date = find_col(['date'])
-            col_home = find_col(['hometeam', 'home', 'ht'])
-            col_away = find_col(['awayteam', 'away', 'at'])
-            col_ftr = find_col(['ftr', 'result'])
-            col_fthg = find_col(['fthg', 'homegoals', 'hg'])
-            col_ftag = find_col(['ftag', 'awaygoals', 'ag'])
-            col_hs = find_col(['hs', 'homeshots'])
-            col_as = find_col(['as', 'awayshots'])
-            col_hst = find_col(['hst', 'homeshotsontarget'])
-            col_ast = find_col(['ast', 'awayshotsontarget'])
-            col_hf = find_col(['hf', 'homefouls'])
-            col_af = find_col(['af', 'awayfouls'])
-            col_hc = find_col(['hc', 'homecorners'])
-            col_ac = find_col(['ac', 'awaycorners'])
-            col_hy = find_col(['hy', 'homeyellow'])
-            col_ay = find_col(['ay', 'awayyellow'])
-            col_hr = find_col(['hr', 'homered'])
-            col_ar = find_col(['ar', 'awayred'])
-            col_b365h = find_col(['b365h', 'bet365h'])
-            col_b365d = find_col(['b365d', 'bet365d'])
-            col_b365a = find_col(['b365a', 'bet365a'])
+            # Mapeamento necessário com expressões regulares flexíveis
+            col_date = find_col([r'date', r'dia', r'data'])
+            col_home = find_col([r'hometeam', r'home', r'ht', r'casa', r'mandante'])
+            col_away = find_col([r'awayteam', r'away', r'at', r'fora', r'visitante'])
+            col_ftr = find_col([r'ftr', r'result', r'resultado'])
+            col_fthg = find_col([r'fthg', r'homegoals', r'hg', r'golsmandante'])
+            col_ftag = find_col([r'ftag', r'awaygoals', r'ag', r'golsvisitante'])
+            col_hs = find_col([r'hs', r'homeshots', r'chutesmandante'])
+            col_as_ = find_col([r'as', r'awayshots', r'chutesvisitante'])
+            col_hst = find_col([r'hst', r'homeshotsontarget', r'shotsonmandante'])
+            col_ast = find_col([r'ast', r'awayshotsontarget', r'shotsonvisitante'])
+            col_hf = find_col([r'hf', r'homefouls', r'faltasmandante'])
+            col_af = find_col([r'af', r'awayfouls', r'faltasvisitante'])
+            col_hc = find_col([r'hc', r'homecorners', r'escanteiosmandante'])
+            col_ac = find_col([r'ac', r'awaycorners', r'escanteiosvisitante'])
+            col_hy = find_col([r'hy', r'homeyellow', r'amarelosmandante'])
+            col_ay = find_col([r'ay', r'awayyellow', r'amarelosvisitante'])
+            col_hr = find_col([r'hr', r'homered', r'vermelhosmandante'])
+            col_ar = find_col([r'ar', r'awayred', r'vermelhosvisitante'])
+            col_b365h = find_col([r'b365h', r'bet365h'])
+            col_b365d = find_col([r'b365d', r'bet365d'])
+            col_b365a = find_col([r'b365a', r'bet365a'])
 
             # Verifica se todas as colunas essenciais foram encontradas
             erros = []
@@ -134,7 +138,7 @@ if opcao == "Converter Dados Brutos":
             if not col_ftag: erros.append("Gols Visitante (FTAG)")
 
             if erros:
-                st.error(f"Colunas essenciais não encontradas: {', '.join(erros)}. Colunas disponíveis: {list(df.columns)}")
+                st.error(f"Colunas essenciais não encontradas: {', '.join(erros)}.")
                 st.stop()
 
             # Converter data
@@ -153,14 +157,13 @@ if opcao == "Converter Dados Brutos":
 
             linhas = []
             for _, jogo in df.iterrows():
-                # Extrai valores com fallback seguro
                 try:
                     fthg = int(jogo[col_fthg])
                     ftag = int(jogo[col_ftag])
                     hst = float(jogo.get(col_hst, 0)) if col_hst else 0.0
                     ast = float(jogo.get(col_ast, 0)) if col_ast else 0.0
                     hs  = float(jogo.get(col_hs, 0)) if col_hs else 0.0
-                    as_ = float(jogo.get(col_as, 0)) if col_as else 0.0
+                    as_ = float(jogo.get(col_as_, 0)) if col_as_ else 0.0
                     hc  = float(jogo.get(col_hc, 0)) if col_hc else 0.0
                     ac  = float(jogo.get(col_ac, 0)) if col_ac else 0.0
                     hf  = float(jogo.get(col_hf, 0)) if col_hf else 0.0
@@ -226,7 +229,7 @@ if opcao == "Converter Dados Brutos":
                 st.error("Nenhuma linha foi convertida. Verifique o conteúdo dos CSVs.")
 
 # ============================================================
-# ANÁLISE DE JOGO (a mesma funcional)
+# ANÁLISE DE JOGO
 # ============================================================
 elif opcao == "Análise de Jogo":
     if not jogos:
