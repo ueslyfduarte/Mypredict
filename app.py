@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 - Aplicativo Completo (com Conversor de CSV Robusto)
+MyPredict 2.0 - Aplicativo Completo (Conversor Robusto com Data Corrigida)
 """
 import streamlit as st
 import pandas as pd
@@ -86,7 +86,14 @@ if opcao == "Converter Dados Brutos":
                     st.error("Nenhuma coluna de data encontrada (precisa conter 'date').")
                     st.stop()
 
-                df[col_data] = pd.to_datetime(df[col_data], dayfirst=True).dt.strftime('%Y-%m-%d')
+                # Converter data: extrai apenas a parte da data (dd/mm/aaaa) e força o formato
+                try:
+                    # Remove hora se existir (ex: "15/08/2025 20:00" -> "15/08/2025")
+                    df[col_data] = df[col_data].astype(str).str.split(' ').str[0]
+                    df[col_data] = pd.to_datetime(df[col_data], format='%d/%m/%Y', exact=False).dt.strftime('%Y-%m-%d')
+                except Exception as e:
+                    st.error(f"Erro ao processar datas: {e}. Tente outro formato ou verifique o CSV.")
+                    st.stop()
 
                 # Função para pegar coluna flexível
                 def get_col(df, possiveis, tipo=float, padrao=0):
