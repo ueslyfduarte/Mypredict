@@ -43,6 +43,19 @@ st.markdown("""
         font-weight: bold; font-size: 0.8rem; line-height: 22px;
     }
     .mpv-destaque { font-size: 3rem; font-weight: bold; color: #DAA520; text-align: center; }
+    .metrica-row {
+        display: flex; align-items: center; margin-bottom: 16px;
+        padding: 10px; border-radius: 8px;
+    }
+    .metrica-row:nth-child(odd) { background-color: #1E1E1E; }
+    .metrica-row:nth-child(even) { background-color: #2A2A2A; }
+    .metrica-label {
+        width: 140px; font-weight: bold; color: #DAA520;
+        margin-right: 15px;
+    }
+    .metrica-desc {
+        flex: 1; color: #BBBBBB; font-size: 0.9rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -98,50 +111,6 @@ with col3:
 ultima_data = max(j['data'] for j in jogos)
 data_ref = st.date_input("📅 Data de referência", value=ultima_data)
 
-# ============================================================
-# CONTEXTO DA LIGA (ANTES DOS CÁLCULOS, JÁ QUE NÃO DEPENDE DELES)
-# ============================================================
-st.markdown("---")
-st.markdown("### 🏆 Contexto na Liga")
-
-times_dict = {t: {'P': 0, 'J': 0, 'V': 0, 'E': 0, 'D': 0, 'GP': 0} for t in times_disponiveis}
-for j in jogos:
-    t = j['time']
-    if j['resultado'] == 'V':
-        times_dict[t]['V'] += 1
-        times_dict[t]['P'] += 3
-    elif j['resultado'] == 'E':
-        times_dict[t]['E'] += 1
-        times_dict[t]['P'] += 1
-    else:
-        times_dict[t]['D'] += 1
-    times_dict[t]['J'] += 1
-    times_dict[t]['GP'] += j['gols']
-
-tabela = []
-for time, stats in times_dict.items():
-    tabela.append([time, stats['J'], stats['V'], stats['E'], stats['D'], stats['GP'], stats['P']])
-df_tabela = pd.DataFrame(tabela, columns=["Time", "J", "V", "E", "D", "GP", "Pts"])
-df_tabela = df_tabela.sort_values("Pts", ascending=False).reset_index(drop=True)
-df_tabela.index = df_tabela.index + 1
-
-def highlight_linha(s):
-    return ['background-color: #DAA520; color: #000' if s.name in [time_casa, time_fora] else '' for _ in s]
-
-st.dataframe(df_tabela.style.apply(highlight_linha, axis=0), use_container_width=True)
-
-pos_casa = df_tabela[df_tabela['Time'] == time_casa].index[0] if not df_tabela[df_tabela['Time'] == time_casa].empty else None
-pos_fora = df_tabela[df_tabela['Time'] == time_fora].index[0] if not df_tabela[df_tabela['Time'] == time_fora].empty else None
-if pos_casa and pos_fora:
-    contexto = f"Na classificação atual, **{time_casa}** ocupa a {pos_casa}ª posição, enquanto **{time_fora}** está em {pos_fora}º. "
-    if pos_casa < pos_fora:
-        contexto += "O time da casa possui melhor campanha."
-    elif pos_casa > pos_fora:
-        contexto += "O visitante vem apresentando melhor desempenho na tabela."
-    else:
-        contexto += "Ambos estão na mesma posição, sugerindo um duelo bastante parelho."
-    st.markdown(contexto)
-
 st.markdown("<div style='text-align: center; margin-top: 20px;'>", unsafe_allow_html=True)
 gerar = st.button("⚡ Gerar MyPredict")
 st.markdown("</div>", unsafe_allow_html=True)
@@ -173,7 +142,7 @@ if gerar:
             mpv = atualizar_MPV(mpv, mpv_adv, jogo['mando'], jogo['resultado'], ima_jogo)
         return mpv
 
-    # ---------- CÁLCULOS PRINCIPAIS ----------
+    # ---------- CÁLCULOS ----------
     ima_casa, desvio_casa = calcular_IMA(jogos, time_casa, data_ref_dt, mando_proximo='casa')
     ima_fora, desvio_fora = calcular_IMA(jogos, time_fora, data_ref_dt, mando_proximo='fora')
 
@@ -195,7 +164,6 @@ if gerar:
 
     mpv_casa_raw = calcular_MPV_final(time_casa, jogos, data_ref_dt)
     mpv_fora_raw = calcular_MPV_final(time_fora, jogos, data_ref_dt)
-
     prob_casa, prob_empate, prob_fora = probabilidades_1x2(mpv_casa_raw, mpv_fora_raw)
 
     odd_casa, odd_empate, odd_fora = 2.0, 3.0, 3.0
@@ -229,7 +197,53 @@ if gerar:
     seta_casa = seta_ima(ima_casa, prat_casa)
     seta_fora = seta_ima(ima_fora, prat_fora)
 
-    # ---------- SEÇÃO IMA (MOMENTO) ----------
+    # ============================================================
+    # 1. CONTEXTO DA LIGA (APÓS GERAR)
+    # ============================================================
+    st.markdown("---")
+    st.markdown("### 🏆 Contexto na Liga")
+
+    times_dict = {t: {'P': 0, 'J': 0, 'V': 0, 'E': 0, 'D': 0, 'GP': 0} for t in times_disponiveis}
+    for j in jogos:
+        t = j['time']
+        if j['resultado'] == 'V':
+            times_dict[t]['V'] += 1
+            times_dict[t]['P'] += 3
+        elif j['resultado'] == 'E':
+            times_dict[t]['E'] += 1
+            times_dict[t]['P'] += 1
+        else:
+            times_dict[t]['D'] += 1
+        times_dict[t]['J'] += 1
+        times_dict[t]['GP'] += j['gols']
+
+    tabela = []
+    for time, stats in times_dict.items():
+        tabela.append([time, stats['J'], stats['V'], stats['E'], stats['D'], stats['GP'], stats['P']])
+    df_tabela = pd.DataFrame(tabela, columns=["Time", "J", "V", "E", "D", "GP", "Pts"])
+    df_tabela = df_tabela.sort_values("Pts", ascending=False).reset_index(drop=True)
+    df_tabela.index = df_tabela.index + 1
+
+    def highlight_linha(s):
+        return ['background-color: #DAA520; color: #000' if s.name in [time_casa, time_fora] else '' for _ in s]
+
+    st.dataframe(df_tabela.style.apply(highlight_linha, axis=0), use_container_width=True)
+
+    pos_casa = df_tabela[df_tabela['Time'] == time_casa].index[0] if not df_tabela[df_tabela['Time'] == time_casa].empty else None
+    pos_fora = df_tabela[df_tabela['Time'] == time_fora].index[0] if not df_tabela[df_tabela['Time'] == time_fora].empty else None
+    if pos_casa and pos_fora:
+        contexto = f"Na classificação atual, **{time_casa}** ocupa a {pos_casa}ª posição, enquanto **{time_fora}** está em {pos_fora}º. "
+        if pos_casa < pos_fora:
+            contexto += "O time da casa possui melhor campanha."
+        elif pos_casa > pos_fora:
+            contexto += "O visitante vem apresentando melhor desempenho na tabela."
+        else:
+            contexto += "Ambos estão na mesma posição, sugerindo um duelo bastante parelho."
+        st.markdown(contexto)
+
+    # ============================================================
+    # 2. IMA (MOMENTO ATUAL)
+    # ============================================================
     st.markdown("---")
     st.markdown("### 📈 Momento Atual (IMA)")
     col_ima1, col_ima2 = st.columns(2)
@@ -240,7 +254,9 @@ if gerar:
         st.metric(f"{time_fora} (Fora)", f"{ima_fora:.1f}")
         st.markdown(f"**{seta_fora}** em relação à expectativa da prateleira")
 
-    # ---------- MÉTRICAS DETALHADAS ----------
+    # ============================================================
+    # 3. MÉTRICAS DETALHADAS
+    # ============================================================
     st.markdown("---")
     st.markdown("### 🔍 Métricas Detalhadas do Modelo")
     nomes = ["ATA (Ataque)", "DEF (Defesa)", "MEI (Meio-campo)", "FOR (Força)", "CONS (Consistência)", "RES (Resiliência)", "OVRall (Força Geral)"]
@@ -257,34 +273,76 @@ if gerar:
     ]
 
     for i, (nome, desc) in enumerate(zip(nomes, descricoes)):
-        st.markdown(f"**{nome}** — *{desc}*")
-        col_bar1, col_bar2 = st.columns(2)
-        with col_bar1:
-            st.markdown(f"<div class='barra-bg'><div class='barra-preenchimento' style='width:{valores_casa[i]}%;'>{valores_casa[i]:.0f}</div></div>", unsafe_allow_html=True)
-            st.markdown(f"<p style='text-align: center;'>{time_casa}: {valores_casa[i]:.1f}</p>", unsafe_allow_html=True)
-        with col_bar2:
-            st.markdown(f"<div class='barra-bg'><div class='barra-preenchimento' style='width:{valores_fora[i]}%;'>{valores_fora[i]:.0f}</div></div>", unsafe_allow_html=True)
-            st.markdown(f"<p style='text-align: center;'>{time_fora}: {valores_fora[i]:.1f}</p>", unsafe_allow_html=True)
+        with st.container():
+            st.markdown(f"""
+            <div class="metrica-row">
+                <div class="metrica-label">{nome}</div>
+                <div class="metrica-desc">{desc}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            col_bar1, col_bar2 = st.columns(2)
+            with col_bar1:
+                st.markdown(f"<div class='barra-bg'><div class='barra-preenchimento' style='width:{valores_casa[i]}%;'>{valores_casa[i]:.0f}</div></div>", unsafe_allow_html=True)
+                st.markdown(f"<p style='text-align: center;'>{time_casa}: {valores_casa[i]:.1f}</p>", unsafe_allow_html=True)
+            with col_bar2:
+                st.markdown(f"<div class='barra-bg'><div class='barra-preenchimento' style='width:{valores_fora[i]}%;'>{valores_fora[i]:.0f}</div></div>", unsafe_allow_html=True)
+                st.markdown(f"<p style='text-align: center;'>{time_fora}: {valores_fora[i]:.1f}</p>", unsafe_allow_html=True)
 
-    # ---------- ANÁLISE DO CONFRONTO ----------
+    # ============================================================
+    # 4. ANÁLISE DO CONFRONTO
+    # ============================================================
     st.markdown("---")
     st.markdown("### 📝 Análise do Confronto")
+
+    comp = []
+    comp.append(f"**ATA**: {'Mandante superior' if ata_casa > ata_fora else 'Visitante superior'} ({ata_casa:.1f} vs {ata_fora:.1f})")
+    comp.append(f"**DEF**: {'Mandante superior' if def_casa > def_fora else 'Visitante superior'} ({def_casa:.1f} vs {def_fora:.1f})")
+    comp.append(f"**MEI**: {'Mandante superior' if mei_casa > mei_fora else 'Visitante superior'} ({mei_casa:.1f} vs {mei_fora:.1f})")
+    comp.append(f"**FOR**: {'Mandante superior' if for_casa > for_fora else 'Visitante superior'} ({for_casa:.1f} vs {for_fora:.1f})")
+    comp.append(f"**CONS**: {'Mandante superior' if cons_casa > cons_fora else 'Visitante superior'} ({cons_casa:.1f} vs {cons_fora:.1f})")
+    comp.append(f"**RES**: {'Mandante superior' if res_casa > res_fora else 'Visitante superior'} ({res_casa:.1f} vs {res_fora:.1f})")
+    comp.append(f"**IMA (Momento)**: {seta_casa} vs {seta_fora}")
+
+    st.markdown("**Comparativo de Métricas:**")
+    for linha in comp:
+        st.markdown(f"- {linha}")
+
     favorito = time_casa if prob_casa > prob_fora else time_fora
     underdog = time_fora if prob_casa > prob_fora else time_casa
     prob_favorito = max(prob_casa, prob_fora)
-    descricao = (
-        f"De acordo com o modelo MyPredict, o **{favorito}** é o favorito para esta partida, "
-        f"com **{prob_favorito:.1%}** de probabilidade de vitória. "
-    )
-    if abs(prob_casa - prob_fora) < 0.15:
-        descricao += "No entanto, o confronto é bastante equilibrado, com chances reais para ambos os lados. "
-    else:
-        descricao += "A superioridade prevista é clara, embora o futebol sempre permita surpresas. "
-    if prob_empate > 0.30:
-        descricao += "A probabilidade de empate é elevada, refletindo um possível equilíbrio tático ou histórico de confrontos diretos."
-    st.markdown(descricao)
 
-    # ---------- PROBABILIDADES E VALOR ----------
+    justificativa = f"Com base no MPV, **{favorito}** leva vantagem ({prob_favorito:.1%} de vitória). "
+    if ovrall_casa > ovrall_fora:
+        justificativa += f"O mandante tem OVRall superior ({ovrall_casa:.1f} vs {ovrall_fora:.1f}), "
+    else:
+        justificativa += f"O visitante tem OVRall superior ({ovrall_fora:.1f} vs {ovrall_casa:.1f}), "
+    if ima_casa > ima_fora:
+        justificativa += f"e está em melhor momento (IMA {ima_casa:.1f} contra {ima_fora:.1f}). "
+    else:
+        justificativa += f"mas o visitante está em melhor momento (IMA {ima_fora:.1f} contra {ima_casa:.1f}). "
+    if prob_empate > 0.30:
+        justificativa += "A alta probabilidade de empate indica equilíbrio tático. "
+    st.markdown(justificativa)
+
+    # ============================================================
+    # 5. MPV EM DESTAQUE (ACIMA DAS PROBABILIDADES)
+    # ============================================================
+    st.markdown("---")
+    st.markdown("### 💎 MyPredict Value (MPV)")
+    col_mpv1, col_mpv2 = st.columns(2)
+    with col_mpv1:
+        st.markdown(f"<div class='mpv-destaque'>{mpv_casa:.1f}</div>", unsafe_allow_html=True)
+        st.markdown(f"<p style='text-align: center;'>{time_casa}</p>", unsafe_allow_html=True)
+    with col_mpv2:
+        st.markdown(f"<div class='mpv-destaque'>{mpv_fora:.1f}</div>", unsafe_allow_html=True)
+        st.markdown(f"<p style='text-align: center;'>{time_fora}</p>", unsafe_allow_html=True)
+    diff_mpv = abs(mpv_casa - mpv_fora)
+    melhor = time_casa if mpv_casa > mpv_fora else time_fora
+    st.markdown(f"<p style='text-align: center; color: #DAA520;'>Diferença: {diff_mpv:.1f} pontos a favor do <b>{melhor}</b></p>", unsafe_allow_html=True)
+
+    # ============================================================
+    # 6. PROBABILIDADES E VALOR
+    # ============================================================
     st.markdown("---")
     st.markdown("### 📊 Probabilidades e Valor")
     col_prob1, col_prob2, col_prob3 = st.columns(3)
@@ -319,17 +377,3 @@ if gerar:
             st.success(f"🥇 **{resultado}**: Selo Dourado! Alto valor identificado.")
         elif "Verde" in selo:
             st.info(f"🟢 **{resultado}**: Selo Verde. Boa oportunidade.")
-
-    # ---------- MPV EM DESTAQUE (FINAL) ----------
-    st.markdown("---")
-    st.markdown("### 💎 MyPredict Value (MPV)")
-    col_mpv1, col_mpv2 = st.columns(2)
-    with col_mpv1:
-        st.markdown(f"<div class='mpv-destaque'>{mpv_casa:.1f}</div>", unsafe_allow_html=True)
-        st.markdown(f"<p style='text-align: center;'>{time_casa}</p>", unsafe_allow_html=True)
-    with col_mpv2:
-        st.markdown(f"<div class='mpv-destaque'>{mpv_fora:.1f}</div>", unsafe_allow_html=True)
-        st.markdown(f"<p style='text-align: center;'>{time_fora}</p>", unsafe_allow_html=True)
-    diff_mpv = abs(mpv_casa - mpv_fora)
-    melhor = time_casa if mpv_casa > mpv_fora else time_fora
-    st.markdown(f"<p style='text-align: center; color: #DAA520;'>Diferença: {diff_mpv:.1f} pontos a favor do <b>{melhor}</b></p>", unsafe_allow_html=True)
