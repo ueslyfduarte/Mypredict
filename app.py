@@ -14,7 +14,6 @@ from mypredict.core import (
     calcular_RES,
     calcular_OVRall,
     inicializar_MPV,
-    atualizar_MPV,
     probabilidades_1x2,
     calcular_edge,
     determinar_selo
@@ -30,48 +29,38 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# CSS customizado
 st.markdown("""
 <style>
-    .stApp {
-        background-color: #111111;
-        color: #FFFFFF;
-    }
-    h1, h2, h3, h4, h5, h6 {
-        color: #DAA520 !important;
-    }
-    [data-testid="stMetricValue"] {
-        font-size: 1.8rem;
-        color: #FFFFFF;
-    }
+    .stApp { background-color: #111111; color: #FFFFFF; }
+    h1, h2, h3, h4, h5, h6 { color: #DAA520 !important; }
+    [data-testid="stMetricValue"] { font-size: 1.8rem; color: #FFFFFF; }
     .stButton>button {
-        background-color: #DAA520;
-        color: #000000;
-        border: none;
-        font-weight: bold;
-        font-size: 1.2rem;
-        padding: 0.5rem 2rem;
-        border-radius: 8px;
+        background-color: #DAA520; color: #000; border: none;
+        font-weight: bold; font-size: 1.2rem; padding: 0.5rem 2rem; border-radius: 8px;
     }
     .positivo { color: #00C853; font-weight: bold; }
     .negativo { color: #FF1744; font-weight: bold; }
     .barra-bg {
-        background-color: #333333;
-        border-radius: 5px;
-        height: 20px;
-        width: 100%;
-        margin: 4px 0;
+        background-color: #333; border-radius: 5px; height: 22px;
+        width: 100%; margin: 4px 0;
     }
     .barra-preenchimento {
-        background-color: #DAA520;
-        height: 20px;
-        border-radius: 5px;
-        text-align: right;
-        padding-right: 5px;
-        color: #000;
-        font-weight: bold;
-        font-size: 0.8rem;
-        line-height: 20px;
+        background-color: #DAA520; height: 22px; border-radius: 5px;
+        text-align: right; padding-right: 6px; color: #000;
+        font-weight: bold; font-size: 0.8rem; line-height: 22px;
+    }
+    .metrica-linha {
+        display: flex; align-items: center; gap: 20px;
+        margin-bottom: 12px;
+    }
+    .metrica-nome {
+        width: 120px; font-size: 1rem; font-weight: bold; color: #DAA520;
+    }
+    .metrica-barra {
+        flex: 1;
+    }
+    .mpv-destaque {
+        font-size: 3rem; font-weight: bold; color: #DAA520; text-align: center;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -179,16 +168,25 @@ if gerar:
     col1, col2, col3 = st.columns([3, 1, 3])
     with col1:
         st.markdown(f"<h2 style='color: #DAA520;'>{time_casa} (Casa)</h2>", unsafe_allow_html=True)
-        st.metric("MPV (0-100)", f"{mpv_casa:.1f}")
         st.metric("IMA (Momento)", f"{ima_casa:.1f}")
         st.metric("OVRall (Força Geral)", f"{ovrall_casa:.1f}")
     with col2:
         st.markdown("<h1 style='text-align: center; color: #DAA520;'>VS</h1>", unsafe_allow_html=True)
     with col3:
         st.markdown(f"<h2 style='color: #DAA520;'>{time_fora} (Fora)</h2>", unsafe_allow_html=True)
-        st.metric("MPV (0-100)", f"{mpv_fora:.1f}")
         st.metric("IMA (Momento)", f"{ima_fora:.1f}")
         st.metric("OVRall (Força Geral)", f"{ovrall_fora:.1f}")
+
+    # ---------- MPV EM DESTAQUE ----------
+    st.markdown("---")
+    st.markdown("### 💎 MyPredict Value (MPV)")
+    col_mpv1, col_mpv2 = st.columns(2)
+    with col_mpv1:
+        st.markdown(f"<div class='mpv-destaque'>{mpv_casa:.1f}</div>", unsafe_allow_html=True)
+        st.markdown(f"<p style='text-align: center;'>{time_casa}</p>", unsafe_allow_html=True)
+    with col_mpv2:
+        st.markdown(f"<div class='mpv-destaque'>{mpv_fora:.1f}</div>", unsafe_allow_html=True)
+        st.markdown(f"<p style='text-align: center;'>{time_fora}</p>", unsafe_allow_html=True)
 
     # ---------- PROBABILIDADES E SELOS ----------
     st.markdown("---")
@@ -238,62 +236,33 @@ if gerar:
         descricao += "A probabilidade de empate é elevada, refletindo um possível equilíbrio tático ou histórico de confrontos diretos."
     st.markdown(descricao)
 
-    # ---------- MÉTRICAS DETALHADAS LADO A LADO COM BARRAS ----------
+    # ---------- MÉTRICAS DETALHADAS (LADO A LADO COM BARRAS) ----------
     st.markdown("---")
     st.markdown("### 🔍 Métricas Detalhadas do Modelo")
 
-    # Definição dos pesos e descrições
-    pesos_ovr = [0.25, 0.25, 0.20, 0.15, 0.10, 0.05]
-    nomes = ["ATA (Ataque)", "DEF (Defesa)", "MEI (Meio-campo)", "FOR (Força)", "CONS (Consistência)", "RES (Resiliência)"]
+    nomes = ["ATA (Ataque)", "DEF (Defesa)", "MEI (Meio-campo)", "FOR (Força)", "CONS (Consistência)", "RES (Resiliência)", "IMA (Momento)", "OVRall (Força Geral)"]
+    valores_casa = [ata_casa, def_casa, mei_casa, for_casa, cons_casa, res_casa, ima_casa, ovrall_casa]
+    valores_fora = [ata_fora, def_fora, mei_fora, for_fora, cons_fora, res_fora, ima_fora, ovrall_fora]
     descricoes = [
         "Capacidade ofensiva ajustada à defesa adversária",
         "Solidez defensiva ajustada ao ataque adversário",
-        "Controle de jogo, passes e qualidade de criação",
-        "Dificuldade imposta aos adversários, imposição física",
-        "Regularidade dos resultados dentro do esperado",
-        "Capacidade de reagir a situações adversas"
+        "Controle de jogo, passes e criação",
+        "Dificuldade imposta aos adversários",
+        "Regularidade dos resultados esperados",
+        "Capacidade de reagir a situações adversas",
+        "Momento atual baseado nos últimos jogos",
+        "Força geral combinada das seis dimensões"
     ]
-    valores_casa = [ata_casa, def_casa, mei_casa, for_casa, cons_casa, res_casa]
-    valores_fora = [ata_fora, def_fora, mei_fora, for_fora, cons_fora, res_fora]
 
-    # Cria duas colunas para cada time
-    col_met_casa, col_met_fora = st.columns(2)
-
-    def barra_html(valor, largura=100):
-        """Retorna HTML para barra de progresso dourada."""
-        return f"""
-        <div class="barra-bg" style="width:{largura}px;">
-            <div class="barra-preenchimento" style="width:{valor}%;">{valor:.0f}</div>
-        </div>
-        """
-
-    with col_met_casa:
-        st.markdown(f"<h3 style='color: #DAA520;'>{time_casa}</h3>", unsafe_allow_html=True)
-        for nome, valor, desc in zip(nomes, valores_casa, descricoes):
-            st.markdown(f"**{nome}** — *{desc}*")
-            st.markdown(barra_html(valor), unsafe_allow_html=True)
-        st.markdown("---")
-        st.markdown(f"**OVRall (Força Geral)** = {ovrall_casa:.1f}")
-        st.markdown("Pesos: ATA 25% | DEF 25% | MEI 20% | FOR 15% | CONS 10% | RES 5%")
-
-    with col_met_fora:
-        st.markdown(f"<h3 style='color: #DAA520;'>{time_fora}</h3>", unsafe_allow_html=True)
-        for nome, valor, desc in zip(nomes, valores_fora, descricoes):
-            st.markdown(f"**{nome}** — *{desc}*")
-            st.markdown(barra_html(valor), unsafe_allow_html=True)
-        st.markdown("---")
-        st.markdown(f"**OVRall (Força Geral)** = {ovrall_fora:.1f}")
-        st.markdown("Pesos: ATA 25% | DEF 25% | MEI 20% | FOR 15% | CONS 10% | RES 5%")
-
-    # IMA e MPV extras
-    st.markdown("---")
-    col_extra1, col_extra2 = st.columns(2)
-    with col_extra1:
-        st.metric("IMA (Momento Atual)", f"{ima_casa:.1f}")
-        st.metric("MPV (Rating 0-100)", f"{mpv_casa:.1f}")
-    with col_extra2:
-        st.metric("IMA (Momento Atual)", f"{ima_fora:.1f}")
-        st.metric("MPV (Rating 0-100)", f"{mpv_fora:.1f}")
+    for i, (nome, desc) in enumerate(zip(nomes, descricoes)):
+        st.markdown(f"**{nome}** — *{desc}*")
+        col_bar1, col_bar2 = st.columns(2)
+        with col_bar1:
+            st.markdown(f"<div class='barra-bg'><div class='barra-preenchimento' style='width:{valores_casa[i]}%;'>{valores_casa[i]:.0f}</div></div>", unsafe_allow_html=True)
+            st.markdown(f"<p style='text-align: center;'>{time_casa}: {valores_casa[i]:.1f}</p>", unsafe_allow_html=True)
+        with col_bar2:
+            st.markdown(f"<div class='barra-bg'><div class='barra-preenchimento' style='width:{valores_fora[i]}%;'>{valores_fora[i]:.0f}</div></div>", unsafe_allow_html=True)
+            st.markdown(f"<p style='text-align: center;'>{time_fora}: {valores_fora[i]:.1f}</p>", unsafe_allow_html=True)
 
     # ---------- TABELA DA LIGA ----------
     st.markdown("---")
