@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 - Aplicativo Completo (com Conversor de CSV)
+MyPredict 2.0 - Aplicativo Completo (com Conversor de CSV e Estatísticas Expandidas)
 """
 import streamlit as st
 import pandas as pd
@@ -8,9 +8,7 @@ from mypredict.core import *
 from math import exp, factorial
 import os
 
-# ============================================================
-# CONFIGURAÇÃO VISUAL
-# ============================================================
+# Configuração visual
 st.set_page_config(page_title="MyPredict 2.0", page_icon="⚽", layout="wide")
 st.markdown("""
 <style>
@@ -23,65 +21,61 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ============================================================
-# CARREGAR DADOS PRINCIPAIS
-# ============================================================
+# Funções de probabilidade
+def prob_over(media_gols, limite):
+    prob_under = sum((media_gols**k) * exp(-media_gols) / factorial(k) for k in range(int(limite)+1))
+    return 1 - prob_under
+
+def prob_btts(ata_casa, def_fora, ata_fora, def_casa):
+    media_casa = (ata_casa/50) * (1 - def_fora/100)
+    media_fora = (ata_fora/50) * (1 - def_casa/100)
+    prob_c = 1 - exp(-media_casa)
+    prob_f = 1 - exp(-media_fora)
+    return prob_c * prob_f
+
+# Carregar dados processados
 @st.cache_data
 def carregar_dados():
     try:
         df = pd.read_csv("data/meus_jogos.csv", parse_dates=["data"])
-        jogos = df.to_dict(orient="records")
-        return jogos
+        return df.to_dict(orient="records")
     except FileNotFoundError:
-        st.error("Arquivo 'data/meus_jogos.csv' não encontrado. Use o conversor no menu lateral.")
         return []
 
 jogos = carregar_dados()
 
-# ============================================================
-# MENU LATERAL
-# ============================================================
+# Menu lateral
 st.sidebar.markdown("<h2 style='color:#DAA520;'>⚽ MyPredict 2.0</h2>", unsafe_allow_html=True)
 opcao = st.sidebar.radio("Modo", ["Análise de Jogo", "Backtest", "Converter Dados Brutos"])
 
-# ============================================================
-# CONVERSOR DE CSV (NOVA FUNCIONALIDADE)
-# ============================================================
 if opcao == "Converter Dados Brutos":
     st.markdown("<h1 style='text-align:center;'>🔄 Conversor de CSV</h1>", unsafe_allow_html=True)
-    st.markdown("Converte os arquivos da pasta `data/raw/` para o formato do MyPredict.")
+    st.markdown("Converte arquivos da pasta `data/raw/` para o formato MyPredict, incluindo novas estatísticas.")
 
-    # Listar arquivos na pasta raw
     raw_path = "data/raw"
-    arquivos_raw = []
     try:
         arquivos_raw = [f for f in os.listdir(raw_path) if f.endswith('.csv')]
     except FileNotFoundError:
-        st.error("Pasta 'data/raw' não encontrada. Verifique se os arquivos foram enviados para lá.")
+        st.error("Pasta 'data/raw' não encontrada. Envie os CSVs da Premier League para lá.")
+        arquivos_raw = []
 
     if not arquivos_raw:
-        st.warning("Nenhum arquivo CSV encontrado em data/raw/. Adicione os arquivos da Premier League nessa pasta.")
+        st.warning("Nenhum arquivo CSV em data/raw/.")
     else:
         st.write("Arquivos encontrados:", arquivos_raw)
-
         if st.button("⚙️ Converter para meus_jogos.csv"):
-            # Ler todos os CSVs da pasta raw
             dfs = []
             for arquivo in arquivos_raw:
                 caminho = os.path.join(raw_path, arquivo)
                 try:
-                    df_temp = pd.read_csv(caminho)
-                    dfs.append(df_temp)
+                    dfs.append(pd.read_csv(caminho))
                 except Exception as e:
                     st.error(f"Erro ao ler {arquivo}: {e}")
 
             if dfs:
                 df = pd.concat(dfs, ignore_index=True)
-
-                # Converter data
                 df['Date'] = pd.to_datetime(df['Date'], dayfirst=True).dt.strftime('%Y-%m-%d')
 
-                # Funções de resultado
                 def res_casa(row):
                     if row['FTR'] == 'H': return 'V'
                     elif row['FTR'] == 'A': return 'D'
@@ -94,8 +88,8 @@ if opcao == "Converter Dados Brutos":
 
                 linhas = []
                 for _, jogo in df.iterrows():
-                    # Mandante
-                    linhas.append({
+                    # Mapeamento de colunas opcionais (usando .get para evitar erros)
+                    mandante = {
                         'data': jogo['Date'],
                         'time': jogo['HomeTeam'],
                         'adv': jogo['AwayTeam'],
@@ -105,16 +99,18 @@ if opcao == "Converter Dados Brutos":
                         'gols_sofridos': int(jogo['FTAG']),
                         'prat_time': 3,
                         'prat_adv': 3,
-                        'finalizacoes_alvo': float(jogo['HST']),
-                        'finalizacoes_totais': float(jogo['HS']),
-                        'escanteios': float(jogo['HC']),
-                        'faltas_sofridas': float(jogo['AF']),
+                        'finalizacoes_alvo': float(jogo.get('HST', 0)),
+                        'finalizacoes_totais': float(jogo.get('HS', 0)),
+                        'escanteios': float(jogo.get('HC', 0)),
+                        'faltas_sofridas': float(jogo.get('AF', 0)),
+                        'faltas_cometidas': float(jogo.get('HF', 0)),
+                        'cartoes_amarelos': int(jogo.get('HY', 0)),
+                        'cartoes_vermelhos': int(jogo.get('HR', 0)),
                         'B365H': float(jogo.get('B365H', 2.0)),
                         'B365D': float(jogo.get('B365D', 3.0)),
                         'B365A': float(jogo.get('B365A', 3.0))
-                    })
-                    # Visitante
-                    linhas.append({
+                    }
+                    visitante = {
                         'data': jogo['Date'],
                         'time': jogo['AwayTeam'],
                         'adv': jogo['HomeTeam'],
@@ -124,22 +120,23 @@ if opcao == "Converter Dados Brutos":
                         'gols_sofridos': int(jogo['FTHG']),
                         'prat_time': 3,
                         'prat_adv': 3,
-                        'finalizacoes_alvo': float(jogo['AST']),
-                        'finalizacoes_totais': float(jogo['AS']),
-                        'escanteios': float(jogo['AC']),
-                        'faltas_sofridas': float(jogo['HF']),
+                        'finalizacoes_alvo': float(jogo.get('AST', 0)),
+                        'finalizacoes_totais': float(jogo.get('AS', 0)),
+                        'escanteios': float(jogo.get('AC', 0)),
+                        'faltas_sofridas': float(jogo.get('HF', 0)),
+                        'faltas_cometidas': float(jogo.get('AF', 0)),
+                        'cartoes_amarelos': int(jogo.get('AY', 0)),
+                        'cartoes_vermelhos': int(jogo.get('AR', 0)),
                         'B365H': float(jogo.get('B365H', 2.0)),
                         'B365D': float(jogo.get('B365D', 3.0)),
                         'B365A': float(jogo.get('B365A', 3.0))
-                    })
+                    }
+                    linhas.append(mandante)
+                    linhas.append(visitante)
 
                 df_final = pd.DataFrame(linhas)
-
-                # Exibir prévia
                 st.success(f"Conversão concluída! {len(df_final)} linhas geradas.")
                 st.dataframe(df_final.head(10))
-
-                # Permitir download
                 csv_exportado = df_final.to_csv(index=False)
                 st.download_button(
                     label="📥 Baixar meus_jogos.csv",
@@ -147,16 +144,13 @@ if opcao == "Converter Dados Brutos":
                     file_name="meus_jogos.csv",
                     mime="text/csv"
                 )
-                st.info("Após baixar, substitua o arquivo `data/meus_jogos.csv` no GitHub pelo novo conteúdo.")
+                st.info("Após baixar, substitua o conteúdo de `data/meus_jogos.csv` no GitHub pelo novo conteúdo.")
 
-# ============================================================
-# ANÁLISE DE JOGO (Mantida igual)
-# ============================================================
 elif opcao == "Análise de Jogo":
     if not jogos:
         st.stop()
     times_disponiveis = sorted(set(j['time'] for j in jogos))
-    # Atribuir prateleiras com base nas odds
+    # Atribuir prateleiras (já existente)
     odds_por_time = {}
     for j in jogos:
         if j['time'] not in odds_por_time:
@@ -254,6 +248,7 @@ elif opcao == "Análise de Jogo":
         mpv_casa = (mpv_casa_raw - 1000) / 10
         mpv_fora = (mpv_fora_raw - 1000) / 10
 
+        # Exibição (resumida, mas com as novas métricas)
         st.markdown("---")
         col1, col2, col3 = st.columns([2,1,2])
         with col1:
@@ -261,6 +256,7 @@ elif opcao == "Análise de Jogo":
             st.metric("MPV", f"{mpv_casa:.1f}")
             st.metric("IMA", f"{ima_casa:.1f}")
             st.metric("OVRall", f"{ovrall_casa:.1f}")
+            st.write(f"ATA: {ata_casa:.1f} | DEF: {def_casa:.1f} | MEI: {mei_casa:.1f} | FOR: {for_casa:.1f}")
         with col2:
             st.markdown("<h2 style='text-align:center; color:#DAA520;'>VS</h2>", unsafe_allow_html=True)
         with col3:
@@ -268,6 +264,7 @@ elif opcao == "Análise de Jogo":
             st.metric("MPV", f"{mpv_fora:.1f}")
             st.metric("IMA", f"{ima_fora:.1f}")
             st.metric("OVRall", f"{ovrall_fora:.1f}")
+            st.write(f"ATA: {ata_fora:.1f} | DEF: {def_fora:.1f} | MEI: {mei_fora:.1f} | FOR: {for_fora:.1f}")
 
         st.markdown("---")
         st.subheader("📊 Probabilidades 1X2")
@@ -305,9 +302,6 @@ elif opcao == "Análise de Jogo":
         total_esc = esc_casa + esc_fora
         col4.metric("Over 9.5 esc.", f"{prob_over(total_esc, 8.5):.1%}")
 
-# ============================================================
-# BACKTEST (Mantido)
-# ============================================================
 elif opcao == "Backtest":
     if not jogos:
         st.stop()
@@ -369,15 +363,3 @@ elif opcao == "Backtest":
         df_log = pd.DataFrame(log)
         st.dataframe(df_log, use_container_width=True)
         st.success(f"Backtest concluído para {len(log)} partidas.")
-
-# Funções auxiliares de probabilidade
-def prob_over(media_gols, limite):
-    prob_under = sum((media_gols**k) * exp(-media_gols) / factorial(k) for k in range(int(limite)+1))
-    return 1 - prob_under
-
-def prob_btts(ata_casa, def_fora, ata_fora, def_casa):
-    media_casa = (ata_casa/50) * (1 - def_fora/100)
-    media_fora = (ata_fora/50) * (1 - def_casa/100)
-    prob_c = 1 - exp(-media_casa)
-    prob_f = 1 - exp(-media_fora)
-    return prob_c * prob_f
