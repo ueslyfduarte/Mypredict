@@ -353,7 +353,7 @@ def calcular_probabilidades(nota_a, nota_b):
     return prob_a/total*100, prob_empate/total*100, prob_b/total*100
 
 # =========================================================================
-# ABA SIMULADOR MANUAL (REESTRUTURADA E MELHORADA)
+# ABA SIMULADOR MANUAL (COMPLETA COM TODOS OS CAMPOS)
 # =========================================================================
 if aba == "🧮 Simulador Manual":
     st.header("🧮 Simulador com Estatísticas Brutas e Momento Completo")
@@ -417,21 +417,412 @@ if aba == "🧮 Simulador Manual":
         med_liga['gols_sofridos'] = cols2[4].number_input("Gols Sofridos", 0.0, 100.0, 1.2)
         med_liga['xg_cedido'] = cols2[5].number_input("xG Cedido", 0.0, 100.0, 1.3)
 
-    # --- COLETA DE DADOS DOS TIMES (simplificada, como no código anterior) ---
-    # (Para não repetir todo o bloco, manterei a estrutura das variáveis est_a, est_b, etc.)
+    # ========== COLETA TIME A ==========
+    st.subheader(f"📈 {nome_a} (Mandante)")
+    est_a, med_a, p_atk_a, p_def_a, p_fdm_a, p_res_a = {}, {}, {}, {}, {}, {}
 
-    # A seguir, a coleta de estatísticas de Ataque, Defesa, Resistência, IRC e Mercados para ambos os times
-    # (Usarei a mesma lógica da resposta anterior, que já funcionava)
+    with st.expander("⚽ Ataque (médias por jogo)", expanded=False):
+        usar_lista_a = st.checkbox("Usar listas de valores (últimos 10 jogos)", key="a_list_ataque")
+        cols = st.columns(3)
+        if cols[0].checkbox("Atq", key="a_atq"):
+            if usar_lista_a:
+                txt = st.text_area("Lista Atq", "12,15,10,14,13,11,16,14,15,12", key="a_atq_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_a['atq'] = media; med_a['atq'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_a['atq'] = cols[0].number_input("Média", 0.0, 100.0, 15.0, key="a_atq_v")
+            p_atk_a['atq'] = 0.20
+        if cols[1].checkbox("Atq Perigosos", key="a_atq_per"):
+            if usar_lista_a:
+                txt = st.text_area("Lista Atq Perigosos", "6,7,5,8,6,7,5,9,6,7", key="a_atq_per_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_a['atq_perigosos'] = media; med_a['atq_perigosos'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_a['atq_perigosos'] = cols[1].number_input("Média", 0.0, 100.0, 7.0, key="a_atq_per_v")
+            p_atk_a['atq_perigosos'] = 0.20
+        if cols[2].checkbox("Chutes", key="a_chutes"):
+            if usar_lista_a:
+                txt = st.text_area("Lista Chutes", "16,14,18,15,17,13,19,16,14,15", key="a_chutes_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_a['chutes'] = media; med_a['chutes'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_a['chutes'] = cols[2].number_input("Média", 0.0, 100.0, 16.0, key="a_chutes_v")
+            p_atk_a['chutes'] = 0.20; p_fdm_a['chutes'] = 0.20
+        cols2 = st.columns(3)
+        if cols2[0].checkbox("Chutes Gol", key="a_chutes_gol"):
+            if usar_lista_a:
+                txt = st.text_area("Lista Chutes Gol", "5,6,4,7,5,6,4,8,5,6", key="a_chutes_gol_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_a['chutes_gol'] = media; med_a['chutes_gol'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_a['chutes_gol'] = cols2[0].number_input("Média", 0.0, 100.0, 6.0, key="a_chutes_gol_v")
+            p_atk_a['chutes_gol'] = 0.20
+        if cols2[1].checkbox("Gols Marcados", key="a_gols"):
+            if usar_lista_a:
+                txt = st.text_area("Lista Gols", "2,1,3,0,2,2,1,4,2,1", key="a_gols_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_a['gols'] = media; med_a['gols'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_a['gols'] = cols2[1].number_input("Média", 0.0, 100.0, 2.0, key="a_gols_v")
+            p_atk_a['gols'] = 0.20
+        if cols2[2].checkbox("xG", key="a_xg"):
+            if usar_lista_a:
+                txt = st.text_area("Lista xG", "1.8,1.5,2.2,0.8,1.9,2.0,1.3,2.5,1.7,1.4", key="a_xg_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_a['xg'] = media; med_a['xg'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_a['xg'] = cols2[2].number_input("Média", 0.0, 100.0, 1.8, key="a_xg_v")
+            p_atk_a['xg'] = 0.20
 
-    # ... (todo o bloco de coleta de dados para Time A e Time B, idêntico ao último código completo enviado)
-    # Por brevidade, omito a repetição, mas no arquivo final esse bloco estará presente.
+    with st.expander("🛡️ Defesa (médias por jogo)", expanded=False):
+        usar_lista_d_a = st.checkbox("Usar listas de valores", key="a_list_def")
+        cols = st.columns(3)
+        if cols[0].checkbox("Atq Sofridos", key="a_atq_sof"):
+            if usar_lista_d_a:
+                txt = st.text_area("Lista Atq Sofridos", "8,6,10,7,9,5,11,8,7,9", key="a_atq_sof_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_a['atq_sofridos'] = media; med_a['atq_sofridos'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_a['atq_sofridos'] = cols[0].number_input("Média", 0.0, 100.0, 8.0, key="a_atq_sof_v")
+            p_def_a['atq_sofridos'] = 0.20
+        if cols[1].checkbox("Atq Perigosos Sofridos", key="a_atq_per_sof"):
+            if usar_lista_d_a:
+                txt = st.text_area("Lista Atq Perigosos Sofridos", "3,4,2,5,3,4,2,6,3,4", key="a_atq_per_sof_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_a['atq_perigosos_sofridos'] = media; med_a['atq_perigosos_sofridos'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_a['atq_perigosos_sofridos'] = cols[1].number_input("Média", 0.0, 100.0, 4.0, key="a_atq_per_sof_v")
+            p_def_a['atq_perigosos_sofridos'] = 0.20
+        if cols[2].checkbox("Chutes Sofridos", key="a_chutes_sof"):
+            if usar_lista_d_a:
+                txt = st.text_area("Lista Chutes Sofridos", "10,8,12,9,11,7,13,10,9,11", key="a_chutes_sof_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_a['chutes_sofridos'] = media; med_a['chutes_sofridos'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_a['chutes_sofridos'] = cols[2].number_input("Média", 0.0, 100.0, 10.0, key="a_chutes_sof_v")
+            p_def_a['chutes_sofridos'] = 0.20; p_fdm_a['chutes_sofridos'] = 0.20
+        cols2 = st.columns(3)
+        if cols2[0].checkbox("Chutes Gol Sofridos", key="a_chutes_gol_sof"):
+            if usar_lista_d_a:
+                txt = st.text_area("Lista Chutes Gol Sofridos", "3,2,4,1,3,2,4,3,2,3", key="a_chutes_gol_sof_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_a['chutes_gol_sofridos'] = media; med_a['chutes_gol_sofridos'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_a['chutes_gol_sofridos'] = cols2[0].number_input("Média", 0.0, 100.0, 3.0, key="a_chutes_gol_sof_v")
+            p_def_a['chutes_gol_sofridos'] = 0.20
+        if cols2[1].checkbox("Gols Sofridos", key="a_gols_sof"):
+            if usar_lista_d_a:
+                txt = st.text_area("Lista Gols Sofridos", "0,1,0,2,1,0,1,1,0,1", key="a_gols_sof_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_a['gols_sofridos'] = media; med_a['gols_sofridos'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_a['gols_sofridos'] = cols2[1].number_input("Média", 0.0, 100.0, 0.8, key="a_gols_sof_v")
+            p_def_a['gols_sofridos'] = 0.20
+        if cols2[2].checkbox("xG Cedido", key="a_xg_ced"):
+            if usar_lista_d_a:
+                txt = st.text_area("Lista xG Cedido", "0.8,1.0,0.5,1.2,0.9,0.7,1.1,1.0,0.6,0.9", key="a_xg_ced_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_a['xg_cedido'] = media; med_a['xg_cedido'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_a['xg_cedido'] = cols2[2].number_input("Média", 0.0, 100.0, 1.0, key="a_xg_ced_v")
+            p_def_a['xg_cedido'] = 0.20
 
-    # --- BOTÃO GERAR MYPREDICT (AGORA COM MAIS DESTAQUE) ---
+    with st.expander("💪 Resistência à Pressão", expanded=False):
+        cols = st.columns(2)
+        if cols[0].checkbox("Pontos Recuperados (0-100)", key="a_pontos_rec"):
+            est_a['pontos_recuperados'] = cols[0].number_input("Nota", 0.0, 100.0, 60.0, key="a_pontos_rec_v")
+            p_res_a['pontos_recuperados'] = 1.0
+        if cols[1].checkbox("Gols Finais (75'-90')", key="a_gols_fin"):
+            est_a['gols_finais'] = cols[1].number_input("Nota", 0.0, 100.0, 70.0, key="a_gols_fin_v")
+            p_res_a['gols_finais'] = 1.0
+
+    hist_im_a = [50.0]*5
+    prat_a = prosp_a
+
+    with st.expander("🧠 IRC (Psicológico / Contextual)", expanded=False):
+        rod_a = st.number_input("Rodada A", 1, 38, 20, key="rod_a")
+        org_a = st.slider("Orgulho Ferido A", 0, 30, 0, key="org_a")
+        rev_a = st.slider("Revanche A", 0, 20, 0, key="rev_a")
+        seq_a_irc = st.slider("Sequência A", -10, 10, 0, key="seq_a_irc")
+        press_a = st.slider("Pressão Torcida A", -10, 15, 0, key="press_a")
+        imp_a = st.selectbox("Importância A", [0,10,20], key="imp_a")
+        desf_a = st.slider("Desfalques A", -15, 0, 0, key="desf_a")
+        usar_emp_a = st.checkbox("Fatores Empíricos A", True, key="emp_a")
+        if usar_emp_a:
+            if_val_a = (geral_a - 50) * 0.3
+            fcf_val_a = (cc3_a - 50) * 0.25
+            vcd_a = st.number_input("Vitórias Confronto Direto A", 0,5,2, key="vcd_a")
+            vcd_val_a = max(-15, min(15, (vcd_a*6) - ((5-vcd_a)*4)))
+            fatores_emp_a = {'if_val': if_val_a, 'fcf_val': fcf_val_a, 'vcd_val': vcd_val_a}
+        else:
+            fatores_emp_a = None
+
+    with st.expander("🎲 Mercados (últimos 10 jogos)", expanded=False):
+        n_jogos_a = st.number_input("Total de jogos A", 1,50,10, key="nj_a")
+        mkt_a = {
+            'n_jogos': n_jogos_a,
+            'over05ht': st.number_input("Over 0.5 HT A", 0,n_jogos_a,6, key="o05a"),
+            'over15ht': st.number_input("Over 1.5 HT A", 0,n_jogos_a,4, key="o15hta"),
+            'over15ft': st.number_input("Over 1.5 FT A", 0,n_jogos_a,7, key="o15a"),
+            'over25ft': st.number_input("Over 2.5 FT A", 0,n_jogos_a,5, key="o25a"),
+            'ambas': st.number_input("Ambas Marcam A", 0,n_jogos_a,4, key="bta"),
+            'escanteios': st.number_input("Média Escanteios A", 0.0,20.0,5.2, key="esca")
+        }
+
+    # ========== COLETA TIME B ==========
+    st.subheader(f"📈 {nome_b} (Visitante)")
+    est_b, med_b, p_atk_b, p_def_b, p_fdm_b, p_res_b = {}, {}, {}, {}, {}, {}
+
+    with st.expander("⚽ Ataque (médias por jogo)", expanded=False):
+        usar_lista_b = st.checkbox("Usar listas", key="b_list_ataque")
+        cols = st.columns(3)
+        if cols[0].checkbox("Atq", key="b_atq"):
+            if usar_lista_b:
+                txt = st.text_area("Lista Atq", "10,12,8,9,11,13,10,9,12,8", key="b_atq_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_b['atq'] = media; med_b['atq'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_b['atq'] = cols[0].number_input("Média", 0.0, 100.0, 10.0, key="b_atq_v")
+            p_atk_b['atq'] = 0.20
+        if cols[1].checkbox("Atq Perigosos", key="b_atq_per"):
+            if usar_lista_b:
+                txt = st.text_area("Lista Atq Perigosos", "4,5,3,6,4,5,4,7,5,4", key="b_atq_per_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_b['atq_perigosos'] = media; med_b['atq_perigosos'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_b['atq_perigosos'] = cols[1].number_input("Média", 0.0, 100.0, 5.0, key="b_atq_per_v")
+            p_atk_b['atq_perigosos'] = 0.20
+        if cols[2].checkbox("Chutes", key="b_chutes"):
+            if usar_lista_b:
+                txt = st.text_area("Lista Chutes", "12,14,10,13,11,15,12,13,10,14", key="b_chutes_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_b['chutes'] = media; med_b['chutes'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_b['chutes'] = cols[2].number_input("Média", 0.0, 100.0, 12.0, key="b_chutes_v")
+            p_atk_b['chutes'] = 0.20; p_fdm_b['chutes'] = 0.20
+        cols2 = st.columns(3)
+        if cols2[0].checkbox("Chutes Gol", key="b_chutes_gol"):
+            if usar_lista_b:
+                txt = st.text_area("Lista Chutes Gol", "3,4,2,5,3,4,3,5,4,3", key="b_chutes_gol_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_b['chutes_gol'] = media; med_b['chutes_gol'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_b['chutes_gol'] = cols2[0].number_input("Média", 0.0, 100.0, 4.0, key="b_chutes_gol_v")
+            p_atk_b['chutes_gol'] = 0.20
+        if cols2[1].checkbox("Gols Marcados", key="b_gols"):
+            if usar_lista_b:
+                txt = st.text_area("Lista Gols", "1,2,0,1,1,2,1,2,1,0", key="b_gols_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_b['gols'] = media; med_b['gols'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_b['gols'] = cols2[1].number_input("Média", 0.0, 100.0, 1.2, key="b_gols_v")
+            p_atk_b['gols'] = 0.20
+        if cols2[2].checkbox("xG", key="b_xg"):
+            if usar_lista_b:
+                txt = st.text_area("Lista xG", "1.2,1.4,0.9,1.3,1.1,1.6,1.2,1.5,1.3,1.0", key="b_xg_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_b['xg'] = media; med_b['xg'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_b['xg'] = cols2[2].number_input("Média", 0.0, 100.0, 1.3, key="b_xg_v")
+            p_atk_b['xg'] = 0.20
+
+    with st.expander("🛡️ Defesa (médias por jogo)", expanded=False):
+        usar_lista_d_b = st.checkbox("Usar listas", key="b_list_def")
+        cols = st.columns(3)
+        if cols[0].checkbox("Atq Sofridos", key="b_atq_sof"):
+            if usar_lista_d_b:
+                txt = st.text_area("Lista Atq Sofridos", "10,12,8,11,9,13,10,11,9,12", key="b_atq_sof_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_b['atq_sofridos'] = media; med_b['atq_sofridos'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_b['atq_sofridos'] = cols[0].number_input("Média", 0.0, 100.0, 10.0, key="b_atq_sof_v")
+            p_def_b['atq_sofridos'] = 0.20
+        if cols[1].checkbox("Atq Perigosos Sofridos", key="b_atq_per_sof"):
+            if usar_lista_d_b:
+                txt = st.text_area("Lista Atq Perigosos Sofridos", "5,6,4,7,5,6,5,7,6,5", key="b_atq_per_sof_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_b['atq_perigosos_sofridos'] = media; med_b['atq_perigosos_sofridos'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_b['atq_perigosos_sofridos'] = cols[1].number_input("Média", 0.0, 100.0, 5.0, key="b_atq_per_sof_v")
+            p_def_b['atq_perigosos_sofridos'] = 0.20
+        if cols[2].checkbox("Chutes Sofridos", key="b_chutes_sof"):
+            if usar_lista_d_b:
+                txt = st.text_area("Lista Chutes Sofridos", "14,12,16,13,15,11,14,13,12,14", key="b_chutes_sof_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_b['chutes_sofridos'] = media; med_b['chutes_sofridos'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_b['chutes_sofridos'] = cols[2].number_input("Média", 0.0, 100.0, 14.0, key="b_chutes_sof_v")
+            p_def_b['chutes_sofridos'] = 0.20; p_fdm_b['chutes_sofridos'] = 0.20
+        cols2 = st.columns(3)
+        if cols2[0].checkbox("Chutes Gol Sofridos", key="b_chutes_gol_sof"):
+            if usar_lista_d_b:
+                txt = st.text_area("Lista Chutes Gol Sofridos", "5,4,6,5,4,5,5,6,4,5", key="b_chutes_gol_sof_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_b['chutes_gol_sofridos'] = media; med_b['chutes_gol_sofridos'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_b['chutes_gol_sofridos'] = cols2[0].number_input("Média", 0.0, 100.0, 5.0, key="b_chutes_gol_sof_v")
+            p_def_b['chutes_gol_sofridos'] = 0.20
+        if cols2[1].checkbox("Gols Sofridos", key="b_gols_sof"):
+            if usar_lista_d_b:
+                txt = st.text_area("Lista Gols Sofridos", "1,0,2,1,1,2,1,0,1,1", key="b_gols_sof_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_b['gols_sofridos'] = media; med_b['gols_sofridos'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_b['gols_sofridos'] = cols2[1].number_input("Média", 0.0, 100.0, 1.0, key="b_gols_sof_v")
+            p_def_b['gols_sofridos'] = 0.20
+        if cols2[2].checkbox("xG Cedido", key="b_xg_ced"):
+            if usar_lista_d_b:
+                txt = st.text_area("Lista xG Cedido", "1.1,1.3,0.8,1.2,1.0,1.4,1.1,1.3,1.2,1.0", key="b_xg_ced_list")
+                media, mediana, _ = processar_lista_estatistica(txt)
+                if media:
+                    est_b['xg_cedido'] = media; med_b['xg_cedido'] = mediana
+                    st.caption(f"Média: {media:.1f} | Mediana: {mediana:.1f}")
+            else:
+                est_b['xg_cedido'] = cols2[2].number_input("Média", 0.0, 100.0, 1.1, key="b_xg_ced_v")
+            p_def_b['xg_cedido'] = 0.20
+
+    with st.expander("💪 Resistência à Pressão", expanded=False):
+        cols = st.columns(2)
+        if cols[0].checkbox("Pontos Recuperados (0-100)", key="b_pontos_rec"):
+            est_b['pontos_recuperados'] = cols[0].number_input("Nota", 0.0, 100.0, 40.0, key="b_pontos_rec_v")
+            p_res_b['pontos_recuperados'] = 1.0
+        if cols[1].checkbox("Gols Finais (75'-90')", key="b_gols_fin"):
+            est_b['gols_finais'] = cols[1].number_input("Nota", 0.0, 100.0, 50.0, key="b_gols_fin_v")
+            p_res_b['gols_finais'] = 1.0
+
+    hist_im_b = [50.0]*5
+    prat_b = prosp_b
+
+    with st.expander("🧠 IRC (Psicológico / Contextual)", expanded=False):
+        rod_b = st.number_input("Rodada B", 1, 38, 20, key="rod_b")
+        org_b = st.slider("Orgulho Ferido B", 0, 30, 0, key="org_b")
+        rev_b = st.slider("Revanche B", 0, 20, 0, key="rev_b")
+        seq_b_irc = st.slider("Sequência B", -10, 10, 0, key="seq_b_irc")
+        press_b = st.slider("Pressão Torcida B", -10, 15, 0, key="press_b")
+        imp_b = st.selectbox("Importância B", [0,10,20], key="imp_b")
+        desf_b = st.slider("Desfalques B", -15, 0, 0, key="desf_b")
+        usar_emp_b = st.checkbox("Fatores Empíricos B", True, key="emp_b")
+        if usar_emp_b:
+            if_val_b = (geral_b - 50) * 0.3
+            fcf_val_b = (cc3_b - 50) * 0.25
+            vcd_b = st.number_input("Vitórias Confronto Direto B", 0,5,2, key="vcd_b")
+            vcd_val_b = max(-15, min(15, (vcd_b*6) - ((5-vcd_b)*4)))
+            fatores_emp_b = {'if_val': if_val_b, 'fcf_val': fcf_val_b, 'vcd_val': vcd_val_b}
+        else:
+            fatores_emp_b = None
+
+    with st.expander("🎲 Mercados (últimos 10 jogos)", expanded=False):
+        n_jogos_b = st.number_input("Total de jogos B", 1,50,10, key="nj_b")
+        mkt_b = {
+            'n_jogos': n_jogos_b,
+            'over05ht': st.number_input("Over 0.5 HT B", 0,n_jogos_b,5, key="o05b"),
+            'over15ht': st.number_input("Over 1.5 HT B", 0,n_jogos_b,3, key="o15htb"),
+            'over15ft': st.number_input("Over 1.5 FT B", 0,n_jogos_b,6, key="o15b"),
+            'over25ft': st.number_input("Over 2.5 FT B", 0,n_jogos_b,4, key="o25b"),
+            'ambas': st.number_input("Ambas Marcam B", 0,n_jogos_b,3, key="btb"),
+            'escanteios': st.number_input("Média Escanteios B", 0.0,20.0,4.8, key="escb")
+        }
+
+    # ========== BOTÃO GERAR MYPREDICT ==========
     if st.button("⚡ GERAR MYPREDICT", use_container_width=True):
-        # (cálculos como antes, usando as variáveis coletadas)
-        # ...
+        # Cálculos
+        res_a = calcular_overall(est_a, med_liga, prat_a, prat_b,
+                                 p_atk_a, p_def_a, p_fdm_a, p_res_a, hist_im_a, med_a)
+        res_b = calcular_overall(est_b, med_liga, prat_b, prat_a,
+                                 p_atk_b, p_def_b, p_fdm_b, p_res_b, hist_im_b, med_b)
+        im_a, bc_a, bg_a, td_a, bz_a = calcular_im(cc3_a, cc5_a, geral_a, geral_a, geral_a, 0, tab_din_a)
+        im_b, bc_b, bg_b, td_b, bz_b = calcular_im(cc3_b, cc5_b, geral_b, geral_b, geral_b, 0, tab_din_b)
+        irc_a, fac_a, urg_a, org_a, rev_a, seq_a, pr_a, imp_a, desf_a = calcular_irc(
+            rod_a, nota_pos_a, prosp_a, org_a, rev_a, seq_a_irc, press_a, imp_a, desf_a, fatores_emp_a
+        )
+        irc_b, fac_b, urg_b, org_b, rev_b, seq_b, pr_b, imp_b, desf_b = calcular_irc(
+            rod_b, nota_pos_b, prosp_b, org_b, rev_b, seq_b_irc, press_b, imp_b, desf_b, fatores_emp_b
+        )
+        imp_a = calcular_imp(res_a['overall'], im_a, irc_a)
+        imp_b = calcular_imp(res_b['overall'], im_b, irc_b)
+        prob_a, prob_e, prob_b = calcular_probabilidades(imp_a, imp_b)
+        diff = imp_a - imp_b
 
-        # Exibição dos resultados com IMP em destaque dourado
+        # Análise descritiva
+        st.markdown("---")
+        st.header("📋 Análise Pré‑Confronto")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(f"### 🏠 {nome_a}")
+            st.markdown(f"""
+            <div class='analysis-box'>
+            <h4>Posicionamento</h4>
+            <p><b>Posição atual:</b> {pos_real_a}º<br>
+            <b>Prospecção:</b> {prosp_a}<br>
+            <b>Forma recente:</b> {seq_a} (IM automático: {im_a:.1f})</p>
+            <h4>Desempenho</h4>
+            <p><b>Overall:</b> {res_a['overall']:.1f} (Ataque {res_a['ataque']:.1f}, Defesa {res_a['defesa']:.1f})<br>
+            <b>Consistência:</b> {res_a['consistencia']:.1f}, <b>Resistência:</b> {res_a['resistencia']:.1f}<br>
+            <b>IRC:</b> {irc_a:.1f}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        with col2:
+            st.markdown(f"### 🚌 {nome_b}")
+            st.markdown(f"""
+            <div class='analysis-box'>
+            <h4>Posicionamento</h4>
+            <p><b>Posição atual:</b> {pos_real_b}º<br>
+            <b>Prospecção:</b> {prosp_b}<br>
+            <b>Forma recente:</b> {seq_b} (IM automático: {im_b:.1f})</p>
+            <h4>Desempenho</h4>
+            <p><b>Overall:</b> {res_b['overall']:.1f} (Ataque {res_b['ataque']:.1f}, Defesa {res_b['defesa']:.1f})<br>
+            <b>Consistência:</b> {res_b['consistencia']:.1f}, <b>Resistência:</b> {res_b['resistencia']:.1f}<br>
+            <b>IRC:</b> {irc_b:.1f}</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # IMP em destaque
         st.markdown("---")
         st.header("🏆 Índice MyPredict (IMP)")
         col_imp1, col_imp2, col_imp3 = st.columns(3)
@@ -457,6 +848,25 @@ if aba == "🧮 Simulador Manual":
             </div>
             """, unsafe_allow_html=True)
 
+        # Probabilidades
+        st.subheader("🎯 Probabilidades de Resultado")
+        c1, c2, c3 = st.columns(3)
+        c1.metric(f"Vitória {nome_a}", f"{prob_a:.1f}%")
+        c2.metric("Empate", f"{prob_e:.1f}%")
+        c3.metric(f"Vitória {nome_b}", f"{prob_b:.1f}%")
+
+        # Descrição baseada na diferença
+        if diff > 10:
+            st.success(f"🏆 {nome_a} é amplamente favorito. A diferença de {diff:.1f} pontos indica superioridade técnica e de momento. Espera-se um domínio claro.")
+        elif diff > 5:
+            st.info(f"📈 {nome_a} leva vantagem, mas o confronto é competitivo. A diferença de {diff:.1f} pontos sugere um jogo disputado, com leve pendor para o mandante.")
+        elif diff > -5:
+            st.warning(f"⚖️ Equilíbrio total. A diferença de {diff:.1f} pontos indica um duelo muito parelho, onde detalhes como fator casa e psicológico podem decidir.")
+        elif diff > -10:
+            st.info(f"📈 {nome_b} leva vantagem, mesmo atuando fora. A diferença de {diff:.1f} pontos aponta um visitante mais forte, mas sem grande margem.")
+        else:
+            st.success(f"🏆 {nome_b} é amplamente favorito. A diferença de {diff:.1f} pontos revela superioridade técnica e de momento, com expectativa de vitória visitante.")
+
         # Tabela comparativa lado a lado
         st.markdown("---")
         st.subheader("📋 Tabela Comparativa")
@@ -470,7 +880,6 @@ if aba == "🧮 Simulador Manual":
         st.dataframe(df_comp, use_container_width=True, hide_index=True)
 
         # Cruzamentos Ataque vs Defesa
-        st.markdown("---")
         st.subheader("⚔️ Confronto Direto: Ataque vs Defesa")
         col_cruz1, col_cruz2 = st.columns(2)
         with col_cruz1:
@@ -482,8 +891,40 @@ if aba == "🧮 Simulador Manual":
             st.metric(f"Ataque {nome_b} vs Defesa {nome_a}", f"{atk_b_vs_def_a:.1f}",
                       help="Média entre o ataque do visitante e a fragilidade defensiva do mandante.")
 
-        # Restante dos resultados (probabilidades, mercados) igual ao código anterior
-        # ...
+        # Mercados
+        st.markdown("---")
+        st.subheader("🎲 Probabilidades de Mercados")
+        def prob(ocorrencias, total):
+            return ocorrencias/total*100 if total > 0 else 0
+        colm1, colm2 = st.columns(2)
+        with colm1:
+            st.write(f"**{nome_a}**")
+            st.write(f"Over 0.5 HT: {prob(mkt_a['over05ht'], n_jogos_a):.0f}%")
+            st.write(f"Over 1.5 HT: {prob(mkt_a['over15ht'], n_jogos_a):.0f}%")
+            st.write(f"Over 1.5 FT: {prob(mkt_a['over15ft'], n_jogos_a):.0f}%")
+            st.write(f"Over 2.5 FT: {prob(mkt_a['over25ft'], n_jogos_a):.0f}%")
+            st.write(f"Ambas Marcam: {prob(mkt_a['ambas'], n_jogos_a):.0f}%")
+            st.write(f"Escanteios: {mkt_a['escanteios']:.1f}")
+        with colm2:
+            st.write(f"**{nome_b}**")
+            st.write(f"Over 0.5 HT: {prob(mkt_b['over05ht'], n_jogos_b):.0f}%")
+            st.write(f"Over 1.5 HT: {prob(mkt_b['over15ht'], n_jogos_b):.0f}%")
+            st.write(f"Over 1.5 FT: {prob(mkt_b['over15ft'], n_jogos_b):.0f}%")
+            st.write(f"Over 2.5 FT: {prob(mkt_b['over25ft'], n_jogos_b):.0f}%")
+            st.write(f"Ambas Marcam: {prob(mkt_b['ambas'], n_jogos_b):.0f}%")
+            st.write(f"Escanteios: {mkt_b['escanteios']:.1f}")
+
+        # Combinação simples (média)
+        st.write("**Médias Combinadas**")
+        comb = {}
+        comb['Over 0.5 HT'] = (prob(mkt_a['over05ht'], n_jogos_a) + prob(mkt_b['over05ht'], n_jogos_b))/2
+        comb['Over 1.5 HT'] = (prob(mkt_a['over15ht'], n_jogos_a) + prob(mkt_b['over15ht'], n_jogos_b))/2
+        comb['Over 1.5 FT'] = (prob(mkt_a['over15ft'], n_jogos_a) + prob(mkt_b['over15ft'], n_jogos_b))/2
+        comb['Over 2.5 FT'] = (prob(mkt_a['over25ft'], n_jogos_a) + prob(mkt_b['over25ft'], n_jogos_b))/2
+        comb['Ambas Marcam'] = (prob(mkt_a['ambas'], n_jogos_a) + prob(mkt_b['ambas'], n_jogos_b))/2
+        comb['Escanteios'] = (mkt_a['escanteios'] + mkt_b['escanteios'])/2
+        for k, v in comb.items():
+            st.metric(k, f"{v:.1f}%" if k != 'Escanteios' else f"{v:.1f}")
 
 # =========================================================================
 # RODAPÉ
