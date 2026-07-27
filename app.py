@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 - Aplicativo Completo com Backtest Detalhado
+MyPredict 2.0 - Aplicativo Completo com Backtest Focado no MyPredict
 """
 import streamlit as st
 import pandas as pd
@@ -20,6 +20,9 @@ st.markdown("""
     .positivo { color:#00C853; font-weight:bold; }
     .negativo { color:#FF1744; font-weight:bold; }
     .mpv-destaque { font-size:3rem; color:#DAA520; text-align:center; }
+    .recomendacao { background-color: #1E1E1E; border-left: 4px solid #DAA520; padding: 10px; margin: 10px 0; border-radius: 5px; }
+    .acerto { color: #00C853; font-weight: bold; font-size: 1.5rem; }
+    .erro { color: #FF1744; font-weight: bold; font-size: 1.5rem; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -38,7 +41,7 @@ def prob_btts(ata_casa, def_fora, ata_fora, def_casa):
     return prob_c * prob_f
 
 # ============================================================
-# CARREGAR PARTIDAS ÚNICAS E LISTA PLANA
+# CARREGAR DADOS
 # ============================================================
 @st.cache_data
 def carregar_dados():
@@ -52,10 +55,8 @@ def carregar_dados():
         df = df.dropna(subset=[col_data])
         df = df.rename(columns={col_data: 'data'})
         
-        # Lista plana para análise de jogo
         jogos_planos = df.to_dict(orient="records")
         
-        # Partidas únicas para backtest
         def make_key(row):
             times = sorted([row['time'], row['adv']])
             return (row['data'], times[0], times[1])
@@ -84,7 +85,7 @@ st.sidebar.markdown("<h2 style='color:#DAA520;'>⚽ MyPredict 2.0</h2>", unsafe_
 opcao = st.sidebar.radio("Modo", ["Análise de Jogo", "Backtest", "Converter Dados Brutos"])
 
 # ============================================================
-# CONVERSOR
+# CONVERSOR (MANTIDO)
 # ============================================================
 if opcao == "Converter Dados Brutos":
     st.markdown("<h1 style='text-align:center;'>🔄 Conversor de CSV</h1>", unsafe_allow_html=True)
@@ -173,7 +174,7 @@ if opcao == "Converter Dados Brutos":
 
             if linhas:
                 df_final = pd.DataFrame(linhas)
-                st.success(f"Conversão concluída! {len(df_final)} linhas geradas.")
+                st.success(f"MyPredict: Conversão concluída! {len(df_final)} linhas geradas.")
                 st.dataframe(df_final.head(10))
                 csv_exportado = df_final.to_csv(index=False)
                 st.download_button("📥 Baixar meus_jogos.csv", csv_exportado, file_name="meus_jogos.csv")
@@ -289,41 +290,48 @@ elif opcao == "Análise de Jogo":
         mpv_casa = (mpv_casa_raw - 1000) / 10
         mpv_fora = (mpv_fora_raw - 1000) / 10
         
-        st.markdown("---")
-        col1, col2, col3 = st.columns([2,1,2])
-        with col1:
-            st.subheader(time_casa)
-            st.metric("MPV", f"{mpv_casa:.1f}")
-            st.metric("IMA", f"{ima_casa:.1f}")
-            st.metric("OVRall", f"{ovrall_casa:.1f}")
-            st.caption(f"ATA: {ata_casa:.1f} | DEF: {def_casa:.1f} | MEI: {mei_casa:.1f} | FOR: {for_casa:.1f}")
-        with col2:
-            st.markdown("<h2 style='text-align:center; color:#DAA520;'>VS</h2>", unsafe_allow_html=True)
-        with col3:
-            st.subheader(time_fora)
-            st.metric("MPV", f"{mpv_fora:.1f}")
-            st.metric("IMA", f"{ima_fora:.1f}")
-            st.metric("OVRall", f"{ovrall_fora:.1f}")
-            st.caption(f"ATA: {ata_fora:.1f} | DEF: {def_fora:.1f} | MEI: {mei_fora:.1f} | FOR: {for_fora:.1f}")
+        # Determinar recomendação principal
+        recomendacao = None
+        rec_prob = 0
+        rec_selo = ""
+        if 'Dourado' in selo_casa or 'Verde' in selo_casa:
+            recomendacao = f"Vitória do {time_casa}"
+            rec_prob = prob_casa
+            rec_selo = selo_casa
+        elif 'Dourado' in selo_empate or 'Verde' in selo_empate:
+            recomendacao = "Empate"
+            rec_prob = prob_empate
+            rec_selo = selo_empate
+        elif 'Dourado' in selo_fora or 'Verde' in selo_fora:
+            recomendacao = f"Vitória do {time_fora}"
+            rec_prob = prob_fora
+            rec_selo = selo_fora
         
         st.markdown("---")
-        st.subheader("📊 Probabilidades 1X2")
+        if recomendacao:
+            st.markdown(f"""
+            <div class="recomendacao">
+                <h3 style="color:#DAA520;">MyPredict Recomenda</h3>
+                <p style="font-size:1.5rem; margin:0;">{recomendacao}</p>
+                <p style="font-size:1.2rem; margin:0;">Probabilidade: {rec_prob:.1%}</p>
+                <p style="font-size:1.2rem; margin:0;">Selo: {rec_selo}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("Nenhuma recomendação de alto valor (Selo Dourado ou Verde) para este jogo.")
+        
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Casa", f"{prob_casa:.1%}")
-            st.metric("Edge", f"{edge_casa:+.1%}")
-            st.caption(f"Selo: {selo_casa}")
+            st.metric(f"MPV {time_casa}", f"{mpv_casa:.1f}")
+            st.metric("IMA", f"{ima_casa:.1f}")
         with col2:
-            st.metric("Empate", f"{prob_empate:.1%}")
-            st.metric("Edge", f"{edge_empate:+.1%}")
-            st.caption(f"Selo: {selo_empate}")
+            st.metric("Diferença MPV", f"{abs(mpv_casa - mpv_fora):.1f}")
         with col3:
-            st.metric("Fora", f"{prob_fora:.1%}")
-            st.metric("Edge", f"{edge_fora:+.1%}")
-            st.caption(f"Selo: {selo_fora}")
+            st.metric(f"MPV {time_fora}", f"{mpv_fora:.1f}")
+            st.metric("IMA", f"{ima_fora:.1f}")
         
         st.markdown("---")
-        st.subheader("🎯 Mercados Adicionais")
+        st.subheader("🎯 Outros Mercados")
         def media_gols(time, tipo):
             jogos_time = [j for j in jogos if j['time'] == time and j['data'] <= data_ref_dt][-10:]
             if not jogos_time: return 1.0
@@ -343,7 +351,7 @@ elif opcao == "Análise de Jogo":
         col4.metric("Over 9.5 esc.", f"{prob_over(total_esc, 8.5):.1%}")
 
 # ============================================================
-# BACKTEST COMPLETO
+# BACKTEST FOCADO NO MYPREDICT
 # ============================================================
 elif opcao == "Backtest":
     st.markdown("<h1 style='text-align:center;'>📈 Backtest MyPredict 2.0</h1>", unsafe_allow_html=True)
@@ -354,7 +362,7 @@ elif opcao == "Backtest":
     
     st.write(f"Total de partidas: {len(partidas)}")
     
-    if st.button("Executar Backtest Completo"):
+    if st.button("Executar Backtest MyPredict"):
         st.write("Simulando temporada...")
         
         partidas_ord = sorted(partidas, key=lambda p: p['data'])
@@ -415,7 +423,28 @@ elif opcao == "Backtest":
             selo_empate = determinar_selo(edge_empate, dif_mpv, 10)
             selo_fora = determinar_selo(edge_fora, dif_mpv, 10)
             
-            # Resultados reais
+            # Determinar recomendação MyPredict
+            recomendacao = None
+            rec_prob = 0
+            rec_odd = 0
+            rec_selo = ""
+            if 'Dourado' in selo_casa or 'Verde' in selo_casa:
+                recomendacao = f"Vitória {time_casa}"
+                rec_prob = prob_casa
+                rec_odd = odd_casa
+                rec_selo = selo_casa
+            elif 'Dourado' in selo_empate or 'Verde' in selo_empate:
+                recomendacao = "Empate"
+                rec_prob = prob_empate
+                rec_odd = odd_empate
+                rec_selo = selo_empate
+            elif 'Dourado' in selo_fora or 'Verde' in selo_fora:
+                recomendacao = f"Vitória {time_fora}"
+                rec_prob = prob_fora
+                rec_odd = odd_fora
+                rec_selo = selo_fora
+            
+            # Resultado real
             gols_casa_real = casa_info['gols']
             gols_fora_real = fora_info['gols']
             resultado_real = 'V' if gols_casa_real > gols_fora_real else ('D' if gols_casa_real < gols_fora_real else 'E')
@@ -428,7 +457,15 @@ elif opcao == "Backtest":
             esc_totais_real = esc_casa_real + esc_fora_real
             over9_5_esc_real = esc_totais_real > 9.5
             
-            # Médias históricas para Over/BTTS/Escanteios
+            # Acerto da recomendação
+            acertou = False
+            if recomendacao:
+                if (recomendacao == f"Vitória {time_casa}" and resultado_real == 'V') or \
+                   (recomendacao == "Empate" and resultado_real == 'E') or \
+                   (recomendacao == f"Vitória {time_fora}" and resultado_real == 'D'):
+                    acertou = True
+            
+            # Outros mercados
             def media_hist(time, tipo):
                 jogos_time = [j for j in hist_filtrado if j['time'] == time]
                 if not jogos_time: return 1.0 if tipo != 'escanteios' else 4.0
@@ -446,9 +483,6 @@ elif opcao == "Backtest":
             esc_fora_hist = media_hist(time_fora, 'escanteios')
             
             media_total = (gols_casa_hist + sofridos_fora_hist)/2 + (gols_fora_hist + sofridos_casa_hist)/2
-            media_esc = (esc_casa_hist + esc_fora_hist) / 2 + (esc_casa_hist + esc_fora_hist) / 2  # simplificação
-            # Melhor: usar média de escanteios totais das partidas anteriores de ambos
-            # Mas para simplificar, usamos a soma das médias
             media_esc_total = esc_casa_hist + esc_fora_hist
             
             prob_over15 = prob_over(media_total, 1.5)
@@ -456,53 +490,24 @@ elif opcao == "Backtest":
             prob_bt = prob_btts(ata_casa, def_fora, ata_fora, def_casa)
             prob_over9_5_esc = prob_over(media_esc_total, 9.5)
             
-            # Aposta recomendada
-            apostas_possiveis = []
-            if 'Dourado' in selo_casa or 'Verde' in selo_casa:
-                apostas_possiveis.append(('Casa', edge_casa, odd_casa))
-            if 'Dourado' in selo_empate or 'Verde' in selo_empate:
-                apostas_possiveis.append(('Empate', edge_empate, odd_empate))
-            if 'Dourado' in selo_fora or 'Verde' in selo_fora:
-                apostas_possiveis.append(('Fora', edge_fora, odd_fora))
-            aposta_recomendada = None
-            if apostas_possiveis:
-                apostas_possiveis.sort(key=lambda x: (x[1], x[2]), reverse=True)
-                aposta_recomendada = apostas_possiveis[0][0]
-            
-            acertou = False
-            if aposta_recomendada:
-                if (aposta_recomendada == 'Casa' and resultado_real == 'V') or \
-                   (aposta_recomendada == 'Empate' and resultado_real == 'E') or \
-                   (aposta_recomendada == 'Fora' and resultado_real == 'D'):
-                    acertou = True
-            
             linhas.append({
                 'Data': data_jogo.strftime('%Y-%m-%d'),
                 'Mandante': time_casa,
                 'Visitante': time_fora,
-                'MPV Casa': f"{((mpv_casa_raw-1000)/10):.1f}",
-                'MPV Fora': f"{((mpv_fora_raw-1000)/10):.1f}",
-                'Dif MPV': f"{abs((mpv_casa_raw-1000)/10 - (mpv_fora_raw-1000)/10):.1f}",
-                'Prob Casa': f"{prob_casa:.1%}",
-                'Prob Empate': f"{prob_empate:.1%}",
-                'Prob Fora': f"{prob_fora:.1%}",
-                'Edge Casa': f"{edge_casa:+.1%}",
-                'Edge Empate': f"{edge_empate:+.1%}",
-                'Edge Fora': f"{edge_fora:+.1%}",
-                'Selo Casa': selo_casa,
-                'Selo Empate': selo_empate,
-                'Selo Fora': selo_fora,
+                'MyPredict Recomenda': recomendacao if recomendacao else 'Nenhuma',
+                'Probabilidade': f"{rec_prob:.1%}" if recomendacao else '-',
+                'Selo': rec_selo if recomendacao else '-',
+                'Odd': f"{rec_odd:.2f}" if recomendacao else '-',
                 'Resultado': resultado_real,
-                'Aposta Rec.': aposta_recomendada if aposta_recomendada else '-',
-                'Acertou?': '✅' if acertou else ('❌' if aposta_recomendada else '-'),
+                'Acertou?': '✅' if recomendacao and acertou else ('❌' if recomendacao else '-'),
                 'Over 1.5 Prob': f"{prob_over15:.1%}",
-                'Over 1.5 Real?': '✅' if over15_real else '❌',
+                'Over 1.5 Real': '✅' if over15_real else '❌',
                 'Over 2.5 Prob': f"{prob_over25:.1%}",
-                'Over 2.5 Real?': '✅' if over25_real else '❌',
+                'Over 2.5 Real': '✅' if over25_real else '❌',
                 'BTTS Prob': f"{prob_bt:.1%}",
-                'BTTS Real?': '✅' if btts_real else '❌',
-                'Esc. Prob': f"{prob_over9_5_esc:.1%}",
-                'Esc. Real?': '✅' if over9_5_esc_real else '❌'
+                'BTTS Real': '✅' if btts_real else '❌',
+                'Esc. >9.5 Prob': f"{prob_over9_5_esc:.1%}",
+                'Esc. >9.5 Real': '✅' if over9_5_esc_real else '❌'
             })
             
             historico.append(casa_info)
@@ -513,35 +518,34 @@ elif opcao == "Backtest":
             df_res = pd.DataFrame(linhas)
             st.dataframe(df_res, use_container_width=True)
             
-            # Resumo
+            # Resumo MyPredict
             st.markdown("---")
-            st.subheader("📊 Desempenho do MyPredict")
-            df_apostas = df_res[df_res['Aposta Rec.'] != '-']
+            st.subheader("📊 Resultado MyPredict")
+            df_apostas = df_res[df_res['MyPredict Recomenda'] != 'Nenhuma']
             total_apostas = len(df_apostas)
             acertos = len(df_apostas[df_apostas['Acertou?'] == '✅'])
             erros = len(df_apostas[df_apostas['Acertou?'] == '❌'])
             
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.metric("Apostas Realizadas", total_apostas)
+                st.metric("Apostas MyPredict", total_apostas)
             with col2:
                 st.metric("Acertos", acertos)
             with col3:
                 taxa = f"{(acertos/total_apostas*100):.1f}%" if total_apostas > 0 else "-"
                 st.metric("Taxa de Acerto", taxa)
             
-            bank = 0.0
+            # Lucro
+            lucro = 0.0
             for _, row in df_apostas.iterrows():
+                odd = float(row['Odd'])
                 if row['Acertou?'] == '✅':
-                    # Pega a odd correspondente à aposta recomendada
-                    if row['Aposta Rec.'] == 'Casa':
-                        odd = float(row['Edge Casa'].replace('%','').replace('+',''))/100 + 1  # reconstroi odd a partir do edge e prob? Melhor guardar a odd.
-                        # Vou ter que guardar a odd usada. No dicionário, não guardei a odd. Vou ajustar rapidamente.
-                        # Para simplificar, vou pegar a odd do CSV. Não tenho mais. Vou calcular a odd como 1/(prob_mpv/(edge+1))
-                        # Não, melhor guardar a odd. Vou modificar o laço para incluir a odd.
-                        pass
-            # Como não ficou fácil, farei um cálculo simples: acertos * odd média - total_apostas.
-            # Mas para já ter uma ideia, vamos mostrar acertos apenas.
-            st.info("Para calcular o lucro exato, os dados de odd estão no CSV. A estrutura está pronta.")
+                    lucro += odd - 1
+                else:
+                    lucro -= 1
+            st.metric("Lucro MyPredict", f"{lucro:+.2f} unidades")
+            if total_apostas > 0:
+                roi = (lucro / total_apostas) * 100
+                st.metric("ROI", f"{roi:.2f}%")
         else:
             st.error("Nenhum resultado gerado.")
