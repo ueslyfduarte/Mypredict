@@ -85,7 +85,6 @@ PESOS_MPV = {
 # IC (Índice de Contexto) — Fatores e pesos iniciais
 # ------------------------------------------------------------
 
-# Pesos dos fatores dentro do IC (somam 1)
 PESOS_IC = {
     'confronto_direto':              0.25,
     'mesmo_escalao':                 0.20,
@@ -94,14 +93,13 @@ PESOS_IC = {
     'odds':                          0.15,
 }
 
-# Número de jogos para cálculo do confronto direto
 JOGOS_CONFRONTO_DIRETO = 6
 
 # ------------------------------------------------------------
-# HERANÇA ESTATÍSTICA (times promovidos / rebaixados)
+# HERANÇA ESTATÍSTICA (OVRall / IMA)
 # ------------------------------------------------------------
 
-POS_REF_PROMOVIDO = 16
-POS_REF_REBAIXADO = 5
+POS_REF_PROMOVIDO = 16   # 1º fora da zona de rebaixamento (herda dados)
+POS_REF_REBAIXADO = 5    # 1º fora da zona de acesso (herda dados)
 NUM_REBAIXADOS = 4
 NUM_PROMOVIDOS = 4
