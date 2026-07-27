@@ -59,8 +59,8 @@ def _poisson_pmf(lmbda: float, k: int) -> float:
 
 
 def _gols_esperados(gols_time: float, gols_sofridos_adv: float, media_liga: float) -> float:
-    if media_liga == 0:
-        return 0
+    if gols_time is None or gols_sofridos_adv is None or media_liga is None or media_liga == 0:
+        return 0.0
     ataque = gols_time / media_liga
     defesa = gols_sofridos_adv / media_liga
     return ataque * defesa * media_liga
