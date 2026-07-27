@@ -1,19 +1,23 @@
-# data_loader.py — MyPredict 2.0 (versão corrigida)
+## data_loader.py — MyPredict 2.0 (Fonte única: FBref)
+import json
 from statistics import stdev, mean
+from pathlib import Path
 from config import JOGOS_BASE_OVRALL, POS_REF_PROMOVIDO, POS_REF_REBAIXADO, PONTOS_BASE
-from data_source_worldfootball import (
-    obter_classificacao as wf_classificacao,
-    obter_partidas_time as wf_partidas
+from data_source_fbref_stats import (
+    obter_codigo_fbref,
+    obter_classificacao as fb_classificacao,
+    obter_partidas_time as fb_partidas,
+    obter_stats_time
 )
-from data_source_fbref_stats import obter_stats_time as obter_stats_fbref
 
 # ------------------------------------------------------------
-# Promoção / Rebaixamento automáticos
+# Funções de apoio (promoção/rebaixamento automáticos)
 # ------------------------------------------------------------
-def _obter_promovidos_ordenados(liga_slug, temporada):
+def _obter_promovidos_ordenados(liga_codigo, temporada):
+    """Retorna promovidos da temporada atual (ordem alfabética)."""
     try:
-        class_atual = wf_classificacao(liga_slug, temporada)
-        class_ant = wf_classificacao(liga_slug, temporada - 1) if temporada > 2010 else {}
+        class_atual = fb_classificacao(liga_codigo, temporada)
+        class_ant = fb_classificacao(liga_codigo, temporada - 1) if temporada > 2010 else {}
     except:
         return []
     if not class_ant:
@@ -21,10 +25,11 @@ def _obter_promovidos_ordenados(liga_slug, temporada):
     promovidos = [t for t in class_atual.values() if t not in class_ant.values()]
     return sorted(promovidos)
 
-def _obter_rebaixados(liga_slug, temporada):
+def _obter_rebaixados(liga_codigo, temporada):
+    """Retorna rebaixados da temporada anterior."""
     try:
-        class_atual = wf_classificacao(liga_slug, temporada)
-        class_ant = wf_classificacao(liga_slug, temporada - 1) if temporada > 2010 else {}
+        class_atual = fb_classificacao(liga_codigo, temporada)
+        class_ant = fb_classificacao(liga_codigo, temporada - 1) if temporada > 2010 else {}
     except:
         return []
     if not class_ant:
@@ -34,12 +39,12 @@ def _obter_rebaixados(liga_slug, temporada):
 # ------------------------------------------------------------
 # Projeção de prateleiras
 # ------------------------------------------------------------
-def gerar_prateleiras(liga_slug, temporada):
-    class_ant = wf_classificacao(liga_slug, temporada)
+def gerar_prateleiras(liga_codigo, temporada):
+    class_ant = fb_classificacao(liga_codigo, temporada)
     if not class_ant:
         return {}
-    promovidos = _obter_promovidos_ordenados(liga_slug, temporada)
-    rebaixados = _obter_rebaixados(liga_slug, temporada - 1) if temporada > 2010 else []
+    promovidos = _obter_promovidos_ordenados(liga_codigo, temporada)
+    rebaixados = _obter_rebaixados(liga_codigo, temporada - 1) if temporada > 2010 else []
     pos_rebaixados = sorted([pos for pos, time in class_ant.items() if time in rebaixados])
     nova_class = class_ant.copy()
     for i, time_prom in enumerate(promovidos):
@@ -48,28 +53,28 @@ def gerar_prateleiras(liga_slug, temporada):
     from ratings import obter_prateleira
     return {time: obter_prateleira(pos) for pos, time in nova_class.items()}
 
-def classificação_anterior(liga_slug, temporada):
-    return wf_classificacao(liga_slug, temporada)
+def classificação_anterior(liga_codigo, temporada):
+    return fb_classificacao(liga_codigo, temporada)
 
-def carregar_jogos_temporada(time, liga_slug, temporada):
-    return wf_partidas(liga_slug, temporada, time)
+def carregar_jogos_temporada(time, liga_codigo, temporada):
+    return fb_partidas(liga_codigo, temporada, time)
 
 # ------------------------------------------------------------
-# Herança e recortes
+# Herança de dados
 # ------------------------------------------------------------
-def obter_ultimos_jogos_com_heranca(time, liga_slug, temporada_atual, classificacao_ant, n=JOGOS_BASE_OVRALL):
+def obter_ultimos_jogos_com_heranca(time, liga_codigo, temporada_atual, classificacao_ant, n=JOGOS_BASE_OVRALL):
     jogos_reais = []
     temp = temporada_atual
     while len(jogos_reais) < n and temp >= temporada_atual - 3:
-        jogos = carregar_jogos_temporada(time, liga_slug, temp)
+        jogos = carregar_jogos_temporada(time, liga_codigo, temp)
         jogos_reais.extend(jogos)
         temp -= 1
     jogos_reais.sort(key=lambda j: j['data'], reverse=True)
     if len(jogos_reais) >= n:
         return jogos_reais[:n]
 
-    promovidos = _obter_promovidos_ordenados(liga_slug, temporada_atual)
-    rebaixados_ant = _obter_rebaixados(liga_slug, temporada_atual - 1)
+    promovidos = _obter_promovidos_ordenados(liga_codigo, temporada_atual)
+    rebaixados_ant = _obter_rebaixados(liga_codigo, temporada_atual - 1)
     if time in promovidos:
         ref_pos = POS_REF_PROMOVIDO
     elif time in rebaixados_ant:
@@ -82,7 +87,7 @@ def obter_ultimos_jogos_com_heranca(time, liga_slug, temporada_atual, classifica
         jogos_ref = []
         temp = temporada_atual - 1
         while len(jogos_ref) < (n - len(jogos_reais)) and temp >= temporada_atual - 3:
-            jogos = carregar_jogos_temporada(ref_time, liga_slug, temp)
+            jogos = carregar_jogos_temporada(ref_time, liga_codigo, temp)
             jogos_ref.extend(jogos)
             temp -= 1
         jogos_ref.sort(key=lambda j: j['data'], reverse=True)
@@ -143,8 +148,8 @@ def _escanteios_media(jogos, chave='escanteios'):
     valores = [j.get(chave) for j in jogos if j.get(chave) is not None]
     return _media(valores)
 
-def obter_dados_ovrall_time(time, liga_slug, temporada_atual, classificacao_ant):
-    jogos = obter_ultimos_jogos_com_heranca(time, liga_slug, temporada_atual, classificacao_ant)
+def obter_dados_ovrall_time(time, liga_codigo, temporada_atual, classificacao_ant):
+    jogos = obter_ultimos_jogos_com_heranca(time, liga_codigo, temporada_atual, classificacao_ant)
     if not jogos:
         return {}
     n = len(jogos)
@@ -193,10 +198,10 @@ def obter_dados_ovrall_time(time, liga_slug, temporada_atual, classificacao_ant)
         'escanteios_sofridos_media': _escanteios_media(jogos, 'escanteios_sofridos'),
     }
 
-    # Tentar complementar com FBref
+    # Complementar com estatísticas agregadas do FBref (se disponíveis)
     try:
-        stats_fbref = obter_stats_fbref(liga_slug, temporada_atual, time)
-        for chave, valor in stats_fbref.items():
+        stats = obter_stats_time(liga_codigo, temporada_atual, time)  # Passa código numérico
+        for chave, valor in stats.items():
             if dados.get(chave) is None and valor is not None:
                 dados[chave] = valor
     except:
