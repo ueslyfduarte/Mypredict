@@ -290,24 +290,28 @@ elif opcao == "Análise de Jogo":
         col4.metric("Over 9.5 esc.", f"{prob_over(total_esc, 8.5):.1%}")
 
 # ============================================================
-# BACKTEST VISUAL (PRATELEIRA, DUPLA CHANCE, OVER 1.5, BTTS)
+# BACKTEST VISUAL (FOCO 1X2, EXIBIÇÃO DOS CÁLCULOS INTERNOS)
 # ============================================================
 elif opcao == "Backtest Visual":
-    st.markdown("<h1 style='text-align:center;'>📈 Backtest MyPredict 2.0</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center;'>📈 Backtest MyPredict 2.0 – Análise 1X2</h1>", unsafe_allow_html=True)
     if not partidas:
         st.error("Nenhuma partida carregada.")
         st.stop()
 
+    # Prateleiras fixas (temporada anterior)
     todas_datas = sorted([p['data'] for p in partidas])
     data_inicio_temporada = todas_datas[0]
     jogos_anteriores = [j for j in jogos if j['data'] < data_inicio_temporada]
-    prateleiras_fixas = classification_to_shelves(jogos_anteriores) if jogos_anteriores else classification_to_shelves(jogos)
+    if len(jogos_anteriores) > 0:
+        prateleiras_fixas = classification_to_shelves(jogos_anteriores)
+    else:
+        prateleiras_fixas = classification_to_shelves(jogos)
 
     if 'resultados_backtest' not in st.session_state:
         st.session_state.resultados_backtest = None
         st.session_state.backtest_executado = False
 
-    if st.button("Iniciar Backtest Completo"):
+    if st.button("Iniciar Backtest 1X2"):
         st.session_state.backtest_executado = True
         partidas_ord = sorted(partidas, key=lambda p: p['data'])
         historico = []
@@ -331,139 +335,143 @@ elif opcao == "Backtest Visual":
 
             hist_filtrado = [j for j in historico if j['data'] < data_jogo]
 
-            def get_ovrall(time, prat):
-                if not any(j['time'] == time for j in hist_filtrado):
-                    return SHELF_VALUES[prat]
-                ata = calcular_ATA(hist_filtrado, time, data_jogo)
-                de = calcular_DEF(hist_filtrado, time, data_jogo)
-                base = SHELF_VALUES[prat]
-                return calcular_OVRall([ata, de, base, base, base, base])
+            # --- IMA (com detalhamento das janelas) ---
+            # Precisamos capturar as notas individuais. Para isso, replicamos parte da lógica do calcular_IMA.
+            jogos_time_casa = [j for j in hist_filtrado if j['time'] == time_casa]
+            jogos_time_fora = [j for j in hist_filtrado if j['time'] == time_fora]
+            jogos_time_casa.sort(key=lambda x: x['data'], reverse=True)
+            jogos_time_fora.sort(key=lambda x: x['data'], reverse=True)
 
-            ovrall_casa = get_ovrall(time_casa, prat_casa)
-            ovrall_fora = get_ovrall(time_fora, prat_fora)
+            def ultimos(jogos_time, n, apenas_mando=None):
+                filtrados = []
+                for j in jogos_time:
+                    if apenas_mando is None or j['mando'] == apenas_mando:
+                        filtrados.append(j)
+                    if len(filtrados) == n:
+                        break
+                return filtrados
 
+            def nota_janela(jogos_janela):
+                if not jogos_janela:
+                    return 50.0
+                P_obtida = P_max = P_min = 0.0
+                for j in jogos_janela:
+                    P_obtida += pontos_do_jogo(j['prat_time'], j['prat_adv'], j['mando'], j['resultado'])
+                    P_max += pontos_do_jogo(j['prat_time'], j['prat_adv'], j['mando'], 'V')
+                    P_min += pontos_do_jogo(j['prat_time'], j['prat_adv'], j['mando'], 'D')
+                if P_max == P_min:
+                    return 50.0
+                return ((P_obtida - P_min) / (P_max - P_min)) * 100
+
+            # Janelas Casa
+            G10_casa = ultimos(jogos_time_casa, 10)
+            G5_casa  = ultimos(jogos_time_casa, 5)
+            G3_casa  = ultimos(jogos_time_casa, 3)
+            L5_casa  = ultimos(jogos_time_casa, 5, apenas_mando='casa')
+            L3_casa  = ultimos(jogos_time_casa, 3, apenas_mando='casa')
+            n_G10_casa = nota_janela(G10_casa)
+            n_G5_casa  = nota_janela(G5_casa)
+            n_G3_casa  = nota_janela(G3_casa)
+            n_L5_casa  = nota_janela(L5_casa)
+            n_L3_casa  = nota_janela(L3_casa)
+            ima_casa = (0.10 * n_G10_casa + 0.15 * n_G5_casa + 0.20 * n_G3_casa +
+                        0.25 * n_L5_casa + 0.30 * n_L3_casa)
+
+            # Janelas Fora
+            G10_fora = ultimos(jogos_time_fora, 10)
+            G5_fora  = ultimos(jogos_time_fora, 5)
+            G3_fora  = ultimos(jogos_time_fora, 3)
+            L5_fora  = ultimos(jogos_time_fora, 5, apenas_mando='fora')
+            L3_fora  = ultimos(jogos_time_fora, 3, apenas_mando='fora')
+            n_G10_fora = nota_janela(G10_fora)
+            n_G5_fora  = nota_janela(G5_fora)
+            n_G3_fora  = nota_janela(G3_fora)
+            n_L5_fora  = nota_janela(L5_fora)
+            n_L3_fora  = nota_janela(L3_fora)
+            ima_fora = (0.10 * n_G10_fora + 0.15 * n_G5_fora + 0.20 * n_G3_fora +
+                        0.25 * n_L5_fora + 0.30 * n_L3_fora)
+
+            # --- OVRall (detalhado) ---
+            def get_ovrall_detalhado(time, prat, hist):
+                if not any(j['time'] == time for j in hist):
+                    base = SHELF_VALUES[prat]
+                    # Retorna componentes padrão baseados na prateleira
+                    return base, base, base, base, base, base
+                ata = calcular_ATA(hist, time, data_jogo)
+                de = calcular_DEF(hist, time, data_jogo)
+                mei = SHELF_VALUES[prat]  # placeholder fixo pela prateleira
+                forc = SHELF_VALUES[prat]
+                cons = SHELF_VALUES[prat]
+                res = SHELF_VALUES[prat]
+                return ata, de, mei, forc, cons, res
+
+            ata_casa, def_casa, mei_casa, for_casa, cons_casa, res_casa = get_ovrall_detalhado(time_casa, prat_casa, hist_filtrado)
+            ovrall_casa = calcular_OVRall([ata_casa, def_casa, mei_casa, for_casa, cons_casa, res_casa])
+
+            ata_fora, def_fora, mei_fora, for_fora, cons_fora, res_fora = get_ovrall_detalhado(time_fora, prat_fora, hist_filtrado)
+            ovrall_fora = calcular_OVRall([ata_fora, def_fora, mei_fora, for_fora, cons_fora, res_fora])
+
+            # MPV
             mpv_casa_raw = inicializar_MPV(ovrall_casa)
             mpv_fora_raw = inicializar_MPV(ovrall_fora)
+            # Evolução com jogos passados
             for jg in hist_filtrado:
                 if jg['time'] == time_casa:
                     ima_jg, _ = calcular_IMA(hist_filtrado, time_casa, jg['data'], mando_proximo=jg['mando'])
-                    ovrall_adv = get_ovrall(jg['adv'], prateleiras_fixas.get(jg['adv'], 3))
+                    ovrall_adv = calcular_OVRall([calcular_ATA(hist_filtrado, jg['adv'], jg['data']),
+                                                  calcular_DEF(hist_filtrado, jg['adv'], jg['data']),
+                                                  SHELF_VALUES[prateleiras_fixas.get(jg['adv'], 3)],
+                                                  SHELF_VALUES[prateleiras_fixas.get(jg['adv'], 3)],
+                                                  SHELF_VALUES[prateleiras_fixas.get(jg['adv'], 3)],
+                                                  SHELF_VALUES[prateleiras_fixas.get(jg['adv'], 3)]])
                     mpv_adv = inicializar_MPV(ovrall_adv)
                     mpv_casa_raw = atualizar_MPV(mpv_casa_raw, mpv_adv, jg['mando'], jg['resultado'], ima_jg)
                 elif jg['time'] == time_fora:
                     ima_jg, _ = calcular_IMA(hist_filtrado, time_fora, jg['data'], mando_proximo=jg['mando'])
-                    ovrall_adv = get_ovrall(jg['adv'], prateleiras_fixas.get(jg['adv'], 3))
+                    ovrall_adv = calcular_OVRall([calcular_ATA(hist_filtrado, jg['adv'], jg['data']),
+                                                  calcular_DEF(hist_filtrado, jg['adv'], jg['data']),
+                                                  SHELF_VALUES[prateleiras_fixas.get(jg['adv'], 3)],
+                                                  SHELF_VALUES[prateleiras_fixas.get(jg['adv'], 3)],
+                                                  SHELF_VALUES[prateleiras_fixas.get(jg['adv'], 3)],
+                                                  SHELF_VALUES[prateleiras_fixas.get(jg['adv'], 3)]])
                     mpv_adv = inicializar_MPV(ovrall_adv)
                     mpv_fora_raw = atualizar_MPV(mpv_fora_raw, mpv_adv, jg['mando'], jg['resultado'], ima_jg)
 
-            ima_casa, _ = calcular_IMA(hist_filtrado, time_casa, data_jogo, mando_proximo='casa')
-            ima_fora, _ = calcular_IMA(hist_filtrado, time_fora, data_jogo, mando_proximo='fora')
-
+            # Bônus IMA fora alto
             if ima_fora > 70:
                 mpv_fora_raw += 50
 
             prob_casa, prob_empate, prob_fora = probabilidades_1x2(mpv_casa_raw, mpv_fora_raw)
 
-            # Recomendação Resultado
-            probs = [('Vitória Casa', prob_casa), ('Empate', prob_empate), ('Vitória Fora', prob_fora)]
-            probs.sort(key=lambda x: x[1], reverse=True)
-            maior, segunda = probs[0], probs[1]
-            if maior[1] < 0.50 and (maior[1] - segunda[1]) < 0.05:
-                rec = "Empate Técnico"
-                rec_prob = prob_empate
-            else:
-                rec = maior[0]
-                rec_prob = maior[1]
-            selo_rec = get_selo(rec_prob)
-
-            # Dupla chance
-            dupla = None
-            if prob_casa + prob_empate >= LIMITE_DUPLA_CHANCE:
-                dupla = f"DC Casa/Empate ({prob_casa + prob_empate:.1%})"
-            elif prob_fora + prob_empate >= LIMITE_DUPLA_CHANCE:
-                dupla = f"DC Fora/Empate ({prob_fora + prob_empate:.1%})"
-
-            # Over 1.5 e BTTS
-            def media_hist(time, tipo):
-                jogos_time = [j for j in hist_filtrado if j['time'] == time]
-                if not jogos_time:
-                    return 1.0 if tipo != 'escanteios' else 4.0
-                if tipo == 'marcados': return sum(j.get('gols', 0) for j in jogos_time) / len(jogos_time)
-                elif tipo == 'sofridos': return sum(j.get('gols_sofridos', 0) for j in jogos_time) / len(jogos_time)
-                elif tipo == 'escanteios': return sum(j.get('escanteios', 0) for j in jogos_time) / len(jogos_time)
-
-            gols_casa_hist = media_hist(time_casa, 'marcados')
-            sofridos_fora_hist = media_hist(time_fora, 'sofridos')
-            gols_fora_hist = media_hist(time_fora, 'marcados')
-            sofridos_casa_hist = media_hist(time_casa, 'sofridos')
-            esc_casa_hist = media_hist(time_casa, 'escanteios')
-            esc_fora_hist = media_hist(time_fora, 'escanteios')
-            media_total = (gols_casa_hist + sofridos_fora_hist)/2 + (gols_fora_hist + sofridos_casa_hist)/2
-            media_esc_total = esc_casa_hist + esc_fora_hist
-
-            prob_over15 = prob_over(media_total, 1.5)
-            prob_over25 = prob_over(media_total, 2.5)
-            prob_bt = prob_btts(ovrall_casa, ovrall_fora, ovrall_fora, ovrall_casa)
-            prob_esc = prob_over(media_esc_total, 9.5)
-            prob_ht_over05 = prob_over(media_total * 0.4, 0.5)
-            prob_ht_over15 = prob_over(media_total * 0.4, 1.5)
-
-            rec_over15 = "Over 1.5" if prob_over15 >= 0.5 else "Under 1.5"
-            rec_btts = "Sim" if prob_bt >= 0.5 else "Não"
-
-            # Análise por prateleira
-            hist_prat_casa = [j for j in hist_filtrado if j['time'] == time_casa and prateleiras_fixas.get(j['adv'], 3) == prat_fora]
-            v_c = sum(1 for j in hist_prat_casa if j['resultado'] == 'V')
-            e_c = sum(1 for j in hist_prat_casa if j['resultado'] == 'E')
-            d_c = sum(1 for j in hist_prat_casa if j['resultado'] == 'D')
-            total_c = len(hist_prat_casa)
-            analise_prat = f"{time_casa} vs prat {prat_fora}: V:{v_c} E:{e_c} D:{d_c} ({(v_c/total_c)*100:.1f}% vit.)" if total_c > 0 else f"Sem histórico vs prat {prat_fora}"
+            # Recomendação
+            probs = {'Vitória Casa': prob_casa, 'Empate': prob_empate, 'Vitória Fora': prob_fora}
+            rec = max(probs, key=probs.get)
+            rec_prob = probs[rec]
+            selo = get_selo(rec_prob)
 
             # Resultado real
             gols_casa_real = casa_info['gols']
             gols_fora_real = fora_info['gols']
             resultado_real = 'V' if gols_casa_real > gols_fora_real else ('D' if gols_casa_real < gols_fora_real else 'E')
-            total_gols = gols_casa_real + gols_fora_real
-            over15_real = total_gols > 1.5
-            over25_real = total_gols > 2.5
-            btts_real = gols_casa_real > 0 and gols_fora_real > 0
-            esc_casa_real = casa_info.get('escanteios', 0)
-            esc_fora_real = fora_info.get('escanteios', 0)
-            esc_real = (esc_casa_real + esc_fora_real) > 9.5
-
             acertou = (rec == 'Vitória Casa' and resultado_real == 'V') or \
                       (rec == 'Empate' and resultado_real == 'E') or \
                       (rec == 'Vitória Fora' and resultado_real == 'D')
-            if rec == "Empate Técnico":
-                acertou = (resultado_real == 'E')
 
-            imp_casa = 1 / float(casa_info.get('B365H', 2.0)) if float(casa_info.get('B365H', 2.0)) > 0 else 0
-            imp_empate = 1 / float(casa_info.get('B365D', 3.0)) if float(casa_info.get('B365D', 3.0)) > 0 else 0
-            imp_fora = 1 / float(casa_info.get('B365A', 3.0)) if float(casa_info.get('B365A', 3.0)) > 0 else 0
-
+            # Armazena TUDO para exibição
             resultados.append({
                 'data': data_jogo,
-                'time_casa': time_casa,
-                'time_fora': time_fora,
+                'time_casa': time_casa, 'time_fora': time_fora,
                 'mpv_casa': (mpv_casa_raw - 1000) / 10,
                 'mpv_fora': (mpv_fora_raw - 1000) / 10,
-                'ima_casa': ima_casa,
-                'ima_fora': ima_fora,
-                'ovr_casa': ovrall_casa,
-                'ovr_fora': ovrall_fora,
-                'prob_casa': prob_casa, 'imp_casa': imp_casa,
-                'prob_empate': prob_empate, 'imp_empate': imp_empate,
-                'prob_fora': prob_fora, 'imp_fora': imp_fora,
-                'recomendacao': rec, 'rec_prob': rec_prob, 'selo': selo_rec,
-                'dupla': dupla,
-                'analise_prat': analise_prat,
-                'resultado_real': resultado_real, 'acertou': acertou,
-                'over15_prob': prob_over15, 'over15_real': over15_real, 'rec_over15': rec_over15,
-                'over25_prob': prob_over25, 'over25_real': over25_real,
-                'btts_prob': prob_bt, 'btts_real': btts_real, 'rec_btts': rec_btts,
-                'esc_prob': prob_esc, 'esc_real': esc_real,
-                'ht_over05_prob': prob_ht_over05,
-                'ht_over15_prob': prob_ht_over15
+                'ima_casa': ima_casa, 'ima_fora': ima_fora,
+                'janelas_casa': (n_G10_casa, n_G5_casa, n_G3_casa, n_L5_casa, n_L3_casa),
+                'janelas_fora': (n_G10_fora, n_G5_fora, n_G3_fora, n_L5_fora, n_L3_fora),
+                'ata_casa': ata_casa, 'def_casa': def_casa, 'mei_casa': mei_casa, 'for_casa': for_casa, 'cons_casa': cons_casa, 'res_casa': res_casa,
+                'ata_fora': ata_fora, 'def_fora': def_fora, 'mei_fora': mei_fora, 'for_fora': for_fora, 'cons_fora': cons_fora, 'res_fora': res_fora,
+                'ovr_casa': ovrall_casa, 'ovr_fora': ovrall_fora,
+                'prob_casa': prob_casa, 'prob_empate': prob_empate, 'prob_fora': prob_fora,
+                'recomendacao': rec, 'rec_prob': rec_prob, 'selo': selo,
+                'resultado_real': resultado_real, 'acertou': acertou
             })
 
             historico.append(casa_info)
@@ -472,7 +480,9 @@ elif opcao == "Backtest Visual":
 
         st.session_state.resultados_backtest = resultados
 
-    # Exibição paginada
+    # ============================================================
+    # EXIBIÇÃO PAGINADA (10 POR VEZ) COM DETALHAMENTO INTERNO
+    # ============================================================
     if st.session_state.resultados_backtest:
         resultados = st.session_state.resultados_backtest
         total_jogos = len(resultados)
@@ -485,65 +495,63 @@ elif opcao == "Backtest Visual":
         st.markdown(f"Mostrando {inicio+1}–{min(fim, total_jogos)} de {total_jogos} partidas")
 
         for res in pagina_atual:
-            with st.container():
-                st.markdown(f"### {res['time_casa']} vs {res['time_fora']} – {res['data'].strftime('%d/%m/%Y')}")
+            with st.expander(f"{res['time_casa']} vs {res['time_fora']} – {res['data'].strftime('%d/%m/%Y')}"):
+                # Linha 1: MPVs e Recomendação
                 col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("MPV Casa", f"{res['mpv_casa']:.1f}")
+                col1.metric("MPV Casa", f"{res['mpv_casa']:.1f}")
+                col2.metric("MPV Fora", f"{res['mpv_fora']:.1f}")
+                col3.metric("Diferença", f"{abs(res['mpv_casa'] - res['mpv_fora']):.1f}")
+                col4.metric("Resultado", res['resultado_real'])
+
+                # Recomendação
+                st.write(f"**MyPredict Recomenda:** {res['recomendacao']} (Prob: {res['rec_prob']:.1%}, Selo: {res['selo']})")
+                st.write(f"Acertou: {'✅' if res['acertou'] else '❌'}")
+
+                # --- IMA Detalhado ---
+                st.markdown("#### IMA (Índice de Momento Atual)")
+                col_i1, col_i2 = st.columns(2)
+                with col_i1:
+                    st.write(f"**{res['time_casa']}**")
+                    st.write(f"G10: {res['janelas_casa'][0]:.1f} | G5: {res['janelas_casa'][1]:.1f} | G3: {res['janelas_casa'][2]:.1f}")
+                    st.write(f"L5: {res['janelas_casa'][3]:.1f} | L3: {res['janelas_casa'][4]:.1f}")
                     st.metric("IMA Casa", f"{res['ima_casa']:.1f}")
-                with col2:
-                    st.metric("MPV Fora", f"{res['mpv_fora']:.1f}")
+                with col_i2:
+                    st.write(f"**{res['time_fora']}**")
+                    st.write(f"G10: {res['janelas_fora'][0]:.1f} | G5: {res['janelas_fora'][1]:.1f} | G3: {res['janelas_fora'][2]:.1f}")
+                    st.write(f"L5: {res['janelas_fora'][3]:.1f} | L3: {res['janelas_fora'][4]:.1f}")
                     st.metric("IMA Fora", f"{res['ima_fora']:.1f}")
-                with col3:
-                    st.metric("OVR Casa", f"{res['ovr_casa']:.1f}")
-                    st.metric("OVR Fora", f"{res['ovr_fora']:.1f}")
-                with col4:
-                    st.write(f"Resultado: {res['resultado_real']}")
-                    st.write(f"**Recomendação: {res['recomendacao']}**")
-                    st.write(f"Prob: {res['rec_prob']:.1%} | Selo: {res['selo']}")
-                    st.write(f"Acertou: {'✅' if res['acertou'] else '❌'}")
-                    if res['dupla']:
-                        st.write(f"🔄 {res['dupla']}")
 
-                st.write("**Probabilidades 1X2**")
+                # --- OVRall Detalhado ---
+                st.markdown("#### OVRall (Força Geral)")
+                col_o1, col_o2 = st.columns(2)
+                with col_o1:
+                    st.write(f"**{res['time_casa']}**")
+                    st.write(f"ATA: {res['ata_casa']:.1f} | DEF: {res['def_casa']:.1f} | MEI: {res['mei_casa']:.1f}")
+                    st.write(f"FOR: {res['for_casa']:.1f} | CONS: {res['cons_casa']:.1f} | RES: {res['res_casa']:.1f}")
+                    st.metric("OVRall Casa", f"{res['ovr_casa']:.1f}")
+                with col_o2:
+                    st.write(f"**{res['time_fora']}**")
+                    st.write(f"ATA: {res['ata_fora']:.1f} | DEF: {res['def_fora']:.1f} | MEI: {res['mei_fora']:.1f}")
+                    st.write(f"FOR: {res['for_fora']:.1f} | CONS: {res['cons_fora']:.1f} | RES: {res['res_fora']:.1f}")
+                    st.metric("OVRall Fora", f"{res['ovr_fora']:.1f}")
+
+                # Probabilidades 1X2
+                st.markdown("#### Probabilidades MyPredict")
                 col_p1, col_p2, col_p3 = st.columns(3)
-                with col_p1:
-                    st.metric("Casa (MyPredict)", f"{res['prob_casa']:.1%}", delta=f"Bet365: {res['imp_casa']:.1%}")
-                with col_p2:
-                    st.metric("Empate (MyPredict)", f"{res['prob_empate']:.1%}", delta=f"Bet365: {res['imp_empate']:.1%}")
-                with col_p3:
-                    st.metric("Fora (MyPredict)", f"{res['prob_fora']:.1%}", delta=f"Bet365: {res['imp_fora']:.1%}")
+                col_p1.metric("Casa", f"{res['prob_casa']:.1%}")
+                col_p2.metric("Empate", f"{res['prob_empate']:.1%}")
+                col_p3.metric("Fora", f"{res['prob_fora']:.1%}")
 
-                st.write("**Recomendações de Mercados**")
-                col_rec1, col_rec2 = st.columns(2)
-                with col_rec1:
-                    st.metric("Over 1.5", f"{res['rec_over15']} ({res['over15_prob']:.1%})", delta=f"{'✅' if res['over15_real'] else '❌'}")
-                with col_rec2:
-                    st.metric("BTTS", f"{res['rec_btts']} ({res['btts_prob']:.1%})", delta=f"{'✅' if res['btts_real'] else '❌'}")
-
-                st.caption(res['analise_prat'])
-
-                st.write("**Outros Mercados**")
-                col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-                with col_m1:
-                    st.metric("Over 2.5", f"{res['over25_prob']:.1%}", delta=f"{'✅' if res['over25_real'] else '❌'}")
-                with col_m2:
-                    st.metric("Esc. >9.5", f"{res['esc_prob']:.1%}", delta=f"{'✅' if res['esc_real'] else '❌'}")
-                with col_m3:
-                    st.metric("HT Over 0.5", f"{res['ht_over05_prob']:.1%}")
-                with col_m4:
-                    st.metric("HT Over 1.5", f"{res['ht_over15_prob']:.1%}")
-                st.markdown("---")
-
-        # Resumo
+        # --- Resumo da Temporada ---
         st.markdown("---")
-        st.subheader("📊 Desempenho do MyPredict")
+        st.subheader("📊 Desempenho do MyPredict na Temporada")
         total_jogos = len(resultados)
         acertos = sum(1 for r in resultados if r['acertou'])
         taxa = (acertos / total_jogos) * 100 if total_jogos > 0 else 0
-        st.metric("Total de Jogos", total_jogos)
-        st.metric("Acertos", acertos)
-        st.metric("Taxa de Acerto", f"{taxa:.1f}%")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total de Jogos", total_jogos)
+        col2.metric("Acertos", acertos)
+        col3.metric("Taxa de Acerto", f"{taxa:.1f}%")
 
         st.subheader("Desempenho por Selo")
         for selo_nome in ["🥇 Ouro", "🟢 Verde", "⚪ Marginal", "🔴 Sem selo"]:
@@ -553,4 +561,4 @@ elif opcao == "Backtest Visual":
                 taxa_selo = (acertos_selo / len(jogos_selo)) * 100
                 st.write(f"{selo_nome}: {len(jogos_selo)} jogos, {acertos_selo} acertos ({taxa_selo:.1f}%)")
     else:
-        st.info("Clique em 'Iniciar Backtest Completo' para processar os jogos.")
+        st.info("Clique em 'Iniciar Backtest 1X2' para processar os jogos.")
