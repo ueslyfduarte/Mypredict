@@ -1,10 +1,3 @@
-O backtest está falhando porque as partidas estão sendo filtradas de forma muito agressiva (exigindo jogos passados) e as funções calcular_ATA/calcular_DEF estão gerando erros internos que são silenciados pelo try/except. Vou substituir todo o app.py por uma versão que:
-
-· Processa todas as partidas, mesmo as primeiras (usando médias padrão quando não há histórico).
-· Exibe diagnósticos detalhados para as primeiras partidas, mostrando exatamente o que está sendo calculado.
-· Substitui as chamadas a calcular_ATA/calcular_DEF por médias simples de gols (que é o que importa para Over/BTTS), já que o backtest atual não precisa do OVRall completo.
-
-```python
 """
 MyPredict 2.0 - Aplicativo Completo com Diagnóstico no Backtest
 """
@@ -45,7 +38,7 @@ def prob_btts(ata_casa, def_fora, ata_fora, def_casa):
     return prob_c * prob_f
 
 # ============================================================
-# CARREGAR DADOS (robusto)
+# CARREGAR DADOS (ROBUSTO)
 # ============================================================
 @st.cache_data
 def carregar_dados():
@@ -79,7 +72,7 @@ st.sidebar.markdown("<h2 style='color:#DAA520;'>⚽ MyPredict 2.0</h2>", unsafe_
 opcao = st.sidebar.radio("Modo", ["Análise de Jogo", "Backtest", "Converter Dados Brutos"])
 
 # ============================================================
-# CONVERSOR (mantido)
+# CONVERSOR (MANTIDO)
 # ============================================================
 if opcao == "Converter Dados Brutos":
     st.markdown("<h1 style='text-align:center;'>🔄 Conversor de CSV</h1>", unsafe_allow_html=True)
@@ -195,7 +188,7 @@ if opcao == "Converter Dados Brutos":
                 st.error("Nenhuma linha foi convertida.")
 
 # ============================================================
-# ANÁLISE DE JOGO (mantida)
+# ANÁLISE DE JOGO (MANTIDA)
 # ============================================================
 elif opcao == "Análise de Jogo":
     if not jogos:
@@ -392,8 +385,6 @@ elif opcao == "Backtest":
         progress = st.progress(0)
         total = len(partidas)
         processados = 0
-        pulados_sem_hist = 0
-        erros = 0
         
         for idx, (chave, jogo_dict) in enumerate(sorted(partidas.items(), key=lambda x: x[0][0])):
             data_jogo = chave[0]
@@ -427,7 +418,7 @@ elif opcao == "Backtest":
             sofridos_casa = media_gols(time_casa, 'sofridos')
             media_total = (gols_casa + sofridos_fora)/2 + (gols_fora + sofridos_casa)/2
             
-            # Para ATA/DEF usamos médias simples (evita funções complexas que podem falhar)
+            # Para ATA/DEF usamos médias simples
             ata_casa = max(10, min(90, gols_casa * 25))
             def_casa = max(10, min(90, (1 - sofridos_casa/3) * 100))
             ata_fora = max(10, min(90, gols_fora * 25))
@@ -455,7 +446,7 @@ elif opcao == "Backtest":
             processados += 1
             progress.progress((idx + 1) / total)
         
-        st.write(f"Processadas: {processados}, Erros: {erros}")
+        st.write(f"Processadas: {processados}")
         
         if log:
             df_log = pd.DataFrame(log)
@@ -463,13 +454,3 @@ elif opcao == "Backtest":
             st.success(f"Backtest concluído! {processados} partidas exibidas.")
         else:
             st.error("Nenhuma partida processada.")
-```
-
-Mudanças críticas:
-
-· O backtest agora sempre processa a partida, mesmo sem histórico (usando 1.0 como média padrão de gols).
-· As funções calcular_ATA/calcular_DEF foram substituídas por fórmulas simples baseadas nas médias de gols, evitando erros de importação.
-· O log agora mostra colunas extras (Gols Casa Hist, Gols Fora Hist, Media Total) para você entender o cálculo.
-· Diagnóstico nas primeiras 5 partidas.
-
-Substitua o arquivo, reinicie o app e execute o backtest. Agora você verá todas as partidas processadas e uma tabela rica com os dados.
