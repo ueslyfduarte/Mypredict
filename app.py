@@ -1,3 +1,4 @@
+# app.py — MyPredict 2.0 (Interface centralizada, seletor de ligas e times)
 import streamlit as st
 from data_loader import (
     gerar_prateleiras, obter_ultimos_jogos_com_heranca, extrair_recortes_ima,
@@ -10,13 +11,44 @@ from markets import (
 )
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
 from data_source_fbref_stats import obter_codigo_fbref
+import json
+from pathlib import Path
 
-st.set_page_config(page_title="MyPredict 2.0", layout="wide")
+# ------------------------------------------------------------
+# Carregar lista de ligas do arquivo config/league_dict.json
+# ------------------------------------------------------------
+def carregar_ligas():
+    league_dict_file = Path('config') / 'league_dict.json'
+    if league_dict_file.exists():
+        with open(league_dict_file, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    # Fallback mínimo se o arquivo não existir
+    return {
+        "Brasileirão": 24,
+        "Premier League": 9,
+        "La Liga": 12,
+        "Bundesliga": 20,
+        "Serie A": 11,
+        "Ligue 1": 13,
+        "Eredivisie": 23,
+        "Primeira Liga": 32,
+        "MLS": 22,
+    }
 
+LIGAS_DICT = carregar_ligas()
+LISTA_LIGAS = sorted(LIGAS_DICT.keys())
+
+# ------------------------------------------------------------
+# Configuração da página
+# ------------------------------------------------------------
+st.set_page_config(page_title="MyPredict 2.0", layout="centered")
+
+# ------------------------------------------------------------
+# CSS personalizado (preto, prata, dourado)
+# ------------------------------------------------------------
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #c0c0c0; }
-    section[data-testid="stSidebar"] { background-color: #1a1a1a; border-right: 1px solid #ffd700; }
     h1, h2, h3 { color: #ffd700 !important; }
     div[data-testid="metric-container"] {
         background-color: #1e1e1e; border: 1px solid #333;
@@ -26,6 +58,7 @@ st.markdown("""
     div.stButton > button {
         background-color: #ffd700; color: #0e1117;
         border: none; font-weight: bold; border-radius: 8px;
+        width: 100%;
     }
     div.stButton > button:hover {
         background-color: #ffed4a; box-shadow: 0px 0px 15px #ffd700;
@@ -43,57 +76,78 @@ st.markdown("""
         50% { box-shadow: 0 0 30px #ffd700; }
         100% { box-shadow: 0 0 10px #ffd700; }
     }
-    .seta-positiva { color: #00ff7f; font-size: 20px; }
-    .seta-negativa { color: #ff4d4d; font-size: 20px; }
-    .seta-neutra { color: #ffd700; font-size: 20px; }
-    .dourado { color: #ffd700; }
+    .stSelectbox [data-baseweb="select"] {
+        background-color: #1e1e1e;
+        color: #ffd700;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-if 'analise_feita' not in st.session_state:
-    st.session_state.analise_feita = False
+# ------------------------------------------------------------
+# Título e frase
+# ------------------------------------------------------------
+st.markdown("<h1 style='text-align: center;'>⚽ MyPredict 2.0</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #c0c0c0;'>"
+            "“O futebol é a única coisa que me emociona mais do que a ciência.”<br>"
+            "— Albert Einstein (adaptado)</p>", unsafe_allow_html=True)
 
-if not st.session_state.analise_feita:
-    col_center = st.columns([1, 2, 1])
-    with col_center[1]:
-        st.markdown("<h1 style='text-align: center;'>⚽ MyPredict 2.0</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: #c0c0c0; font-size: 18px;'>"
-                    "“O futebol é a única coisa que me emociona mais do que a ciência.”<br>"
-                    "— Albert Einstein (adaptado)</p>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: #ffd700;'>"
-                    "Bem-vindo ao futuro das predições esportivas.</p>", unsafe_allow_html=True)
+# ------------------------------------------------------------
+# Seleção de liga e temporada
+# ------------------------------------------------------------
+liga_selecionada = st.selectbox("Selecione a liga", LISTA_LIGAS, index=0)
+temporada = st.number_input("Temporada", min_value=2015, max_value=2026, value=2024)
 
-with st.sidebar:
-    st.markdown("<h2 style='color: #ffd700;'>⚙️ Configuração</h2>", unsafe_allow_html=True)
-    liga_nome = st.text_input("Nome da Liga", "Brasileirão")
-    temporada = st.number_input("Temporada", min_value=2015, max_value=2026, value=2024)
-    st.markdown("---")
-    time_casa = st.text_input("Time da casa", "Flamengo")
-    time_fora = st.text_input("Time de fora", "Palmeiras")
-    gerar = st.button("⚡ Gerar MyPredict", type="primary", use_container_width=True)
-    if gerar:
-        st.session_state.analise_feita = True
+# Carregar classificação para preencher times
+try:
+    liga_codigo = LIGAS_DICT[liga_selecionada]
+    class_ant = classificação_anterior(liga_codigo, temporada)
+    if class_ant:
+        lista_times = sorted(class_ant.values())
+    else:
+        lista_times = []
+        st.warning("Não foi possível carregar a classificação desta liga/temporada.")
+except Exception as e:
+    lista_times = []
+    st.error(f"Erro ao carregar dados da liga: {e}")
 
-if st.session_state.analise_feita:
-    with st.spinner("Descobrindo liga e calculando..."):
+# ------------------------------------------------------------
+# Seleção dos times
+# ------------------------------------------------------------
+col1, col2 = st.columns(2)
+with col1:
+    if lista_times:
+        time_casa = st.selectbox("Time da casa", lista_times)
+    else:
+        time_casa = st.text_input("Time da casa", "Flamengo")
+with col2:
+    if lista_times:
+        time_fora = st.selectbox("Time de fora", lista_times, index=min(1, len(lista_times)-1))
+    else:
+        time_fora = st.text_input("Time de fora", "Palmeiras")
+
+# ------------------------------------------------------------
+# Botão de ação
+# ------------------------------------------------------------
+gerar = st.button("⚡ Gerar MyPredict", use_container_width=True)
+
+# ------------------------------------------------------------
+# Execução da análise
+# ------------------------------------------------------------
+if gerar:
+    with st.spinner("Calculando..."):
         try:
-            liga_codigo = obter_codigo_fbref(liga_nome)
-            if not liga_codigo:
-                st.error(f"Não encontrei a liga '{liga_nome}'. Tente o nome exato (ex.: Brasileirão, Premier League).")
-                st.stop()
-
-            class_ant = classificação_anterior(liga_codigo, temporada)
             if not class_ant:
-                st.error(f"Classificação não disponível para {liga_nome} {temporada}.")
+                st.error("Classificação indisponível.")
                 st.stop()
             prateleiras = gerar_prateleiras(liga_codigo, temporada)
 
             dados_casa = obter_dados_ovrall_time(time_casa, liga_codigo, temporada, class_ant)
             dados_fora = obter_dados_ovrall_time(time_fora, liga_codigo, temporada, class_ant)
             if not dados_casa or not dados_fora:
-                st.error(f"Partidas não encontradas para {time_casa} ou {time_fora}.")
+                st.error("Partidas não encontradas para um dos times.")
                 st.stop()
 
+            # IMA
             jogos_casa = obter_ultimos_jogos_com_heranca(time_casa, liga_codigo, temporada, class_ant, n=20)
             rec_casa = extrair_recortes_ima(jogos_casa, True)
             jogos_fora = obter_ultimos_jogos_com_heranca(time_fora, liga_codigo, temporada, class_ant, n=20)
@@ -138,7 +192,7 @@ if st.session_state.analise_feita:
             def recomendado(prob):
                 return prob is not None and prob >= 0.60
 
-            st.markdown(f"<h1 style='text-align: center;'>{time_casa} x {time_fora}</h1>",
+            st.markdown(f"<h2 style='text-align: center;'>{time_casa} x {time_fora}</h2>",
                         unsafe_allow_html=True)
 
             col1, col2, col3 = st.columns(3)
