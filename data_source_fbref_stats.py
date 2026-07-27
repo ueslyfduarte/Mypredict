@@ -1,4 +1,3 @@
-# data_source_fbref_stats.py — MyPredict 2.0 (versão anti-bloqueio)
 import time
 import random
 import requests
@@ -20,7 +19,6 @@ HEADERS = {
 CACHE_DIR = Path('cache/fbref_stats')
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-# Fallback estático expandido (principais ligas mundiais)
 FBREF_CODES = {
     "brasileirão": 24,
     "campeonato brasileiro série a": 24,
@@ -36,6 +34,22 @@ FBREF_CODES = {
     "primera división": 10,
     "championship": 10,
     "série b": 38,
+    "superliga grega": 27,
+    "super lig": 26,
+    "russian premier league": 30,
+    "ukrainian premier league": 29,
+    "belgian pro league": 37,
+    "swiss super league": 42,
+    "austrian bundesliga": 41,
+    "scottish premiership": 40,
+    "2. bundesliga": 33,
+    "serie b": 18,
+    "la liga 2": 17,
+    "ligue 2": 14,
+    "liga mx": 31,
+    "k league 1": 55,
+    "a-league": 43,
+    "saudi pro league": 56,
 }
 
 def _cache_ler(chave):
@@ -56,7 +70,7 @@ def _criar_sessao():
 
 def _get(url):
     sessao = _criar_sessao()
-    time.sleep(random.uniform(6, 9))  # delay maior para evitar bloqueios
+    time.sleep(random.uniform(6, 9))
     resp = sessao.get(url, timeout=30)
     resp.raise_for_status()
     return resp.text
@@ -71,24 +85,16 @@ def _extrair_tabela_por_id(html_str, table_id):
     table = soup.find('table', id=table_id)
     return table
 
-# ------------------------------------------------------------
-# 1. CÓDIGO DA LIGA (com fallback estático e tentativa única)
-# ------------------------------------------------------------
 def obter_codigo_fbref(nome_liga):
     nome_lower = nome_liga.lower().strip()
-    # 1. Fallback estático (rápido e sem internet)
     if nome_lower in FBREF_CODES:
         return FBREF_CODES[nome_lower]
-
-    # 2. Cache em disco (tentativas anteriores)
     cache_file = CACHE_DIR / 'fbref_codes.json'
     if cache_file.exists():
         with open(cache_file, 'r', encoding='utf-8') as f:
             codes = json.load(f)
         if nome_lower in codes:
             return codes[nome_lower]
-
-    # 3. Tentativa única de scraping (se falhar, não tenta mais nesta sessão)
     try:
         url = 'https://fbref.com/en/comps/'
         html_str = _get(url)
@@ -103,19 +109,14 @@ def obter_codigo_fbref(nome_liga):
                         nome = link.get_text(strip=True).lower()
                         codigo = int(link['href'].split('/')[-1])
                         codes[nome] = codigo
-        # Mescla com fallback e salva
         all_codes = FBREF_CODES.copy()
         all_codes.update(codes)
         with open(cache_file, 'w', encoding='utf-8') as f:
             json.dump(all_codes, f, ensure_ascii=False, indent=2)
         return all_codes.get(nome_lower)
     except:
-        # Se falhar, usa fallback (já verificado) ou retorna None
         return None
 
-# ------------------------------------------------------------
-# 2. CLASSIFICAÇÃO
-# ------------------------------------------------------------
 def obter_classificacao(liga_codigo, temporada):
     chave = f'class_{liga_codigo}_{temporada}'
     cached = _cache_ler(chave)
@@ -159,9 +160,6 @@ def obter_classificacao(liga_codigo, temporada):
     _cache_escrever(chave, classif)
     return classif
 
-# ------------------------------------------------------------
-# 3. PARTIDAS DE UM TIME (com HT)
-# ------------------------------------------------------------
 def obter_partidas_time(liga_codigo, temporada, time):
     chave = f'partidas_{liga_codigo}_{temporada}_{time}'
     cached = _cache_ler(chave)
@@ -257,9 +255,6 @@ def obter_partidas_time(liga_codigo, temporada, time):
     _cache_escrever(chave, jogos)
     return jogos
 
-# ------------------------------------------------------------
-# 4. ESTATÍSTICAS AGREGADAS (OVRall)
-# ------------------------------------------------------------
 def obter_stats_time(liga, temporada, time):
     chave = f'stats_{liga}_{temporada}_{time}'
     cached = _cache_ler(chave)
