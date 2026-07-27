@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 - Aplicativo Completo (Backtest Simplificado)
+MyPredict 2.0 - Aplicativo Completo com Backtest Automático
 """
 import streamlit as st
 import pandas as pd
@@ -38,36 +38,47 @@ def prob_btts(ata_casa, def_fora, ata_fora, def_casa):
     return prob_c * prob_f
 
 # ============================================================
-# CARREGAR DADOS
+# CARREGAR PARTIDAS ÚNICAS (PARA BACKTEST)
 # ============================================================
 @st.cache_data
-def carregar_dados():
+def carregar_partidas():
     try:
         df = pd.read_csv("data/meus_jogos.csv", sep=None, engine='python')
-        col_data = None
-        for col in df.columns:
-            if 'data' in col.lower() or 'date' in col.lower():
-                col_data = col
-                break
-        if col_data:
-            df[col_data] = pd.to_datetime(df[col_data], dayfirst=True, errors='coerce')
-            df = df.dropna(subset=[col_data])
-            df = df.rename(columns={col_data: 'data'})
-        else:
-            st.error("Coluna de data não encontrada.")
-            return []
-        # Limpar espaços
         for col in ['time', 'adv', 'mando', 'resultado']:
             if col in df.columns:
                 df[col] = df[col].astype(str).str.strip()
-        return df.to_dict(orient="records")
-    except FileNotFoundError:
-        return []
+        col_data = [c for c in df.columns if 'data' in c.lower() or 'date' in c.lower()][0]
+        df[col_data] = pd.to_datetime(df[col_data], dayfirst=True, errors='coerce')
+        df = df.dropna(subset=[col_data])
+        df = df.rename(columns={col_data: 'data'})
+        
+        # Chave única por partida (times ordenados)
+        def make_key(row):
+            times = sorted([row['time'], row['adv']])
+            return (row['data'], times[0], times[1])
+        df['key'] = df.apply(make_key, axis=1)
+        
+        partidas = []
+        for key, group in df.groupby('key'):
+            casa = group[group['mando'] == 'casa']
+            fora = group[group['mando'] == 'fora']
+            if not casa.empty and not fora.empty:
+                partidas.append({
+                    'data': key[0],
+                    'casa': casa.iloc[0].to_dict(),
+                    'fora': fora.iloc[0].to_dict()
+                })
+        return partidas
     except Exception as e:
-        st.error(f"Erro ao ler arquivo: {e}")
+        st.error(f"Erro ao carregar partidas: {e}")
         return []
 
-jogos = carregar_dados()
+partidas = carregar_partidas()
+# Lista plana para análise de jogo
+jogos = []
+for p in partidas:
+    jogos.append(p['casa'])
+    jogos.append(p['fora'])
 
 # ============================================================
 # MENU LATERAL
@@ -76,7 +87,7 @@ st.sidebar.markdown("<h2 style='color:#DAA520;'>⚽ MyPredict 2.0</h2>", unsafe_
 opcao = st.sidebar.radio("Modo", ["Análise de Jogo", "Backtest", "Converter Dados Brutos"])
 
 # ============================================================
-# CONVERSOR
+# CONVERSOR (MANTIDO)
 # ============================================================
 if opcao == "Converter Dados Brutos":
     st.markdown("<h1 style='text-align:center;'>🔄 Conversor de CSV</h1>", unsafe_allow_html=True)
@@ -107,28 +118,10 @@ if opcao == "Converter Dados Brutos":
                 st.stop()
 
             df = pd.concat(dfs, ignore_index=True)
-
-            COL_DATE = 1
-            COL_HOME = 3
-            COL_AWAY = 4
-            COL_FTHG = 5
-            COL_FTAG = 6
-            COL_FTR = 7
-            COL_HS = 12
-            COL_AS = 13
-            COL_HST = 14
-            COL_AST = 15
-            COL_HF = 16
-            COL_AF = 17
-            COL_HC = 18
-            COL_AC = 19
-            COL_HY = 20
-            COL_AY = 21
-            COL_HR = 22
-            COL_AR = 23
-            COL_B365H = 24
-            COL_B365D = 25
-            COL_B365A = 26
+            COL_DATE = 1; COL_HOME = 3; COL_AWAY = 4; COL_FTHG = 5; COL_FTAG = 6; COL_FTR = 7
+            COL_HS = 12; COL_AS = 13; COL_HST = 14; COL_AST = 15; COL_HF = 16; COL_AF = 17
+            COL_HC = 18; COL_AC = 19; COL_HY = 20; COL_AY = 21; COL_HR = 22; COL_AR = 23
+            COL_B365H = 24; COL_B365D = 25; COL_B365A = 26
 
             linhas = []
             for _, jogo in df.iterrows():
@@ -192,7 +185,7 @@ if opcao == "Converter Dados Brutos":
                 st.error("Nenhuma linha foi convertida.")
 
 # ============================================================
-# ANÁLISE DE JOGO
+# ANÁLISE DE JOGO (MANTIDA)
 # ============================================================
 elif opcao == "Análise de Jogo":
     if not jogos:
@@ -353,90 +346,192 @@ elif opcao == "Análise de Jogo":
         col4.metric("Over 9.5 esc.", f"{prob_over(total_esc, 8.5):.1%}")
 
 # ============================================================
-# BACKTEST SIMPLIFICADO (PROCESSA LINHA POR LINHA)
+# BACKTEST AUTOMÁTICO COMPLETO
 # ============================================================
 elif opcao == "Backtest":
     st.markdown("<h1 style='text-align:center;'>📈 Backtest MyPredict 2.0</h1>", unsafe_allow_html=True)
     
-    if not jogos:
-        st.error("Nenhum dado carregado.")
+    if not partidas:
+        st.error("Nenhuma partida carregada. Execute a conversão primeiro.")
         st.stop()
     
-    # Diagnóstico rápido
-    total_casa = sum(1 for j in jogos if j.get('mando', '').strip().lower() == 'casa')
-    total_fora = sum(1 for j in jogos if j.get('mando', '').strip().lower() == 'fora')
-    st.write(f"Total de registros: {len(jogos)} (Casa: {total_casa}, Fora: {total_fora})")
+    st.write(f"Total de partidas: {len(partidas)}")
     
-    for j in jogos:
-        if isinstance(j['data'], str):
-            j['data'] = pd.to_datetime(j['data'], dayfirst=True)
-    
-    if st.button("Executar Backtest"):
-        # Ordena por data
-        jogos_ord = sorted(jogos, key=lambda x: x['data'])
+    if st.button("Executar Backtest Completo"):
+        st.write("Simulando temporada jogo a jogo...")
         
-        log = []
+        # Ordena partidas por data
+        partidas_ord = sorted(partidas, key=lambda p: p['data'])
+        historico = []  # Lista de jogos (casa e fora) já ocorridos
+        resultados = []
         progress = st.progress(0)
-        total = len(jogos_ord)
-        processados = 0
         
-        for idx, j in enumerate(jogos_ord):
-            data_jogo = j['data']
-            time_casa = j['time'] if j['mando'].strip().lower() == 'casa' else None
-            time_fora = j['adv'] if j['mando'].strip().lower() == 'casa' else None
+        for idx, p in enumerate(partidas_ord):
+            data_jogo = p['data']
+            casa_info = p['casa']
+            fora_info = p['fora']
+            time_casa = casa_info['time']
+            time_fora = fora_info['time']
             
-            # Se a linha for do visitante, ajusta os nomes
-            if time_casa is None:
-                time_casa = j['adv']
-                time_fora = j['time']
+            # Filtra histórico até a data do jogo (exclui o próprio jogo)
+            hist_filtrado = [j for j in historico if j['data'] < data_jogo]
             
-            jogos_passados = [p for p in jogos if p['data'] < data_jogo]
+            # ----- Cálculos com o motor MyPredict -----
+            # IMA
+            ima_casa, _ = calcular_IMA(hist_filtrado, time_casa, data_jogo, mando_proximo='casa')
+            ima_fora, _ = calcular_IMA(hist_filtrado, time_fora, data_jogo, mando_proximo='fora')
             
-            def media_gols(time, tipo):
-                jogos_time = [p for p in jogos_passados if p['time'].strip().lower() == time.strip().lower()]
-                if not jogos_time:
-                    return 1.0
+            # OVRall
+            ata_casa = calcular_ATA(hist_filtrado, time_casa, data_jogo)
+            def_casa = calcular_DEF(hist_filtrado, time_casa, data_jogo)
+            mei_casa = calcular_MEI(hist_filtrado, time_casa, data_jogo)
+            for_casa = calcular_FOR(hist_filtrado, time_casa, data_jogo)
+            cons_casa = calcular_CONS(hist_filtrado, time_casa, data_jogo)
+            res_casa = calcular_RES(hist_filtrado, time_casa, data_jogo)
+            ovrall_casa = calcular_OVRall([ata_casa, def_casa, mei_casa, for_casa, cons_casa, res_casa])
+            
+            ata_fora = calcular_ATA(hist_filtrado, time_fora, data_jogo)
+            def_fora = calcular_DEF(hist_filtrado, time_fora, data_jogo)
+            mei_fora = calcular_MEI(hist_filtrado, time_fora, data_jogo)
+            for_fora = calcular_FOR(hist_filtrado, time_fora, data_jogo)
+            cons_fora = calcular_CONS(hist_filtrado, time_fora, data_jogo)
+            res_fora = calcular_RES(hist_filtrado, time_fora, data_jogo)
+            ovrall_fora = calcular_OVRall([ata_fora, def_fora, mei_fora, for_fora, cons_fora, res_fora])
+            
+            # MPV (rating atual baseado no OVRall e histórico)
+            mpv_casa_raw = inicializar_MPV(ovrall_casa)
+            mpv_fora_raw = inicializar_MPV(ovrall_fora)
+            # Atualiza com jogos passados (simula o aprendizado)
+            for jogo_passado in sorted(hist_filtrado, key=lambda x: x['data']):
+                if jogo_passado['time'] == time_casa:
+                    ima_jogo, _ = calcular_IMA(hist_filtrado, time_casa, jogo_passado['data'], mando_proximo=jogo_passado['mando'])
+                    ovrall_adv = calcular_OVRall([calcular_ATA(hist_filtrado, jogo_passado['adv'], jogo_passado['data']),
+                                                  calcular_DEF(hist_filtrado, jogo_passado['adv'], jogo_passado['data']),
+                                                  calcular_MEI(hist_filtrado, jogo_passado['adv'], jogo_passado['data']),
+                                                  calcular_FOR(hist_filtrado, jogo_passado['adv'], jogo_passado['data']),
+                                                  calcular_CONS(hist_filtrado, jogo_passado['adv'], jogo_passado['data']),
+                                                  calcular_RES(hist_filtrado, jogo_passado['adv'], jogo_passado['data'])])
+                    mpv_adv = inicializar_MPV(ovrall_adv)
+                    mpv_casa_raw = atualizar_MPV(mpv_casa_raw, mpv_adv, jogo_passado['mando'], jogo_passado['resultado'], ima_jogo)
+                elif jogo_passado['time'] == time_fora:
+                    ima_jogo, _ = calcular_IMA(hist_filtrado, time_fora, jogo_passado['data'], mando_proximo=jogo_passado['mando'])
+                    ovrall_adv = calcular_OVRall([calcular_ATA(hist_filtrado, jogo_passado['adv'], jogo_passado['data']),
+                                                  calcular_DEF(hist_filtrado, jogo_passado['adv'], jogo_passado['data']),
+                                                  calcular_MEI(hist_filtrado, jogo_passado['adv'], jogo_passado['data']),
+                                                  calcular_FOR(hist_filtrado, jogo_passado['adv'], jogo_passado['data']),
+                                                  calcular_CONS(hist_filtrado, jogo_passado['adv'], jogo_passado['data']),
+                                                  calcular_RES(hist_filtrado, jogo_passado['adv'], jogo_passado['data'])])
+                    mpv_adv = inicializar_MPV(ovrall_adv)
+                    mpv_fora_raw = atualizar_MPV(mpv_fora_raw, mpv_adv, jogo_passado['mando'], jogo_passado['resultado'], ima_jogo)
+            
+            # Probabilidades 1X2
+            prob_casa, prob_empate, prob_fora = probabilidades_1x2(mpv_casa_raw, mpv_fora_raw)
+            
+            # Odds reais
+            odd_casa = casa_info.get('B365H', 2.0)
+            odd_empate = casa_info.get('B365D', 3.0)
+            odd_fora = casa_info.get('B365A', 3.0)
+            
+            edge_casa = calcular_edge(prob_casa, odd_casa)
+            edge_empate = calcular_edge(prob_empate, odd_empate)
+            edge_fora = calcular_edge(prob_fora, odd_fora)
+            
+            # Selos
+            dif_mpv = abs(mpv_casa_raw + 75 - mpv_fora_raw)
+            selo_casa = determinar_selo(edge_casa, dif_mpv, 10)
+            selo_empate = determinar_selo(edge_empate, dif_mpv, 10)
+            selo_fora = determinar_selo(edge_fora, dif_mpv, 10)
+            
+            # Resultados reais
+            gols_casa_real = casa_info['gols']
+            gols_fora_real = fora_info['gols']
+            total_gols = gols_casa_real + gols_fora_real
+            over25_real = total_gols > 2.5
+            btts_real = gols_casa_real > 0 and gols_fora_real > 0
+            resultado_real = 'V' if gols_casa_real > gols_fora_real else ('D' if gols_casa_real < gols_fora_real else 'E')
+            
+            # Over 2.5 e BTTS (Poisson com médias históricas)
+            def media_gols_hist(time, tipo):
+                jogos_time = [j for j in hist_filtrado if j['time'] == time]
+                if not jogos_time: return 1.0
                 if tipo == 'marcados':
-                    return sum(p.get('gols', 0) for p in jogos_time) / len(jogos_time)
+                    return sum(j.get('gols', 0) for j in jogos_time) / len(jogos_time)
                 else:
-                    return sum(p.get('gols_sofridos', 0) for p in jogos_time) / len(jogos_time)
+                    return sum(j.get('gols_sofridos', 0) for j in jogos_time) / len(jogos_time)
             
-            gols_casa = media_gols(time_casa, 'marcados')
-            sofridos_fora = media_gols(time_fora, 'sofridos')
-            gols_fora = media_gols(time_fora, 'marcados')
-            sofridos_casa = media_gols(time_casa, 'sofridos')
-            media_total = (gols_casa + sofridos_fora)/2 + (gols_fora + sofridos_casa)/2
-            
-            ata_casa = max(10, min(90, gols_casa * 25))
-            def_casa = max(10, min(90, (1 - sofridos_casa/3) * 100))
-            ata_fora = max(10, min(90, gols_fora * 25))
-            def_fora = max(10, min(90, (1 - sofridos_fora/3) * 100))
+            gols_casa_hist = media_gols_hist(time_casa, 'marcados')
+            sofridos_fora_hist = media_gols_hist(time_fora, 'sofridos')
+            gols_fora_hist = media_gols_hist(time_fora, 'marcados')
+            sofridos_casa_hist = media_gols_hist(time_casa, 'sofridos')
+            media_total = (gols_casa_hist + sofridos_fora_hist)/2 + (gols_fora_hist + sofridos_casa_hist)/2
             
             prob_over25 = prob_over(media_total, 2.5)
             prob_bt = prob_btts(ata_casa, def_fora, ata_fora, def_casa)
             
-            total_gols = j.get('gols', 0) + j.get('gols_sofridos', 0)
-            over25_real = total_gols > 2.5
-            btts_real = (j.get('gols', 0) > 0 and j.get('gols_sofridos', 0) > 0)
-            
-            log.append({
-                'Data': str(data_jogo)[:10],
-                'Time': j['time'],
-                'Adversário': j['adv'],
-                'Mando': j['mando'],
-                'Prob Over 2.5': f"{prob_over25:.1%}",
+            # Armazena resultado
+            resultados.append({
+                'Data': data_jogo.strftime('%Y-%m-%d'),
+                'Mandante': time_casa,
+                'Visitante': time_fora,
+                'Prob Casa': f"{prob_casa:.1%}",
+                'Odd Casa': odd_casa,
+                'Edge Casa': f"{edge_casa:+.1%}",
+                'Selo Casa': selo_casa,
+                'Prob Empate': f"{prob_empate:.1%}",
+                'Odd Empate': odd_empate,
+                'Edge Empate': f"{edge_empate:+.1%}",
+                'Selo Empate': selo_empate,
+                'Prob Fora': f"{prob_fora:.1%}",
+                'Odd Fora': odd_fora,
+                'Edge Fora': f"{edge_fora:+.1%}",
+                'Selo Fora': selo_fora,
+                'Resultado': resultado_real,
+                'Gols Totais': total_gols,
                 'Over 2.5 Real': 'Sim' if over25_real else 'Não',
-                'Prob BTTS': f"{prob_bt:.1%}",
-                'BTTS Real': 'Sim' if btts_real else 'Não'
+                'Prob Over 2.5': f"{prob_over25:.1%}",
+                'BTTS Real': 'Sim' if btts_real else 'Não',
+                'Prob BTTS': f"{prob_bt:.1%}"
             })
-            processados += 1
-            progress.progress((idx + 1) / total)
+            
+            # Adiciona ao histórico
+            historico.append(casa_info)
+            historico.append(fora_info)
+            progress.progress((idx + 1) / len(partidas_ord))
         
-        st.write(f"Processadas: {processados}")
-        
-        if log:
-            df_log = pd.DataFrame(log)
-            st.dataframe(df_log, use_container_width=True)
-            st.success(f"Backtest concluído! {processados} partidas exibidas.")
+        # Exibe tabela
+        if resultados:
+            df_res = pd.DataFrame(resultados)
+            st.dataframe(df_res, use_container_width=True)
+            
+            # Resumo de apostas nos selos
+            st.markdown("---")
+            st.subheader("💰 Resultado Financeiro (Apostas com Selo Dourado/Verde)")
+            bank = 0.0
+            apostas = 0
+            for r in resultados:
+                # Verifica cada mercado (casa, empate, fora)
+                for mercado, selo, odd_str, edge_str, prob_str in [
+                    ('casa', r['Selo Casa'], r['Odd Casa'], r['Edge Casa'], r['Prob Casa']),
+                    ('empate', r['Selo Empate'], r['Odd Empate'], r['Edge Empate'], r['Prob Empate']),
+                    ('fora', r['Selo Fora'], r['Odd Fora'], r['Edge Fora'], r['Prob Fora'])
+                ]:
+                    if 'Dourado' in selo or 'Verde' in selo:
+                        apostas += 1
+                        odd = odd_str
+                        resultado = r['Resultado']
+                        if (mercado == 'casa' and resultado == 'V') or \
+                           (mercado == 'empate' and resultado == 'E') or \
+                           (mercado == 'fora' and resultado == 'D'):
+                            bank += odd - 1
+                        else:
+                            bank -= 1
+            
+            st.write(f"Apostas realizadas: {apostas}")
+            st.write(f"Lucro/Prejuízo: {bank:.2f} unidades")
+            if apostas > 0:
+                roi = (bank / apostas) * 100
+                st.write(f"ROI: {roi:.2f}%")
+            else:
+                st.write("Nenhuma aposta foi disparada pelos selos.")
         else:
-            st.error("Nenhuma partida processada.")
+            st.error("Nenhum resultado gerado.")
