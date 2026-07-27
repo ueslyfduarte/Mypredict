@@ -1,13 +1,12 @@
 # data_loader.py — MyPredict 2.0
 # Carregamento de dados, herança estatística, projeção de prateleiras.
 
-from config import (
-    JOGOS_BASE_OVRALL, POS_REF_PROMOVIDO, POS_REF_REBAIXADO,
-    PONTOS_BASE
-)
+from config import JOGOS_BASE_OVRALL, POS_REF_PROMOVIDO, POS_REF_REBAIXADO, PONTOS_BASE
 from statistics import stdev, mean
 import json
 from pathlib import Path
+from data_source_worldfootball import obter_classificacao, obter_partidas_time
+from data_source_fbref_stats import obter_stats_time as obter_stats_fbref
 
 CONFIG_LIGAS_PATH = 'config_ligas.json'
 
@@ -18,7 +17,6 @@ def _carregar_config_ligas():
     return {}
 
 def classificação_anterior(liga, temporada):
-    from data_source_fbref import obter_classificacao
     return obter_classificacao(liga, temporada)
 
 def _obter_promovidos_ordenados(liga, temporada):
@@ -44,7 +42,6 @@ def gerar_prateleiras(liga, temporada):
     return {time: obter_prateleira(pos) for pos, time in nova_class.items()}
 
 def carregar_jogos_temporada(time, liga, temporada):
-    from data_source_fbref import obter_partidas_time
     return obter_partidas_time(liga, temporada, time)
 
 def obter_ultimos_jogos_com_heranca(time, liga, temporada_atual, classificacao_ant, n=JOGOS_BASE_OVRALL):
@@ -90,7 +87,7 @@ def extrair_recortes_ima(jogos, time_mandante):
     recortes['3CF'] = jogos_mando[:3]
     return recortes
 
-# funções agregadoras (resumidas mas idênticas)
+# Funções auxiliares de agregação
 def _media(lista):
     return mean(lista) if lista else None
 def _desvio(lista):
@@ -139,17 +136,56 @@ def obter_dados_ovrall_time(time, liga, temporada_atual, classificacao_ant):
     n = len(jogos)
     gols = [j['gols_pro'] for j in jogos]
     gols_sofridos = [j['gols_contra'] for j in jogos]
-    # ... demais agregações (idênticas ao código anterior, não vou repetir todas)
-    # Para manter a revisão focada, usarei as funções acima para montar o dicionário.
+    xg = [j.get('xg') for j in jogos if j.get('xg') is not None]
+    xga = [j.get('xga') for j in jogos if j.get('xga') is not None]
+    finalizacoes_alvo = [j.get('finalizacoes_alvo') for j in jogos if j.get('finalizacoes_alvo') is not None]
+    finalizacoes_alvo_sofridas = [j.get('finalizacoes_alvo_sofridas') for j in jogos if j.get('finalizacoes_alvo_sofridas') is not None]
+    chutes = [j.get('finalizacoes_tot', 0) for j in jogos]
+    desarmes_intercep = [j.get('desarmes', 0) + j.get('interceptacoes', 0) for j in jogos]
+    posse = [j.get('posse') for j in jogos if j.get('posse') is not None]
+    passes_certos = [j.get('passes_certos') for j in jogos if j.get('passes_certos') is not None]
+    passes_totais = [j.get('passes_totais') for j in jogos if j.get('passes_totais') is not None]
+    passes_chave = [j.get('passes_chave') for j in jogos if j.get('passes_chave') is not None]
+    assistencias = [j.get('assistencias') for j in jogos if j.get('assistencias') is not None]
+    pontos_por_jogo = [PONTOS_BASE[j['resultado']] for j in jogos]
+
     dados = {
         'gols_media': _media(gols),
         'gols_sofridos_media': _media(gols_sofridos),
+        'xg_media': _media(xg),
+        'xga_media': _media(xga),
+        'finalizacoes_alvo_media': _media(finalizacoes_alvo),
+        'finalizacoes_alvo_sofridas_media': _media(finalizacoes_alvo_sofridas),
+        'chutes_media': _media(chutes),
+        'desarmes_intercep_media': _media(desarmes_intercep),
+        'posse_media': _media(posse),
+        'passes_certos_pct': (sum(passes_certos)/sum(passes_totais))*100 if passes_totais and sum(passes_totais)>0 else None,
+        'passes_chave_media': _media(passes_chave),
+        'assistencias_media': _media(assistencias),
+        'conversao': (sum(gols)/sum(chutes))*100 if sum(chutes)>0 else None,
+        'clean_sheets_pct': (sum(1 for g in gols_sofridos if g==0)/n)*100,
+        'desvio_pontos': _desvio(pontos_por_jogo),
+        'desvio_gols_pro': _desvio(gols),
+        'desvio_gols_sofridos': _desvio(gols_sofridos),
+        'pontos_pos_desvantagem_media': _pontos_pos_desvantagem(jogos),
+        'gols_ultimos_15min_media': _gols_ultimos_15min(jogos),
+        'pontos_apos_derrota_media': _pontos_apos_derrota(jogos),
+        'diff_aprov_casa_fora': _diff_casa_fora(jogos),
+        'aprov_viradas_favor': _aprov_viradas_favor(jogos),
+        'aprov_viradas_contra': _aprov_viradas_contra(jogos),
         'gols_ht_media': _gols_ht_media(jogos),
         'gols_ht_sofridos_media': _gols_ht_sofridos_media(jogos),
-        'diff_aprov_casa_fora': _diff_casa_fora(jogos),
         'escanteios_media': _escanteios_media(jogos, 'escanteios'),
         'escanteios_sofridos_media': _escanteios_media(jogos, 'escanteios_sofridos'),
-        # demais campos podem ser None
     }
-    # filtrar None
+
+    # Tentar complementar com estatísticas do FBref (não sobrescreve se já existir)
+    try:
+        stats_fbref = obter_stats_fbref(liga, temporada_atual, time)
+        for chave, valor in stats_fbref.items():
+            if dados.get(chave) is None and valor is not None:
+                dados[chave] = valor
+    except Exception:
+        pass  # se falhar, segue com os dados originais
+
     return {k: v for k, v in dados.items() if v is not None}
