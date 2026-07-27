@@ -366,7 +366,7 @@ elif opcao == "Backtest":
             j['data'] = pd.to_datetime(j['data'], dayfirst=True)
     
     if st.button("Executar Backtest"):
-        st.write("Iniciando processamento...")
+        st.write("Montando partidas...")
         
         jogos_ord = sorted(jogos, key=lambda x: x['data'])
         partidas = {}
@@ -379,8 +379,31 @@ elif opcao == "Backtest":
             else:
                 partidas[chave]['fora'] = j
         
-        st.write(f"Partidas únicas: {len(partidas)}")
+        # Diagnóstico das partidas
+        completas = 0
+        incompletas = []
+        for chave, val in partidas.items():
+            if val['casa'] is not None and val['fora'] is not None:
+                completas += 1
+            else:
+                incompletas.append(chave)
         
+        st.write(f"Partidas únicas: {len(partidas)}")
+        st.write(f"Partidas com ambos os lados (completas): {completas}")
+        st.write(f"Partidas incompletas (faltando casa ou fora): {len(incompletas)}")
+        if incompletas:
+            st.warning(f"Exemplo de partida incompleta: {incompletas[0]}")
+            chave_ex = incompletas[0]
+            st.write(f"Registros para {chave_ex}:")
+            for j in jogos:
+                if (j['data'], j['time'], j['adv']) == chave_ex:
+                    st.write(j)
+        
+        if completas == 0:
+            st.error("Nenhuma partida está completa. Execute a conversão novamente.")
+            st.stop()
+        
+        st.write("Iniciando processamento...")
         log = []
         progress = st.progress(0)
         total = len(partidas)
@@ -398,11 +421,9 @@ elif opcao == "Backtest":
             
             jogos_passados = [j for j in jogos if j['data'] < data_jogo]
             
-            # Diagnóstico nas primeiras 5 partidas
             if idx < 5:
                 st.write(f"Partida {idx+1}: {data_jogo.date()} {time_casa} x {time_fora} | Jogos passados: {len(jogos_passados)}")
             
-            # Função de média segura (usa 1.0 se não houver histórico)
             def media_gols(time, tipo):
                 jogos_time = [j for j in jogos_passados if j['time'] == time]
                 if not jogos_time:
@@ -418,7 +439,6 @@ elif opcao == "Backtest":
             sofridos_casa = media_gols(time_casa, 'sofridos')
             media_total = (gols_casa + sofridos_fora)/2 + (gols_fora + sofridos_casa)/2
             
-            # Para ATA/DEF usamos médias simples
             ata_casa = max(10, min(90, gols_casa * 25))
             def_casa = max(10, min(90, (1 - sofridos_casa/3) * 100))
             ata_fora = max(10, min(90, gols_fora * 25))
