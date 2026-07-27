@@ -126,8 +126,8 @@ elif opcao == "Análise de Jogo":
         def get_ovrall(time):
             if not any(j['time'] == time for j in jogos_passados):
                 return OVRALL_INICIAL.get(time, 50.0)
-            ata = calcular_ATA(jogos_passados, time, data_ref_dt, valor_inicial=OVRALL_INICIAL[time])
-            de = calcular_DEF(jogos_passados, time, data_ref_dt, valor_inicial=OVRALL_INICIAL[time])
+            ata = calcular_ATA(jogos_passados, time, data_ref_dt, valor_inicial=OVRALL_INICIAL.get(time, 50.0))
+            de = calcular_DEF(jogos_passados, time, data_ref_dt, valor_inicial=OVRALL_INICIAL.get(time, 50.0))
             mei = calcular_MEI(jogos_passados, time, data_ref_dt)
             forc = calcular_FOR(jogos_passados, time, data_ref_dt)
             cons = calcular_CONS(jogos_passados, time, data_ref_dt)
@@ -213,9 +213,9 @@ elif opcao == "Backtest Detalhado":
                 # OVRall com valor_inicial (EVITA QUEDAS BRUSCAS)
                 def ovrall_time(time):
                     if not any(j['time'] == time for j in hist_filtrado):
-                        return OVRALL_INICIAL[time]
-                    ata = calcular_ATA(hist_filtrado, time, data_jogo, valor_inicial=OVRALL_INICIAL[time])
-                    de = calcular_DEF(hist_filtrado, time, data_jogo, valor_inicial=OVRALL_INICIAL[time])
+                        return OVRALL_INICIAL.get(time, 50.0)
+                    ata = calcular_ATA(hist_filtrado, time, data_jogo, valor_inicial=OVRALL_INICIAL.get(time, 50.0))
+                    de = calcular_DEF(hist_filtrado, time, data_jogo, valor_inicial=OVRALL_INICIAL.get(time, 50.0))
                     mei = calcular_MEI(hist_filtrado, time, data_jogo)
                     forc = calcular_FOR(hist_filtrado, time, data_jogo)
                     cons = calcular_CONS(hist_filtrado, time, data_jogo)
