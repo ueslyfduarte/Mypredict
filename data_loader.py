@@ -1,51 +1,41 @@
 # data_loader.py — MyPredict 2.0
-# Funções para carregamento de jogos, classificação e aplicação da herança estatística.
+# Carregamento de dados, herança estatística e extração de recortes.
 
-from config import JOGOS_BASE_OVRALL, POS_REF_PROMOVIDO, POS_REF_REBAIXADO
+from config import JOGOS_BASE_OVRALL, POS_REF_PROMOVIDO, POS_REF_REBAIXADO, JOGOS_CONFRONTO_DIRETO
 
 
 def carregar_jogos_temporada(time: str, liga: str, temporada: int) -> list:
     """
-    Retorna lista de jogos de um time em uma determinada liga e temporada.
-    Exemplo de dicionário retornado:
-        {
-            'data': datetime,
-            'resultado': 'V'/'E'/'D',
-            'adversario': str,
-            'mandante': bool,
-            'gols_pro': int,
-            'gols_contra': int,
-            ... (demais estatísticas)
-        }
-    Esta é uma função placeholder que deve ser implementada com a fonte de dados real.
+    Retorna lista de todos os jogos de um time em uma determinada liga e temporada.
+    Placeholder — conectar com API/CSV real.
+    Campos esperados: data, resultado, adversario, mandante, gols_pro, gols_contra, ...
     """
-    # TODO: conectar com API/CSV real
+    return []
+
+
+def carregar_confrontos_diretos(time: str, adversario: str, liga: str, limite: int = JOGOS_CONFRONTO_DIRETO) -> list:
+    """
+    Retorna lista dos últimos confrontos entre time e adversário (qualquer competição/temporada).
+    Campos: data, resultado (do ponto de vista do time), etc.
+    Placeholder.
+    """
     return []
 
 
 def classificação_anterior(liga: str, temporada: int) -> dict:
-    """
-    Retorna a classificação final da temporada anterior.
-    Formato: {posicao: nome_time}
-    """
-    # TODO: implementar
+    """Retorna {posicao: nome_time} da temporada anterior."""
     return {}
 
 
 def time_eh_promovido(time: str, liga: str, temporada_atual: int) -> bool:
-    """Verifica se o time subiu de divisão na temporada atual."""
-    # TODO: comparar com lista de promovidos
     return False
 
 
 def time_eh_rebaixado(time: str, liga: str, temporada_atual: int) -> bool:
-    """Verifica se o time desceu de divisão na temporada atual."""
-    # TODO: comparar com lista de rebaixados
     return False
 
 
 def obter_time_por_posicao(classificacao: dict, posicao: int) -> str:
-    """Retorna o nome do time na posição indicada da tabela."""
     return classificacao.get(posicao)
 
 
@@ -57,10 +47,9 @@ def obter_ultimos_jogos_com_heranca(
     n: int = JOGOS_BASE_OVRALL
 ) -> list:
     """
-    Retorna os últimos n jogos do time, complementando com jogos do time de referência
-    caso o time não tenha histórico suficiente na divisão atual.
+    Retorna lista com os últimos n jogos do time na divisão.
+    Se o time não possui histórico suficiente, completa com jogos do time de referência.
     """
-    # Busca jogos reais (da temporada atual e anteriores, se existirem)
     jogos_reais = []
     temp = temporada_atual
     while len(jogos_reais) < n and temp >= temporada_atual - 3:
@@ -72,13 +61,10 @@ def obter_ultimos_jogos_com_heranca(
     if len(jogos_reais) >= n:
         return jogos_reais[:n]
 
-    # Identifica se é promovido ou rebaixado para aplicar herança
     if time_eh_promovido(time, liga, temporada_atual):
-        ref_pos = POS_REF_PROMOVIDO
-        ref_time = obter_time_por_posicao(classificacao_anterior, ref_pos)
+        ref_time = obter_time_por_posicao(classificacao_anterior, POS_REF_PROMOVIDO)
     elif time_eh_rebaixado(time, liga, temporada_atual):
-        ref_pos = POS_REF_REBAIXADO
-        ref_time = obter_time_por_posicao(classificacao_anterior, ref_pos)
+        ref_time = obter_time_por_posicao(classificacao_anterior, POS_REF_REBAIXADO)
     else:
         ref_time = None
 
@@ -95,30 +81,29 @@ def obter_ultimos_jogos_com_heranca(
         todos_jogos.sort(key=lambda j: j['data'], reverse=True)
         return todos_jogos[:n]
 
-    return jogos_reais[:n]  # fallback sem complemento
+    return jogos_reais[:n]
 
 
 def extrair_recortes_ima(jogos: list, time_mandante: bool) -> dict:
     """
-    A partir de uma lista de jogos (ordenados por data decrescente),
-    extrai os recortes necessários para o cálculo do IMA.
-    Retorna um dicionário com as listas:
-        '10G', '5G', '3G', '5CF', '3CF'
-    O parâmetro time_mandante indica se o time joga em casa na partida atual.
+    A partir da lista de jogos (ordenados por data decrescente),
+    retorna dict com os recortes: 10G, 5G, 3G, 5CF, 3CF.
     """
-    # Gerais (sem filtro de mando)
     recortes = {
         '10G': jogos[:10],
         '5G':  jogos[:5],
         '3G':  jogos[:3],
     }
-
-    # Filtra por mando: se for mandante na partida atual, busca jogos como mandante;
-    # caso contrário, como visitante.
     condicao = lambda j: j['mandante'] if time_mandante else not j['mandante']
-
     jogos_mando = [j for j in jogos if condicao(j)]
     recortes['5CF'] = jogos_mando[:5]
     recortes['3CF'] = jogos_mando[:3]
-
     return recortes
+
+
+def carregar_odds_partida(casa: str, fora: str, liga: str) -> tuple:
+    """
+    Retorna (odds_casa, odds_empate, odds_fora) para a partida.
+    Placeholder — integrar com API de odds.
+    """
+    return None, None, None
