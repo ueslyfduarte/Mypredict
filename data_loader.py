@@ -1,3 +1,4 @@
+# data_loader.py — MyPredict 2.0 (versão corrigida)
 from statistics import stdev, mean
 from config import JOGOS_BASE_OVRALL, POS_REF_PROMOVIDO, POS_REF_REBAIXADO, PONTOS_BASE
 from data_source_worldfootball import (
@@ -6,6 +7,9 @@ from data_source_worldfootball import (
 )
 from data_source_fbref_stats import obter_stats_time as obter_stats_fbref
 
+# ------------------------------------------------------------
+# Promoção / Rebaixamento automáticos
+# ------------------------------------------------------------
 def _obter_promovidos_ordenados(liga_slug, temporada):
     try:
         class_atual = wf_classificacao(liga_slug, temporada)
@@ -27,6 +31,9 @@ def _obter_rebaixados(liga_slug, temporada):
         return []
     return [t for t in class_ant.values() if t not in class_atual.values()]
 
+# ------------------------------------------------------------
+# Projeção de prateleiras
+# ------------------------------------------------------------
 def gerar_prateleiras(liga_slug, temporada):
     class_ant = wf_classificacao(liga_slug, temporada)
     if not class_ant:
@@ -47,6 +54,9 @@ def classificação_anterior(liga_slug, temporada):
 def carregar_jogos_temporada(time, liga_slug, temporada):
     return wf_partidas(liga_slug, temporada, time)
 
+# ------------------------------------------------------------
+# Herança e recortes
+# ------------------------------------------------------------
 def obter_ultimos_jogos_com_heranca(time, liga_slug, temporada_atual, classificacao_ant, n=JOGOS_BASE_OVRALL):
     jogos_reais = []
     temp = temporada_atual
@@ -89,6 +99,9 @@ def extrair_recortes_ima(jogos, time_mandante):
     recortes['3CF'] = jogos_mando[:3]
     return recortes
 
+# ------------------------------------------------------------
+# Agregadores para OVRall
+# ------------------------------------------------------------
 def _media(lista):
     return mean(lista) if lista else None
 def _desvio(lista):
@@ -180,7 +193,7 @@ def obter_dados_ovrall_time(time, liga_slug, temporada_atual, classificacao_ant)
         'escanteios_sofridos_media': _escanteios_media(jogos, 'escanteios_sofridos'),
     }
 
-    # Tentar complementar com FBref (não sobrescreve dados já existentes)
+    # Tentar complementar com FBref
     try:
         stats_fbref = obter_stats_fbref(liga_slug, temporada_atual, time)
         for chave, valor in stats_fbref.items():
