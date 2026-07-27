@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 – Aplicativo Completo (Backtest Focado em 1X2, Comparação MyPredict x Bet365)
+MyPredict 2.0 – Aplicativo Completo (Backtest Focado em 1X2, Probabilidades Corrigidas)
 """
 import streamlit as st
 import pandas as pd
@@ -282,7 +282,7 @@ elif opcao == "Análise de Jogo":
         col4.metric("Over 9.5 esc.", f"{prob_over(total_esc, 8.5):.1%}")
 
 # ============================================================
-# BACKTEST VISUAL (RECONSTRUÍDO – FIEL, COMPARATIVO, CARDS ABERTOS)
+# BACKTEST VISUAL (CORRIGIDO – PROBABILIDADES NORMALIZADAS, DIFERENÇA MPV, ANÁLISE)
 # ============================================================
 elif opcao == "Backtest Visual":
     st.markdown("<h1 style='text-align:center;'>📈 Backtest MyPredict 2.0</h1>", unsafe_allow_html=True)
@@ -290,11 +290,31 @@ elif opcao == "Backtest Visual":
         st.error("Nenhuma partida carregada.")
         st.stop()
 
-    # Prateleiras fixas
+    # Prateleiras fixas (temporada anterior)
     todas_datas = sorted([p['data'] for p in partidas])
     data_inicio_temporada = todas_datas[0]
     jogos_anteriores = [j for j in jogos if j['data'] < data_inicio_temporada]
-    prateleiras_fixas = classification_to_shelves(jogos_anteriores) if jogos_anteriores else classification_to_shelves(jogos)
+    if len(jogos_anteriores) > 0:
+        prateleiras_fixas = classification_to_shelves(jogos_anteriores)
+    else:
+        prateleiras_fixas = classification_to_shelves(jogos)
+
+    # Função de probabilidades corrigida (evita negativos e normaliza soma = 1)
+    def prob_1x2_corrigida(mpv_casa, mpv_fora):
+        # Usa a lógica original, mas força limites e normaliza
+        P_casa = 1 / (1 + 10 ** ((mpv_fora - (mpv_casa + PARAMS['V_mando'])) / PARAMS['S']))
+        dif_norm = abs(mpv_casa + PARAMS['V_mando'] - mpv_fora) / PARAMS['S']
+        P_empate = max(0.14, min(0.32, 0.30 - 0.05 * dif_norm))
+        P_casa_final = max(0.0, P_casa - 0.5 * P_empate)
+        P_empate_final = max(0.0, P_empate)
+        P_fora_final = max(0.0, 1.0 - P_casa_final - P_empate_final)
+        # Normaliza se necessário (soma pode não ser 1 por arredondamento)
+        total = P_casa_final + P_empate_final + P_fora_final
+        if total > 0:
+            P_casa_final /= total
+            P_empate_final /= total
+            P_fora_final /= total
+        return P_casa_final, P_empate_final, P_fora_final
 
     if 'resultados_backtest' not in st.session_state:
         st.session_state.resultados_backtest = None
@@ -324,7 +344,7 @@ elif opcao == "Backtest Visual":
 
             hist_filtrado = [j for j in historico if j['data'] < data_jogo]
 
-            # --- IMA detalhado ---
+            # --- IMA detalhado (mantido) ---
             def calc_ima_detalhado(time, mando_prox):
                 jogos_time = [j for j in hist_filtrado if j['time'] == time]
                 jogos_time.sort(key=lambda x: x['data'], reverse=True)
@@ -354,7 +374,7 @@ elif opcao == "Backtest Visual":
             ima_casa, jan_casa = calc_ima_detalhado(time_casa, 'casa')
             ima_fora, jan_fora = calc_ima_detalhado(time_fora, 'fora')
 
-            # --- OVRall detalhado ---
+            # --- OVRall detalhado (mantido) ---
             def ovrall_detalhado(time, prat):
                 if not any(j['time'] == time for j in hist_filtrado):
                     base = SHELF_VALUES[prat]
@@ -396,7 +416,7 @@ elif opcao == "Backtest Visual":
                     mpv_adv = inicializar_MPV(ovr_adv)
                     mpv_fora_raw = atualizar_MPV(mpv_fora_raw, mpv_adv, jg['mando'], jg['resultado'], ima_jg)
 
-            prob_casa, prob_empate, prob_fora = probabilidades_1x2(mpv_casa_raw, mpv_fora_raw)
+            prob_casa, prob_empate, prob_fora = prob_1x2_corrigida(mpv_casa_raw, mpv_fora_raw)
 
             # Recomendação
             probs = {'Vitória Casa': prob_casa, 'Empate': prob_empate, 'Vitória Fora': prob_fora}
@@ -417,12 +437,16 @@ elif opcao == "Backtest Visual":
             imp_empate = 1 / float(casa_info.get('B365D', 3.0)) if float(casa_info.get('B365D', 3.0)) > 0 else 0
             imp_fora = 1 / float(casa_info.get('B365A', 3.0)) if float(casa_info.get('B365A', 3.0)) > 0 else 0
 
+            # Diferença de MPV (com mando)
+            dif_mpv = (mpv_casa_raw - 1000)/10 - (mpv_fora_raw - 1000)/10
+
             resultados.append({
                 'data': data_jogo,
                 'time_casa': time_casa, 'time_fora': time_fora,
                 'prat_casa': prat_casa, 'prat_fora': prat_fora,
                 'mpv_casa': (mpv_casa_raw - 1000) / 10,
                 'mpv_fora': (mpv_fora_raw - 1000) / 10,
+                'dif_mpv': dif_mpv,
                 'ima_casa': ima_casa, 'ima_fora': ima_fora,
                 'jan_casa': jan_casa, 'jan_fora': jan_fora,
                 'comp_casa': comp_casa, 'comp_fora': comp_fora,
@@ -454,6 +478,14 @@ elif opcao == "Backtest Visual":
         st.markdown(f"Mostrando {inicio+1}–{min(fim, total_jogos)} de {total_jogos} partidas")
 
         for res in pagina_atual:
+            # Determinar ícone de tendência (se o time mais forte pelo MPV tem maior probabilidade)
+            if res['dif_mpv'] > 0:
+                tendencia = f"MPV Casa maior em {res['dif_mpv']:.1f} pontos"
+            elif res['dif_mpv'] < 0:
+                tendencia = f"MPV Fora maior em {abs(res['dif_mpv']):.1f} pontos"
+            else:
+                tendencia = "MPV igual"
+
             st.markdown(f"""
             <div class="card">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -471,11 +503,13 @@ elif opcao == "Backtest Visual":
                 <div class="metric-row">
                     <div class="metric-cell"><div class="metric-label">MPV Casa</div><div class="metric-value">{res['mpv_casa']:.1f}</div></div>
                     <div class="metric-cell"><div class="metric-label">MPV Fora</div><div class="metric-value">{res['mpv_fora']:.1f}</div></div>
+                    <div class="metric-cell"><div class="metric-label">Diferença</div><div class="metric-value">{res['dif_mpv']:+.1f}</div></div>
                     <div class="metric-cell"><div class="metric-label">IMA Casa</div><div class="metric-value">{res['ima_casa']:.1f}</div></div>
                     <div class="metric-cell"><div class="metric-label">IMA Fora</div><div class="metric-value">{res['ima_fora']:.1f}</div></div>
                     <div class="metric-cell"><div class="metric-label">OVR Casa</div><div class="metric-value">{res['ovr_casa']:.1f}</div></div>
                     <div class="metric-cell"><div class="metric-label">OVR Fora</div><div class="metric-value">{res['ovr_fora']:.1f}</div></div>
                 </div>
+                <div style="font-size:0.7rem; color:#aaa; margin-bottom:4px;">{tendencia}</div>
                 <div class="metric-row" style="font-size:0.7rem; color:#aaa;">
                     <div class="metric-cell">G10:{res['jan_casa'][0]:.0f} G5:{res['jan_casa'][1]:.0f} G3:{res['jan_casa'][2]:.0f} L5:{res['jan_casa'][3]:.0f} L3:{res['jan_casa'][4]:.0f}</div>
                     <div class="metric-cell">G10:{res['jan_fora'][0]:.0f} G5:{res['jan_fora'][1]:.0f} G3:{res['jan_fora'][2]:.0f} L5:{res['jan_fora'][3]:.0f} L3:{res['jan_fora'][4]:.0f}</div>
