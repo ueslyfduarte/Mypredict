@@ -99,7 +99,28 @@ JOGOS_CONFRONTO_DIRETO = 6
 # HERANÇA ESTATÍSTICA (OVRall / IMA)
 # ------------------------------------------------------------
 
-POS_REF_PROMOVIDO = 16   # 1º fora da zona de rebaixamento (herda dados)
-POS_REF_REBAIXADO = 5    # 1º fora da zona de acesso (herda dados)
+POS_REF_PROMOVIDO = 16
+POS_REF_REBAIXADO = 5
 NUM_REBAIXADOS = 4
 NUM_PROMOVIDOS = 4
+
+# ------------------------------------------------------------
+# MERCADOS
+# ------------------------------------------------------------
+
+# Vantagem de casa dinâmica – substitui valor fixo
+MAX_BONUS_CASA_MPV = 10.0      # teto do bônus de mando (pontos de MPV)
+FATOR_BONUS_CASA = 0.1         # multiplicador aplicado à diferença de aproveitamento (%)
+
+SIGMOID_K = 0.12
+SIGMA_EMPATE = 15.0
+PROB_EMPATE_BASE = 0.28
+
+# Médias de gols da liga (fallback se não calculadas dinamicamente)
+MEDIA_GOLS_CASA_LIGA = 1.5
+MEDIA_GOLS_FORA_LIGA = 1.2
+
+PROPORCAO_GOLS_HT = 0.44
+
+# Escanteios – margem de segurança
+MARGEM_SEGURANCA_ESCANTEIOS = 2.0   # linha = total esperado - 2
