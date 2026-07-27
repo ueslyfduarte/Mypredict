@@ -18,7 +18,8 @@ def carregar_jogos_temporada(time: str, liga: str, temporada: int) -> list:
     Campos esperados: data, resultado ('V','E','D'), adversario, mandante (bool),
     gols_pro, gols_contra, finalizacoes_tot, finalizacoes_alvo, posse,
     passes_certos, passes_totais, passes_chave, assistencias, xg, xga,
-    desarmes, interceptacoes, ht_placar (lista [gols_time, gols_adv]), etc.
+    desarmes, interceptacoes, ht_placar (lista [gols_time, gols_adv]),
+    escanteios, escanteios_sofridos, gols_ultimos_15, etc.
     """
     return []
 
@@ -64,17 +65,14 @@ def gerar_prateleiras(liga: str, temporada_atual: int) -> dict:
     promovidos = _obter_promovidos_ordenados(liga, temporada_atual)
     rebaixados = _obter_rebaixados(liga, temporada_atual - 1)
 
-    # Posições ocupadas pelos rebaixados (ordenadas)
     pos_rebaixados = sorted([pos for pos, time in class_ant.items() if time in rebaixados])
 
-    # Nova classificação: substitui rebaixados pelos promovidos
     nova_class = class_ant.copy()
     for i, time_prom in enumerate(promovidos):
         if i < len(pos_rebaixados):
             nova_class[pos_rebaixados[i]] = time_prom
 
-    # Converter posições para prateleiras
-    from ratings import obter_prateleira  # evita circular import se bem estruturado
+    from ratings import obter_prateleira
     prateleiras = {}
     for pos, time in nova_class.items():
         prateleiras[time] = obter_prateleira(pos)
@@ -105,13 +103,12 @@ def obter_ultimos_jogos_com_heranca(
     if len(jogos_reais) >= n:
         return jogos_reais[:n]
 
-    # Determinar time de referência
     if _time_subiu(time, liga, temporada_atual):
         ref_pos = POS_REF_PROMOVIDO
     elif _time_desceu(time, liga, temporada_atual):
         ref_pos = POS_REF_REBAIXADO
     else:
-        ref_time = None
+        ref_pos = None
 
     ref_time = classificação_anterior.get(ref_pos) if ref_pos else None
 
@@ -132,13 +129,11 @@ def obter_ultimos_jogos_com_heranca(
 
 
 def _time_subiu(time: str, liga: str, temporada: int) -> bool:
-    """Verifica se o time é promovido na temporada atual."""
     promovidos = _obter_promovidos_ordenados(liga, temporada)
     return time in promovidos
 
 
 def _time_desceu(time: str, liga: str, temporada: int) -> bool:
-    """Verifica se o time é rebaixado na temporada anterior."""
     rebaixados = _obter_rebaixados(liga, temporada - 1)
     return time in rebaixados
 
@@ -148,10 +143,6 @@ def _time_desceu(time: str, liga: str, temporada: int) -> bool:
 # ------------------------------------------------------------
 
 def extrair_recortes_ima(jogos: list, time_mandante: bool) -> dict:
-    """
-    A partir da lista de jogos (mais recente primeiro), retorna:
-        {'10G': [...], '5G': [...], '3G': [...], '5CF': [...], '3CF': [...]}
-    """
     recortes = {
         '10G': jogos[:10],
         '5G':  jogos[:5],
@@ -165,7 +156,7 @@ def extrair_recortes_ima(jogos: list, time_mandante: bool) -> dict:
 
 
 # ------------------------------------------------------------
-# AGREGADORES DE ESTATÍSTICAS (OVRall)
+# AGREGADORES DE ESTATÍSTICAS (OVRall e mercados)
 # ------------------------------------------------------------
 
 def _media(lista):
@@ -180,19 +171,16 @@ def _aproveitamento(jogos):
     return (pontos / (len(jogos) * 3)) * 100
 
 def _gols_ultimos_15min(jogos):
-    """Gols marcados nos últimos 15 minutos por jogo (média)."""
     gols = [j.get('gols_ultimos_15', 0) for j in jogos]
     return _media(gols)
 
 def _pontos_pos_desvantagem(jogos):
-    """Média de pontos em jogos que saiu atrás no HT."""
     desv = [j for j in jogos if j.get('ht_placar') and j['ht_placar'][0] < j['ht_placar'][1]]
     return _aproveitamento(desv)
 
 def _pontos_apos_derrota(jogos):
-    """Aproveitamento no jogo seguinte a uma derrota."""
-    # Necessita da lista de jogos ordenada; aqui simplificamos.
-    return None  # placeholder
+    # placeholder
+    return None
 
 def _diff_casa_fora(jogos):
     casa = [j for j in jogos if j['mandante']]
@@ -202,12 +190,10 @@ def _diff_casa_fora(jogos):
     return ap_casa - ap_fora
 
 def _aprov_viradas_favor(jogos):
-    """Aproveitamento ao sair perdendo no HT."""
     desv = [j for j in jogos if j.get('ht_placar') and j['ht_placar'][0] < j['ht_placar'][1]]
     return _aproveitamento(desv)
 
 def _aprov_viradas_contra(jogos):
-    """Pontos perdidos ao sair vencendo no HT (quanto menor, melhor)."""
     vant = [j for j in jogos if j.get('ht_placar') and j['ht_placar'][0] > j['ht_placar'][1]]
     if not vant:
         return None
@@ -215,6 +201,24 @@ def _aprov_viradas_contra(jogos):
     max_pontos = len(vant) * 3
     pontos_perdidos = max_pontos - pontos_obtidos
     return (pontos_perdidos / max_pontos) * 100
+
+def _gols_ht_media(jogos):
+    gols_ht = []
+    for j in jogos:
+        if j.get('ht_placar'):
+            gols_ht.append(j['ht_placar'][0])
+    return _media(gols_ht)
+
+def _gols_ht_sofridos_media(jogos):
+    gols_ht = []
+    for j in jogos:
+        if j.get('ht_placar'):
+            gols_ht.append(j['ht_placar'][1])
+    return _media(gols_ht)
+
+def _escanteios_media(jogos, chave='escanteios'):
+    valores = [j.get(chave) for j in jogos if j.get(chave) is not None]
+    return _media(valores)
 
 
 def obter_dados_ovrall_time(time: str, liga: str, temporada_atual: int,
@@ -268,22 +272,23 @@ def obter_dados_ovrall_time(time: str, liga: str, temporada_atual: int,
         'diff_aprov_casa_fora': _diff_casa_fora(jogos),
         'aprov_viradas_favor': _aprov_viradas_favor(jogos),
         'aprov_viradas_contra': _aprov_viradas_contra(jogos),
+        # Mercados
+        'gols_ht_media': _gols_ht_media(jogos),
+        'gols_ht_sofridos_media': _gols_ht_sofridos_media(jogos),
+        'escanteios_media': _escanteios_media(jogos, 'escanteios'),
+        'escanteios_sofridos_media': _escanteios_media(jogos, 'escanteios_sofridos'),
     }
+
     return {k: v for k, v in dados.items() if v is not None}
 
 
-# Função para compilar dados de toda a liga (necessário para normalização)
 def obter_dados_liga(liga: str, temporada_atual: int) -> dict:
-    """
-    Retorna um dicionário com listas de valores de cada indicador
-    para todos os times da liga.
-    """
-    # Obter lista de times (via projeção de prateleiras ou outro método)
+    """Retorna dicionário com listas de cada indicador para todos os times da liga."""
     prateleiras = gerar_prateleiras(liga, temporada_atual)
     times = list(prateleiras.keys())
     dados_liga = {}
     for time in times:
-        dados_time = obter_dados_ovrall_time(time, liga, temporada_atual, classificacao_anterior(liga, temporada_atual-1))
+        dados_time = obter_dados_ovrall_time(time, liga, temporada_atual, classificação_anterior(liga, temporada_atual-1))
         for chave, valor in dados_time.items():
             dados_liga.setdefault(chave, []).append(valor)
     return dados_liga
