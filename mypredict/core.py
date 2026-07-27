@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 – Motor de Cálculo (conforme documento oficial, com OVRall estável)
+MyPredict 2.0 – Motor de Cálculo (com OVRall estável)
 """
 import statistics
 
@@ -76,7 +76,7 @@ def calcular_IMA(jogos, time, data_ref, mando_proximo=None):
         desvio = 10.0
     return ima, desvio
 
-# ---------- OVRall (versão com estabilidade inicial) ----------
+# ---------- OVRall (com estabilidade) ----------
 def media_ponderada_38_10(serie):
     if not serie:
         return 0.0
@@ -98,7 +98,7 @@ def calcular_ATA(jogos, time, data_ref, valor_inicial=None):
     nota_calculada = 0.6 * nota_gols + 0.4 * nota_conv
 
     if valor_inicial is not None and n < 10:
-        peso_inicial = (10 - n) / 5   # n=5 -> peso=1.0, n=9 -> peso=0.2
+        peso_inicial = (10 - n) / 5
         return peso_inicial * valor_inicial + (1 - peso_inicial) * nota_calculada
     return nota_calculada
 
