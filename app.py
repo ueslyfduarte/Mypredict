@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 – Aplicativo Completo (Backtest Visual Estável)
+MyPredict 2.0 – Aplicativo Completo (Backtest Paginado)
 """
 import streamlit as st
 import pandas as pd
@@ -19,15 +19,6 @@ st.markdown("""
     .stButton>button { background:#DAA520; color:#000; font-weight:bold; border-radius:8px; }
     .positivo { color:#00C853; font-weight:bold; }
     .negativo { color:#FF1744; font-weight:bold; }
-    .card { background-color: #1E1E1E; border-left: 4px solid #DAA520; padding: 15px; margin: 10px 0; border-radius: 8px; }
-    .card-header { display: flex; justify-content: space-between; align-items: center; }
-    .team-name { font-size: 1.2rem; color: #DAA520; }
-    .score { font-size: 2rem; font-weight: bold; color: #fff; }
-    .metric-row { display: flex; justify-content: space-between; margin: 8px 0; }
-    .metric-item { text-align: center; flex: 1; }
-    .metric-value { font-size: 1.5rem; color: #DAA520; }
-    .metric-label { font-size: 0.8rem; color: #aaa; }
-    .acerto { font-size: 2rem; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -200,7 +191,6 @@ elif opcao == "Análise de Jogo":
         mpv_casa = (mpv_casa_raw - 1000) / 10
         mpv_fora = (mpv_fora_raw - 1000) / 10
 
-        # Recomendação pelo selo (sem Edge > 0)
         rec = None; rec_prob = 0; rec_selo = ""
         if 'Dourado' in selo_casa or 'Verde' in selo_casa:
             rec = f"Vitória {time_casa}"; rec_prob = prob_casa; rec_selo = selo_casa
@@ -211,7 +201,7 @@ elif opcao == "Análise de Jogo":
 
         st.markdown("---")
         if rec:
-            st.markdown(f"""<div class="recomendacao"><h3 style="color:#DAA520;">MyPredict Recomenda</h3><p style="font-size:1.5rem;">{rec}</p><p>Probabilidade: {rec_prob:.1%}</p><p>Selo: {rec_selo}</p></div>""", unsafe_allow_html=True)
+            st.success(f"MyPredict Recomenda: **{rec}** (Prob: {rec_prob:.1%}, Selo: {rec_selo})")
         else:
             st.info("Sem recomendação de alto valor.")
 
@@ -239,7 +229,7 @@ elif opcao == "Análise de Jogo":
         col4.metric("Over 9.5 esc.", f"{prob_over(total_esc, 8.5):.1%}")
 
 # ============================================================
-# BACKTEST VISUAL (COMPLETO E ESTÁVEL)
+# BACKTEST VISUAL (PAGINADO, 10 POR VEZ)
 # ============================================================
 elif opcao == "Backtest Visual":
     st.markdown("<h1 style='text-align:center;'>📈 Backtest MyPredict 2.0</h1>", unsafe_allow_html=True)
@@ -256,7 +246,7 @@ elif opcao == "Backtest Visual":
     else:
         prateleiras_fixas = classification_to_shelves(jogos)
 
-    # Estado da sessão para evitar loop
+    # Estado da sessão
     if 'resultados_backtest' not in st.session_state:
         st.session_state.resultados_backtest = None
         st.session_state.backtest_executado = False
@@ -276,7 +266,6 @@ elif opcao == "Backtest Visual":
             time_casa = casa_info['time']
             time_fora = fora_info['time']
 
-            # Prateleiras fixas
             casa_info['prat_time'] = prateleiras_fixas.get(time_casa, 3)
             casa_info['prat_adv'] = prateleiras_fixas.get(time_fora, 3)
             fora_info['prat_time'] = prateleiras_fixas.get(time_fora, 3)
@@ -284,12 +273,10 @@ elif opcao == "Backtest Visual":
 
             hist_filtrado = [j for j in historico if j['data'] < data_jogo]
 
-            # IMA
             ima_casa, desvio_casa = calcular_IMA(hist_filtrado, time_casa, data_jogo, mando_proximo='casa')
             ima_fora, desvio_fora = calcular_IMA(hist_filtrado, time_fora, data_jogo, mando_proximo='fora')
             desvio_medio = (desvio_casa + desvio_fora) / 2
 
-            # OVRall
             if not any(j['time'] == time_casa for j in hist_filtrado):
                 prat = prateleiras_fixas.get(time_casa, 3)
                 ovrall_casa = {1: 80, 2: 65, 3: 50, 4: 35, 5: 20}.get(prat, 50)
@@ -311,7 +298,6 @@ elif opcao == "Backtest Visual":
                                                calcular_CONS(hist_filtrado, time_fora, data_jogo),
                                                calcular_RES(hist_filtrado, time_fora, data_jogo)])
 
-            # MPV
             mpv_casa_raw = inicializar_MPV(ovrall_casa)
             mpv_fora_raw = inicializar_MPV(ovrall_fora)
             for jg in hist_filtrado:
@@ -349,7 +335,6 @@ elif opcao == "Backtest Visual":
             selo_empate = determinar_selo(edge_empate, dif_mpv, desvio_medio)
             selo_fora = determinar_selo(edge_fora, dif_mpv, desvio_medio)
 
-            # Recomendação apenas pelo selo
             recomendacao = None
             rec_prob = 0
             rec_selo = ""
@@ -370,7 +355,6 @@ elif opcao == "Backtest Visual":
                 rec_odd = odd_fora
                 rec_selo = selo_fora
 
-            # Resultado real
             gols_casa_real = casa_info['gols']
             gols_fora_real = fora_info['gols']
             resultado_real = 'V' if gols_casa_real > gols_fora_real else ('D' if gols_casa_real < gols_fora_real else 'E')
@@ -389,7 +373,6 @@ elif opcao == "Backtest Visual":
                    (recomendacao == f"Vitória {time_fora}" and resultado_real == 'D'):
                     acertou = True
 
-            # Mercados adicionais
             def media_hist(time, tipo):
                 jogos_time = [j for j in hist_filtrado if j['time'] == time]
                 if not jogos_time:
@@ -446,52 +429,44 @@ elif opcao == "Backtest Visual":
 
         st.session_state.resultados_backtest = resultados
 
-    # --- Exibição dos resultados (após o cálculo ou se já existir) ---
+    # Exibição paginada (10 por vez)
     if st.session_state.resultados_backtest:
         resultados = st.session_state.resultados_backtest
-        st.markdown("---")
-        st.subheader(f"📋 Todos os Jogos ({len(resultados)} partidas)")
+        total_jogos = len(resultados)
+        pag_size = 10
+        total_pags = (total_jogos // pag_size) + (1 if total_jogos % pag_size else 0)
 
-        # Exibe cards para cada jogo (usando st.expander para evitar poluição)
-        for res in resultados:
-            with st.expander(f"{res['time_casa']} vs {res['time_fora']} - {res['data'].strftime('%d/%m/%Y')}"):
-                # Barra de MPV
-                total_mpv = res['mpv_casa'] + res['mpv_fora']
-                perc_casa = (res['mpv_casa'] / total_mpv * 100) if total_mpv > 0 else 50
-                perc_fora = 100 - perc_casa
-                mpv_bar = f"""
-                <div style="display:flex; align-items:center; margin:10px 0;">
-                    <span style="width:100px; color:#DAA520; font-weight:bold;">{res['time_casa']} ({res['mpv_casa']:.1f})</span>
-                    <div style="flex:1; background:#333; height:20px; border-radius:10px; overflow:hidden; display:flex;">
-                        <div style="width:{perc_casa}%; background:#DAA520; height:100%;"></div>
-                        <div style="width:{perc_fora}%; background:#888; height:100%;"></div>
-                    </div>
-                    <span style="width:100px; text-align:right; color:#DAA520; font-weight:bold;">({res['mpv_fora']:.1f}) {res['time_fora']}</span>
-                </div>
-                """
-                st.markdown(mpv_bar, unsafe_allow_html=True)
+        pag = st.selectbox(f"Página (1 a {total_pags})", range(1, total_pags + 1))
+        inicio = (pag - 1) * pag_size
+        fim = inicio + pag_size
+        pagina_atual = resultados[inicio:fim]
 
+        st.markdown(f"Mostrando {inicio+1}–{min(fim, total_jogos)} de {total_jogos} partidas")
+
+        for res in pagina_atual:
+            with st.container():
+                st.markdown(f"### {res['time_casa']} vs {res['time_fora']} – {res['data'].strftime('%d/%m/%Y')}")
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
-                    st.metric("IMA Casa", f"{res['ima_casa']:.1f}")
-                    st.metric("OVR Casa", f"{res['ovr_casa']:.1f}")
-                with col2:
-                    st.metric("IMA Fora", f"{res['ima_fora']:.1f}")
-                    st.metric("OVR Fora", f"{res['ovr_fora']:.1f}")
-                with col3:
                     st.metric("MPV Casa", f"{res['mpv_casa']:.1f}")
+                    st.metric("IMA Casa", f"{res['ima_casa']:.1f}")
+                with col2:
                     st.metric("MPV Fora", f"{res['mpv_fora']:.1f}")
+                    st.metric("IMA Fora", f"{res['ima_fora']:.1f}")
+                with col3:
+                    st.metric("OVR Casa", f"{res['ovr_casa']:.1f}")
+                    st.metric("OVR Fora", f"{res['ovr_fora']:.1f}")
                 with col4:
-                    st.metric("Resultado", res['resultado_real'])
+                    st.write(f"Resultado: {res['resultado_real']}")
                     if res['recomendacao']:
                         st.write(f"Recomendação: {res['recomendacao']}")
-                        st.write(f"Prob: {res['rec_prob']:.1%}, Selo: {res['rec_selo']}")
+                        st.write(f"Prob: {res['rec_prob']:.1%} | Selo: {res['rec_selo']}")
                         st.write(f"Acertou: {'✅' if res['acertou'] else '❌'}")
                     else:
                         st.write("Sem recomendação")
 
                 # Probabilidades
-                st.markdown("**Probabilidades 1X2**")
+                st.write("**Probabilidades 1X2**")
                 col_p1, col_p2, col_p3 = st.columns(3)
                 with col_p1:
                     st.metric("Casa (MyPredict)", f"{res['prob_casa']:.1%}", delta=f"Bet365: {res['imp_casa']:.1%}")
@@ -501,7 +476,7 @@ elif opcao == "Backtest Visual":
                     st.metric("Fora (MyPredict)", f"{res['prob_fora']:.1%}", delta=f"Bet365: {res['imp_fora']:.1%}")
 
                 # Edge e Selos
-                st.markdown("**Edge e Selos**")
+                st.write("**Edge e Selos**")
                 col_e1, col_e2, col_e3 = st.columns(3)
                 with col_e1:
                     st.write(f"Edge Casa: {res['edge_casa']:+.1%} ({res['selo_casa']})")
@@ -511,7 +486,7 @@ elif opcao == "Backtest Visual":
                     st.write(f"Edge Fora: {res['edge_fora']:+.1%} ({res['selo_fora']})")
 
                 # Outros mercados
-                st.markdown("**Outros Mercados (MyPredict)**")
+                st.write("**Outros Mercados (MyPredict)**")
                 col_m1, col_m2, col_m3, col_m4 = st.columns(4)
                 with col_m1:
                     st.metric("Over 1.5", f"{res['over15_prob']:.1%}", delta=f"{'✅' if res['over15_real'] else '❌'}")
@@ -526,8 +501,9 @@ elif opcao == "Backtest Visual":
                     st.metric("HT Over 0.5", f"{res['ht_over05_prob']:.1%}")
                 with col_m6:
                     st.metric("HT Over 1.5", f"{res['ht_over15_prob']:.1%}")
+                st.markdown("---")
 
-        # --- Resumo geral ---
+        # Resumo geral
         st.markdown("---")
         st.subheader("📊 Desempenho do MyPredict")
         apostas = [r for r in resultados if r['recomendacao']]
@@ -546,4 +522,4 @@ elif opcao == "Backtest Visual":
         else:
             st.warning("Nenhuma aposta foi recomendada.")
     else:
-        st.info("Clique no botão para iniciar a simulação.")
+        st.info("Clique em 'Iniciar Backtest Completo' para processar os jogos.")
