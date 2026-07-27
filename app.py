@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 – Simulação Otimizada (Detalhes a cada 5 jogos)
+MyPredict 2.0 – Simulação Otimizada (Detalhes a cada 5 jogos) - CORRIGIDO
 """
 import streamlit as st
 import pandas as pd
@@ -208,7 +208,7 @@ elif opcao == "Análise de Jogo":
         col_p3.metric("Fora (MyPredict)", f"{prob_fora:.1%}", delta=f"Bet365: {imp_fora:.1%}")
 
 # ============================================================
-# SIMULAÇÃO DETALHADA (OTIMIZADA – DETALHES A CADA 5 JOGOS)
+# SIMULAÇÃO DETALHADA (OTIMIZADA – DETALHES A CADA 5 JOGOS, CORRIGIDA)
 # ============================================================
 elif opcao == "Simulação Detalhada":
     st.markdown("<h1 style='text-align:center;'>📈 Simulação MyPredict 2.0 – Detalhada (a cada 5 jogos)</h1>", unsafe_allow_html=True)
@@ -247,7 +247,7 @@ elif opcao == "Simulação Detalhada":
 
                 hist_filtrado = [j for j in historico if j['data'] < data_jogo]
 
-                # IMA com detalhes
+                # IMA com detalhes (CORRIGIDO)
                 def ima_detalhado(time, mando_prox):
                     jogos_time = [j for j in hist_filtrado if j['time'] == time]
                     jogos_time.sort(key=lambda x: x['data'], reverse=True)
@@ -258,19 +258,24 @@ elif opcao == "Simulação Detalhada":
                             if len(filtrados) == n: break
                         return filtrados
                     def nota(lista):
-                        if not lista: return 50.0, 0, 0, 0
+                        if not lista: return 50.0, 0.0, 0.0, 0.0
                         P_obt = sum(pontos_do_jogo(j['prat_time'], j['prat_adv'], j['mando'], j['resultado']) for j in lista)
                         P_max = sum(pontos_do_jogo(j['prat_time'], j['prat_adv'], j['mando'], 'V') for j in lista)
                         P_min = sum(pontos_do_jogo(j['prat_time'], j['prat_adv'], j['mando'], 'D') for j in lista)
                         if P_max == P_min: return 50.0, P_obt, P_max, P_min
                         return ((P_obt - P_min) / (P_max - P_min)) * 100, P_obt, P_max, P_min
-                    g10, g5, g3 = ultimos(10), ultimos(5), ultimos(3)
+                    g10 = ultimos(10); g5 = ultimos(5); g3 = ultimos(3)
                     l5 = ultimos(5, apenas_mando=mando_prox)
                     l3 = ultimos(3, apenas_mando=mando_prox)
-                    n10, p10 = nota(g10); n5, p5 = nota(g5); n3, p3 = nota(g3)
-                    nl5, pl5 = nota(l5); nl3, pl3 = nota(l3)
+                    n10, ob10, mx10, mn10 = nota(g10)
+                    n5,  ob5,  mx5,  mn5  = nota(g5)
+                    n3,  ob3,  mx3,  mn3  = nota(g3)
+                    nl5, obl5, mxl5, mnl5 = nota(l5)
+                    nl3, obl3, mxl3, mnl3 = nota(l3)
                     ima = 0.10*n10 + 0.15*n5 + 0.20*n3 + 0.25*nl5 + 0.30*nl3
-                    return ima, (n10, n5, n3, nl5, nl3), (p10, p5, p3, pl5, pl3)
+                    return (ima,
+                            (n10, n5, n3, nl5, nl3),
+                            ((ob10, mx10, mn10), (ob5, mx5, mn5), (ob3, mx3, mn3), (obl5, mxl5, mnl5), (obl3, mxl3, mnl3)))
 
                 ima_casa, notas_casa, det_casa = ima_detalhado(time_casa, 'casa')
                 ima_fora, notas_fora, det_fora = ima_detalhado(time_fora, 'fora')
@@ -310,7 +315,6 @@ elif opcao == "Simulação Detalhada":
                 gols_fora_real = fora_info['gols']
                 resultado_real = 'V' if gols_casa_real > gols_fora_real else ('D' if gols_casa_real < gols_fora_real else 'E')
 
-                # K e atualização MPV
                 k_casa = PARAMS['K']['normal'] if 40 <= ima_casa <= 60 else (PARAMS['K']['atencao'] if 25 <= ima_casa < 40 or 60 < ima_casa <= 75 else PARAMS['K']['alerta'])
                 k_fora = PARAMS['K']['normal'] if 40 <= ima_fora <= 60 else (PARAMS['K']['atencao'] if 25 <= ima_fora < 40 or 60 < ima_fora <= 75 else PARAMS['K']['alerta'])
                 mpv_atual[time_casa] = atualizar_MPV(mpv_casa_raw, mpv_fora_raw, 'casa', resultado_real, ima_casa)
@@ -318,7 +322,6 @@ elif opcao == "Simulação Detalhada":
                                                       'V' if resultado_real == 'D' else ('D' if resultado_real == 'V' else 'E'),
                                                       ima_fora)
 
-                # Lucro
                 odd_utilizada = None; lucro_partida = 0.0
                 if aposta_valida:
                     if rec.startswith('Vitória do '):
@@ -382,7 +385,6 @@ elif opcao == "Simulação Detalhada":
             st.markdown("---")
             st.subheader("📋 Detalhamento das Partidas (expandido a cada 5)")
 
-            # Exibição em páginas de 20 para não pesar
             pag_size = 20
             total_pags = (total_jogos // pag_size) + (1 if total_jogos % pag_size else 0)
             pag = st.selectbox(f"Página (1 a {total_pags})", range(1, total_pags + 1))
@@ -391,11 +393,10 @@ elif opcao == "Simulação Detalhada":
             pagina_atual = resultados[inicio:fim]
 
             for res in pagina_atual:
-                if res['idx'] % 5 == 0:  # DETALHES COMPLETOS A CADA 5 JOGOS
+                if res['idx'] % 5 == 0:
                     with st.expander(f"🔍 {res['time_casa']} vs {res['time_fora']} – {res['data'].strftime('%d/%m/%Y')} (DETALHES)", expanded=True):
                         st.markdown(f"**Prateleiras:** {res['time_casa']} ({SHELF_NAMES[res['prat_casa']]}) | {res['time_fora']} ({SHELF_NAMES[res['prat_fora']]})")
 
-                        # IMA
                         st.markdown("#### IMA (Fórmula: (P_obt - P_min)/(P_max - P_min)*100)")
                         for lado, notas, det in [("Casa", res['notas_casa'], res['det_casa']), ("Fora", res['notas_fora'], res['det_fora'])]:
                             st.write(f"**{lado}**")
@@ -404,7 +405,6 @@ elif opcao == "Simulação Detalhada":
                                 st.markdown(f"- {nome}: Nota={notas[i]:.1f} | P_obt={det[i][0]:.1f} P_max={det[i][1]:.1f} P_min={det[i][2]:.1f}")
                         st.write(f"IMA Casa = {res['ima_casa']:.1f}, IMA Fora = {res['ima_fora']:.1f}")
 
-                        # OVRall
                         st.markdown("#### OVRall (Pesos: ATA 25% DEF 25% MEI 20% FOR 15% CONS 10% RES 5%)")
                         col1, col2 = st.columns(2)
                         with col1:
@@ -416,25 +416,22 @@ elif opcao == "Simulação Detalhada":
                             st.write(f"ATA={res['comp_fora'][0]:.1f} DEF={res['comp_fora'][1]:.1f} MEI={res['comp_fora'][2]:.1f} FOR={res['comp_fora'][3]:.1f} CONS={res['comp_fora'][4]:.1f} RES={res['comp_fora'][5]:.1f}")
                             st.metric("OVRall Fora", f"{res['ovr_fora']:.1f}")
 
-                        # MPV
                         st.markdown("#### MPV (Escala 0-100, Elo com K dinâmico)")
                         col1, col2 = st.columns(2)
                         col1.metric("MPV Casa", f"{res['mpv_casa']:.1f}", delta=f"K={res['k_casa']}")
                         col2.metric("MPV Fora", f"{res['mpv_fora']:.1f}", delta=f"K={res['k_fora']}")
                         st.write(f"Diferença MPV: {res['mpv_casa'] - res['mpv_fora']:+.1f}")
 
-                        # Probabilidades
                         st.markdown("#### Probabilidades MyPredict x Bet365")
                         col1, col2, col3 = st.columns(3)
                         col1.metric("Casa (MYP)", f"{res['prob_casa']:.1%}", delta=f"Bet365: {res['imp_casa']:.1%}")
                         col2.metric("Empate (MYP)", f"{res['prob_empate']:.1%}", delta=f"Bet365: {res['imp_empate']:.1%}")
                         col3.metric("Fora (MYP)", f"{res['prob_fora']:.1%}", delta=f"Bet365: {res['imp_fora']:.1%}")
 
-                        # Recomendação
                         st.markdown(f"**🎯 Recomendação:** {res['recomendacao']} (Prob: {res['rec_prob']:.1%}, Selo: {res['selo']}, Odd: {res['odd_utilizada']})")
                         st.markdown(f"**Resultado Real:** {res['resultado_real']} | {'✅ ACERTOU' if res['aposta_valida'] and res['acertou'] else ('❌ ERROU' if res['aposta_valida'] else '')}")
                         st.markdown(f"**Lucro:** R$ {res['lucro_partida']:+.2f} | **Banca:** R$ {res['banca_apos']:.2f}")
-                else:  # LINHA RESUMIDA
+                else:
                     st.markdown(f"""
                     <div class="resumo-linha">
                         <strong>{res['data'].strftime('%d/%m')}</strong> {res['time_casa']} {res['resultado_real']} {res['time_fora']} | 
