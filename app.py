@@ -1,4 +1,3 @@
-# app.py — MyPredict 2.0 (Universal, tema escuro/dourado, fonte única FBref)
 import streamlit as st
 from data_loader import (
     gerar_prateleiras, obter_ultimos_jogos_com_heranca, extrair_recortes_ima,
@@ -14,9 +13,6 @@ from data_source_fbref_stats import obter_codigo_fbref
 
 st.set_page_config(page_title="MyPredict 2.0", layout="wide")
 
-# ------------------------------------------------------------
-# CSS personalizado (preto, prata, dourado)
-# ------------------------------------------------------------
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #c0c0c0; }
@@ -54,9 +50,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ------------------------------------------------------------
-# Tela de boas-vindas
-# ------------------------------------------------------------
 if 'analise_feita' not in st.session_state:
     st.session_state.analise_feita = False
 
@@ -70,9 +63,6 @@ if not st.session_state.analise_feita:
         st.markdown("<p style='text-align: center; color: #ffd700;'>"
                     "Bem-vindo ao futuro das predições esportivas.</p>", unsafe_allow_html=True)
 
-# ------------------------------------------------------------
-# Barra lateral
-# ------------------------------------------------------------
 with st.sidebar:
     st.markdown("<h2 style='color: #ffd700;'>⚙️ Configuração</h2>", unsafe_allow_html=True)
     liga_nome = st.text_input("Nome da Liga", "Brasileirão")
@@ -84,33 +74,26 @@ with st.sidebar:
     if gerar:
         st.session_state.analise_feita = True
 
-# ------------------------------------------------------------
-# Lógica principal
-# ------------------------------------------------------------
 if st.session_state.analise_feita:
     with st.spinner("Descobrindo liga e calculando..."):
         try:
-            # Converter nome da liga para código FBref
             liga_codigo = obter_codigo_fbref(liga_nome)
             if not liga_codigo:
                 st.error(f"Não encontrei a liga '{liga_nome}'. Tente o nome exato (ex.: Brasileirão, Premier League).")
                 st.stop()
 
-            # Classificação e prateleiras
             class_ant = classificação_anterior(liga_codigo, temporada)
             if not class_ant:
                 st.error(f"Classificação não disponível para {liga_nome} {temporada}.")
                 st.stop()
             prateleiras = gerar_prateleiras(liga_codigo, temporada)
 
-            # Dados OVRall
             dados_casa = obter_dados_ovrall_time(time_casa, liga_codigo, temporada, class_ant)
             dados_fora = obter_dados_ovrall_time(time_fora, liga_codigo, temporada, class_ant)
             if not dados_casa or not dados_fora:
                 st.error(f"Partidas não encontradas para {time_casa} ou {time_fora}.")
                 st.stop()
 
-            # IMA
             jogos_casa = obter_ultimos_jogos_com_heranca(time_casa, liga_codigo, temporada, class_ant, n=20)
             rec_casa = extrair_recortes_ima(jogos_casa, True)
             jogos_fora = obter_ultimos_jogos_com_heranca(time_fora, liga_codigo, temporada, class_ant, n=20)
@@ -121,14 +104,12 @@ if st.session_state.analise_feita:
             ima_fora = calcular_ima(time_fora, rec_fora['10G'], rec_fora['5G'], rec_fora['3G'],
                                     rec_fora['5CF'], rec_fora['3CF'], prateleiras)
 
-            # MPV
-            ovrall_casa, ovrall_fora = 50.0, 50.0  # placeholder até termos dados_liga
+            ovrall_casa, ovrall_fora = 50.0, 50.0
             ic_casa, ic_fora = 50.0, 50.0
             mpv_casa = calcular_mpv(ima_casa, ovrall_casa, ic_casa)
             mpv_fora = calcular_mpv(ima_fora, ovrall_fora, ic_fora)
             bonus_casa = calcular_bonus_casa(dados_casa.get('diff_aprov_casa_fora'))
 
-            # Mercados
             p1, pX, p2 = prob_1x2(mpv_casa, mpv_fora, bonus_casa)
 
             over25 = prob_over_2_5(
@@ -154,9 +135,6 @@ if st.session_state.analise_feita:
                 dados_casa.get('escanteios_sofridos_media'), dados_fora.get('escanteios_sofridos_media')
             )
 
-            # ------------------------------------------------------------
-            # Exibição dos resultados
-            # ------------------------------------------------------------
             def recomendado(prob):
                 return prob is not None and prob >= 0.60
 
@@ -201,7 +179,6 @@ if st.session_state.analise_feita:
                     st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>',
                                 unsafe_allow_html=True)
 
-            # Métricas detalhadas
             with st.expander("📊 Métricas detalhadas"):
                 c1, c2 = st.columns(2)
                 with c1:
@@ -213,7 +190,6 @@ if st.session_state.analise_feita:
                     st.write(f"IMA: {ima_fora:.1f}")
                     st.write(f"MPV: {mpv_fora:.1f}")
 
-            # Indicador de fonte dos dados
             avancados = any(
                 dados_casa.get(k) for k in ['xg_media', 'posse_media']
             ) or any(
