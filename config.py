@@ -1,10 +1,3 @@
-# config.py — MyPredict 2.0
-# Configurações gerais do projeto.
-
-# ------------------------------------------------------------
-# PRATELEIRAS E BÔNUS DO IMA
-# ------------------------------------------------------------
-
 PRATELEIRAS = {
     'Elite':   (1, 3),
     'Alta':    (4, 7),
@@ -39,10 +32,6 @@ BONUS_EMPATE = {
     ('Critica', 'Critica'): +0.5,
 }
 
-# ------------------------------------------------------------
-# PESOS DOS RECORTES DO IMA
-# ------------------------------------------------------------
-
 PESOS_RECORTES = {
     '10G': 0.10,
     '5G':  0.15,
@@ -51,16 +40,8 @@ PESOS_RECORTES = {
     '3CF': 0.30,
 }
 
-# ------------------------------------------------------------
-# NORMALIZAÇÃO IMA (0–100)
-# ------------------------------------------------------------
-
 PISO_IMA = -2.0
 TETO_IMA = 5.0
-
-# ------------------------------------------------------------
-# OVRALL
-# ------------------------------------------------------------
 
 JOGOS_BASE_OVRALL = 38
 PESOS_OVRALL = {
@@ -71,19 +52,11 @@ PESOS_OVRALL = {
     'Resiliencia':  0.15,
 }
 
-# ------------------------------------------------------------
-# MPV — Pesos dos três pilares
-# ------------------------------------------------------------
-
 PESOS_MPV = {
     'IMA':    1/3,
     'OVRall': 1/3,
     'IC':     1/3,
 }
-
-# ------------------------------------------------------------
-# IC (Índice de Contexto) — Fatores e pesos iniciais
-# ------------------------------------------------------------
 
 PESOS_IC = {
     'confronto_direto':              0.25,
@@ -95,32 +68,15 @@ PESOS_IC = {
 
 JOGOS_CONFRONTO_DIRETO = 6
 
-# ------------------------------------------------------------
-# HERANÇA ESTATÍSTICA (OVRall / IMA)
-# ------------------------------------------------------------
-
 POS_REF_PROMOVIDO = 16
 POS_REF_REBAIXADO = 5
-NUM_REBAIXADOS = 4
-NUM_PROMOVIDOS = 4
 
-# ------------------------------------------------------------
-# MERCADOS
-# ------------------------------------------------------------
-
-# Vantagem de casa dinâmica – substitui valor fixo
-MAX_BONUS_CASA_MPV = 10.0      # teto do bônus de mando (pontos de MPV)
-FATOR_BONUS_CASA = 0.1         # multiplicador aplicado à diferença de aproveitamento (%)
-
+MAX_BONUS_CASA_MPV = 10.0
+FATOR_BONUS_CASA = 0.1
 SIGMOID_K = 0.12
 SIGMA_EMPATE = 15.0
 PROB_EMPATE_BASE = 0.28
-
-# Médias de gols da liga (fallback se não calculadas dinamicamente)
 MEDIA_GOLS_CASA_LIGA = 1.5
 MEDIA_GOLS_FORA_LIGA = 1.2
-
 PROPORCAO_GOLS_HT = 0.44
-
-# Escanteios – margem de segurança
-MARGEM_SEGURANCA_ESCANTEIOS = 2.0   # linha = total esperado - 2
+MARGEM_SEGURANCA_ESCANTEIOS = 2.0
