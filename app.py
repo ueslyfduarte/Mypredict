@@ -303,7 +303,7 @@ elif opcao == "Análise de Jogo":
         col4.metric("Over 9.5 esc.", f"{prob_over(total_esc, 8.5):.1%}")
 
 # ============================================================
-# BACKTEST VISUAL (CORRIGIDO – SEM EDGE NA RECOMENDAÇÃO, MPV DESTACADO)
+# BACKTEST VISUAL (OTIMIZADO – SEM REINICIAR)
 # ============================================================
 elif opcao == "Backtest Visual":
     st.markdown("<h1 style='text-align:center;'>📈 Backtest MyPredict 2.0</h1>", unsafe_allow_html=True)
@@ -311,7 +311,7 @@ elif opcao == "Backtest Visual":
         st.error("Nenhuma partida carregada.")
         st.stop()
 
-    # --- 1. Prateleiras fixas (classificação da temporada anterior) ---
+    # --- 1. Prateleiras fixas ---
     todas_datas = sorted([p['data'] for p in partidas])
     data_inicio_temporada = todas_datas[0]
     jogos_anteriores = [j for j in jogos if j['data'] < data_inicio_temporada]
@@ -325,291 +325,303 @@ elif opcao == "Backtest Visual":
     st.write("Prateleiras fixas:")
     st.write({t: f"Prateleira {p}" for t, p in prateleiras_fixas.items()})
 
-    # --- 2. Simulação ---
-    if st.button("Iniciar Backtest Completo"):
-        partidas_ord = sorted(partidas, key=lambda p: p['data'])
-        historico = []
-        resultados = []
-        progress = st.progress(0)
-        total = len(partidas_ord)
+    # --- 2. Inicializa estado da sessão ---
+    if 'resultados' not in st.session_state:
+        st.session_state.resultados = None
+        st.session_state.simulacao_feita = False
 
-        for idx, p in enumerate(partidas_ord):
-            data_jogo = p['data']
-            casa_info = p['casa']
-            fora_info = p['fora']
-            time_casa = casa_info['time']
-            time_fora = fora_info['time']
+    if st.button("Iniciar Backtest Completo") or st.session_state.simulacao_feita:
+        if not st.session_state.simulacao_feita:
+            st.session_state.simulacao_feita = True
+            partidas_ord = sorted(partidas, key=lambda p: p['data'])
+            historico = []
+            resultados = []
+            progress = st.progress(0)
+            total = len(partidas_ord)
 
-            # Prateleiras fixas
-            casa_info['prat_time'] = prateleiras_fixas.get(time_casa, 3)
-            casa_info['prat_adv'] = prateleiras_fixas.get(time_fora, 3)
-            fora_info['prat_time'] = prateleiras_fixas.get(time_fora, 3)
-            fora_info['prat_adv'] = prateleiras_fixas.get(time_casa, 3)
+            for idx, p in enumerate(partidas_ord):
+                data_jogo = p['data']
+                casa_info = p['casa']
+                fora_info = p['fora']
+                time_casa = casa_info['time']
+                time_fora = fora_info['time']
 
-            hist_filtrado = [j for j in historico if j['data'] < data_jogo]
+                # Prateleiras fixas
+                casa_info['prat_time'] = prateleiras_fixas.get(time_casa, 3)
+                casa_info['prat_adv'] = prateleiras_fixas.get(time_fora, 3)
+                fora_info['prat_time'] = prateleiras_fixas.get(time_fora, 3)
+                fora_info['prat_adv'] = prateleiras_fixas.get(time_casa, 3)
 
-            # IMA
-            ima_casa, desvio_casa = calcular_IMA(hist_filtrado, time_casa, data_jogo, mando_proximo='casa')
-            ima_fora, desvio_fora = calcular_IMA(hist_filtrado, time_fora, data_jogo, mando_proximo='fora')
-            desvio_medio = (desvio_casa + desvio_fora) / 2
+                hist_filtrado = [j for j in historico if j['data'] < data_jogo]
 
-            # OVRall
-            if not any(j['time'] == time_casa for j in hist_filtrado):
-                prat = prateleiras_fixas.get(time_casa, 3)
-                ovrall_casa = {1: 80, 2: 65, 3: 50, 4: 35, 5: 20}.get(prat, 50)
-            else:
-                ovrall_casa = calcular_OVRall([calcular_ATA(hist_filtrado, time_casa, data_jogo),
-                                               calcular_DEF(hist_filtrado, time_casa, data_jogo),
-                                               calcular_MEI(hist_filtrado, time_casa, data_jogo),
-                                               calcular_FOR(hist_filtrado, time_casa, data_jogo),
-                                               calcular_CONS(hist_filtrado, time_casa, data_jogo),
-                                               calcular_RES(hist_filtrado, time_casa, data_jogo)])
-            if not any(j['time'] == time_fora for j in hist_filtrado):
-                prat = prateleiras_fixas.get(time_fora, 3)
-                ovrall_fora = {1: 80, 2: 65, 3: 50, 4: 35, 5: 20}.get(prat, 50)
-            else:
-                ovrall_fora = calcular_OVRall([calcular_ATA(hist_filtrado, time_fora, data_jogo),
-                                               calcular_DEF(hist_filtrado, time_fora, data_jogo),
-                                               calcular_MEI(hist_filtrado, time_fora, data_jogo),
-                                               calcular_FOR(hist_filtrado, time_fora, data_jogo),
-                                               calcular_CONS(hist_filtrado, time_fora, data_jogo),
-                                               calcular_RES(hist_filtrado, time_fora, data_jogo)])
+                # IMA
+                ima_casa, desvio_casa = calcular_IMA(hist_filtrado, time_casa, data_jogo, mando_proximo='casa')
+                ima_fora, desvio_fora = calcular_IMA(hist_filtrado, time_fora, data_jogo, mando_proximo='fora')
+                desvio_medio = (desvio_casa + desvio_fora) / 2
 
-            # MPV
-            mpv_casa_raw = inicializar_MPV(ovrall_casa)
-            mpv_fora_raw = inicializar_MPV(ovrall_fora)
-            for jg in hist_filtrado:
-                if jg['time'] == time_casa:
-                    ima_jg, _ = calcular_IMA(hist_filtrado, time_casa, jg['data'], mando_proximo=jg['mando'])
-                    ovrall_adv = calcular_OVRall([calcular_ATA(hist_filtrado, jg['adv'], jg['data']),
-                                                  calcular_DEF(hist_filtrado, jg['adv'], jg['data']),
-                                                  50,50,50,50])
-                    mpv_adv = inicializar_MPV(ovrall_adv)
-                    mpv_casa_raw = atualizar_MPV(mpv_casa_raw, mpv_adv, jg['mando'], jg['resultado'], ima_jg)
-                elif jg['time'] == time_fora:
-                    ima_jg, _ = calcular_IMA(hist_filtrado, time_fora, jg['data'], mando_proximo=jg['mando'])
-                    ovrall_adv = calcular_OVRall([calcular_ATA(hist_filtrado, jg['adv'], jg['data']),
-                                                  calcular_DEF(hist_filtrado, jg['adv'], jg['data']),
-                                                  50,50,50,50])
-                    mpv_adv = inicializar_MPV(ovrall_adv)
-                    mpv_fora_raw = atualizar_MPV(mpv_fora_raw, mpv_adv, jg['mando'], jg['resultado'], ima_jg)
+                # OVRall
+                if not any(j['time'] == time_casa for j in hist_filtrado):
+                    prat = prateleiras_fixas.get(time_casa, 3)
+                    ovrall_casa = {1: 80, 2: 65, 3: 50, 4: 35, 5: 20}.get(prat, 50)
+                else:
+                    ovrall_casa = calcular_OVRall([calcular_ATA(hist_filtrado, time_casa, data_jogo),
+                                                   calcular_DEF(hist_filtrado, time_casa, data_jogo),
+                                                   calcular_MEI(hist_filtrado, time_casa, data_jogo),
+                                                   calcular_FOR(hist_filtrado, time_casa, data_jogo),
+                                                   calcular_CONS(hist_filtrado, time_casa, data_jogo),
+                                                   calcular_RES(hist_filtrado, time_casa, data_jogo)])
+                if not any(j['time'] == time_fora for j in hist_filtrado):
+                    prat = prateleiras_fixas.get(time_fora, 3)
+                    ovrall_fora = {1: 80, 2: 65, 3: 50, 4: 35, 5: 20}.get(prat, 50)
+                else:
+                    ovrall_fora = calcular_OVRall([calcular_ATA(hist_filtrado, time_fora, data_jogo),
+                                                   calcular_DEF(hist_filtrado, time_fora, data_jogo),
+                                                   calcular_MEI(hist_filtrado, time_fora, data_jogo),
+                                                   calcular_FOR(hist_filtrado, time_fora, data_jogo),
+                                                   calcular_CONS(hist_filtrado, time_fora, data_jogo),
+                                                   calcular_RES(hist_filtrado, time_fora, data_jogo)])
 
-            prob_casa, prob_empate, prob_fora = probabilidades_1x2(mpv_casa_raw, mpv_fora_raw)
+                # MPV
+                mpv_casa_raw = inicializar_MPV(ovrall_casa)
+                mpv_fora_raw = inicializar_MPV(ovrall_fora)
+                for jg in hist_filtrado:
+                    if jg['time'] == time_casa:
+                        ima_jg, _ = calcular_IMA(hist_filtrado, time_casa, jg['data'], mando_proximo=jg['mando'])
+                        ovrall_adv = calcular_OVRall([calcular_ATA(hist_filtrado, jg['adv'], jg['data']),
+                                                      calcular_DEF(hist_filtrado, jg['adv'], jg['data']),
+                                                      50,50,50,50])
+                        mpv_adv = inicializar_MPV(ovrall_adv)
+                        mpv_casa_raw = atualizar_MPV(mpv_casa_raw, mpv_adv, jg['mando'], jg['resultado'], ima_jg)
+                    elif jg['time'] == time_fora:
+                        ima_jg, _ = calcular_IMA(hist_filtrado, time_fora, jg['data'], mando_proximo=jg['mando'])
+                        ovrall_adv = calcular_OVRall([calcular_ATA(hist_filtrado, jg['adv'], jg['data']),
+                                                      calcular_DEF(hist_filtrado, jg['adv'], jg['data']),
+                                                      50,50,50,50])
+                        mpv_adv = inicializar_MPV(ovrall_adv)
+                        mpv_fora_raw = atualizar_MPV(mpv_fora_raw, mpv_adv, jg['mando'], jg['resultado'], ima_jg)
 
-            odd_casa = casa_info.get('B365H', 2.0)
-            odd_empate = casa_info.get('B365D', 3.0)
-            odd_fora = casa_info.get('B365A', 3.0)
+                prob_casa, prob_empate, prob_fora = probabilidades_1x2(mpv_casa_raw, mpv_fora_raw)
 
-            imp_casa = 1 / odd_casa if odd_casa > 0 else 0
-            imp_empate = 1 / odd_empate if odd_empate > 0 else 0
-            imp_fora = 1 / odd_fora if odd_fora > 0 else 0
+                odd_casa = casa_info.get('B365H', 2.0)
+                odd_empate = casa_info.get('B365D', 3.0)
+                odd_fora = casa_info.get('B365A', 3.0)
 
-            edge_casa = calcular_edge(prob_casa, odd_casa)
-            edge_empate = calcular_edge(prob_empate, odd_empate)
-            edge_fora = calcular_edge(prob_fora, odd_fora)
+                imp_casa = 1 / odd_casa if odd_casa > 0 else 0
+                imp_empate = 1 / odd_empate if odd_empate > 0 else 0
+                imp_fora = 1 / odd_fora if odd_fora > 0 else 0
 
-            dif_mpv = abs(mpv_casa_raw + 75 - mpv_fora_raw)
-            selo_casa = determinar_selo(edge_casa, dif_mpv, desvio_medio)
-            selo_empate = determinar_selo(edge_empate, dif_mpv, desvio_medio)
-            selo_fora = determinar_selo(edge_fora, dif_mpv, desvio_medio)
+                edge_casa = calcular_edge(prob_casa, odd_casa)
+                edge_empate = calcular_edge(prob_empate, odd_empate)
+                edge_fora = calcular_edge(prob_fora, odd_fora)
 
-            # Recomendação APENAS pelo selo (sem Edge > 0)
-            recomendacao = None
-            rec_prob = 0
-            rec_selo = ""
-            rec_odd = 0
-            if 'Dourado' in selo_casa or 'Verde' in selo_casa:
-                recomendacao = f"Vitória {time_casa}"
-                rec_prob = prob_casa
-                rec_odd = odd_casa
-                rec_selo = selo_casa
-            elif 'Dourado' in selo_empate or 'Verde' in selo_empate:
-                recomendacao = "Empate"
-                rec_prob = prob_empate
-                rec_odd = odd_empate
-                rec_selo = selo_empate
-            elif 'Dourado' in selo_fora or 'Verde' in selo_fora:
-                recomendacao = f"Vitória {time_fora}"
-                rec_prob = prob_fora
-                rec_odd = odd_fora
-                rec_selo = selo_fora
+                dif_mpv = abs(mpv_casa_raw + 75 - mpv_fora_raw)
+                selo_casa = determinar_selo(edge_casa, dif_mpv, desvio_medio)
+                selo_empate = determinar_selo(edge_empate, dif_mpv, desvio_medio)
+                selo_fora = determinar_selo(edge_fora, dif_mpv, desvio_medio)
 
-            # Resultado real
-            gols_casa_real = casa_info['gols']
-            gols_fora_real = fora_info['gols']
-            resultado_real = 'V' if gols_casa_real > gols_fora_real else ('D' if gols_casa_real < gols_fora_real else 'E')
-            total_gols = gols_casa_real + gols_fora_real
-            over15_real = total_gols > 1.5
-            over25_real = total_gols > 2.5
-            btts_real = gols_casa_real > 0 and gols_fora_real > 0
-            esc_casa_real = casa_info.get('escanteios', 0)
-            esc_fora_real = fora_info.get('escanteios', 0)
-            esc_real = (esc_casa_real + esc_fora_real) > 9.5
+                # Recomendação APENAS pelo selo
+                recomendacao = None
+                rec_prob = 0
+                rec_selo = ""
+                rec_odd = 0
+                if 'Dourado' in selo_casa or 'Verde' in selo_casa:
+                    recomendacao = f"Vitória {time_casa}"
+                    rec_prob = prob_casa
+                    rec_odd = odd_casa
+                    rec_selo = selo_casa
+                elif 'Dourado' in selo_empate or 'Verde' in selo_empate:
+                    recomendacao = "Empate"
+                    rec_prob = prob_empate
+                    rec_odd = odd_empate
+                    rec_selo = selo_empate
+                elif 'Dourado' in selo_fora or 'Verde' in selo_fora:
+                    recomendacao = f"Vitória {time_fora}"
+                    rec_prob = prob_fora
+                    rec_odd = odd_fora
+                    rec_selo = selo_fora
 
-            acertou = False
-            if recomendacao:
-                if (recomendacao == f"Vitória {time_casa}" and resultado_real == 'V') or \
-                   (recomendacao == "Empate" and resultado_real == 'E') or \
-                   (recomendacao == f"Vitória {time_fora}" and resultado_real == 'D'):
-                    acertou = True
+                # Resultado real
+                gols_casa_real = casa_info['gols']
+                gols_fora_real = fora_info['gols']
+                resultado_real = 'V' if gols_casa_real > gols_fora_real else ('D' if gols_casa_real < gols_fora_real else 'E')
+                total_gols = gols_casa_real + gols_fora_real
+                over15_real = total_gols > 1.5
+                over25_real = total_gols > 2.5
+                btts_real = gols_casa_real > 0 and gols_fora_real > 0
+                esc_casa_real = casa_info.get('escanteios', 0)
+                esc_fora_real = fora_info.get('escanteios', 0)
+                esc_real = (esc_casa_real + esc_fora_real) > 9.5
 
-            # Mercados adicionais
-            def media_hist(time, tipo):
-                jogos_time = [j for j in hist_filtrado if j['time'] == time]
-                if not jogos_time:
-                    return 1.0 if tipo != 'escanteios' else 4.0
-                if tipo == 'marcados': return sum(j.get('gols', 0) for j in jogos_time) / len(jogos_time)
-                elif tipo == 'sofridos': return sum(j.get('gols_sofridos', 0) for j in jogos_time) / len(jogos_time)
-                elif tipo == 'escanteios': return sum(j.get('escanteios', 0) for j in jogos_time) / len(jogos_time)
+                acertou = False
+                if recomendacao:
+                    if (recomendacao == f"Vitória {time_casa}" and resultado_real == 'V') or \
+                       (recomendacao == "Empate" and resultado_real == 'E') or \
+                       (recomendacao == f"Vitória {time_fora}" and resultado_real == 'D'):
+                        acertou = True
 
-            gols_casa_hist = media_hist(time_casa, 'marcados')
-            sofridos_fora_hist = media_hist(time_fora, 'sofridos')
-            gols_fora_hist = media_hist(time_fora, 'marcados')
-            sofridos_casa_hist = media_hist(time_casa, 'sofridos')
-            esc_casa_hist = media_hist(time_casa, 'escanteios')
-            esc_fora_hist = media_hist(time_fora, 'escanteios')
-            media_total = (gols_casa_hist + sofridos_fora_hist)/2 + (gols_fora_hist + sofridos_casa_hist)/2
-            media_esc_total = esc_casa_hist + esc_fora_hist
+                # Mercados adicionais
+                def media_hist(time, tipo):
+                    jogos_time = [j for j in hist_filtrado if j['time'] == time]
+                    if not jogos_time:
+                        return 1.0 if tipo != 'escanteios' else 4.0
+                    if tipo == 'marcados': return sum(j.get('gols', 0) for j in jogos_time) / len(jogos_time)
+                    elif tipo == 'sofridos': return sum(j.get('gols_sofridos', 0) for j in jogos_time) / len(jogos_time)
+                    elif tipo == 'escanteios': return sum(j.get('escanteios', 0) for j in jogos_time) / len(jogos_time)
 
-            prob_over15 = prob_over(media_total, 1.5)
-            prob_over25 = prob_over(media_total, 2.5)
-            prob_bt = prob_btts(ovrall_casa, ovrall_fora, ovrall_fora, ovrall_casa)
-            prob_esc = prob_over(media_esc_total, 9.5)
-            prob_ht_over05 = prob_over(media_total * 0.4, 0.5)
-            prob_ht_over15 = prob_over(media_total * 0.4, 1.5)
+                gols_casa_hist = media_hist(time_casa, 'marcados')
+                sofridos_fora_hist = media_hist(time_fora, 'sofridos')
+                gols_fora_hist = media_hist(time_fora, 'marcados')
+                sofridos_casa_hist = media_hist(time_casa, 'sofridos')
+                esc_casa_hist = media_hist(time_casa, 'escanteios')
+                esc_fora_hist = media_hist(time_fora, 'escanteios')
+                media_total = (gols_casa_hist + sofridos_fora_hist)/2 + (gols_fora_hist + sofridos_casa_hist)/2
+                media_esc_total = esc_casa_hist + esc_fora_hist
 
-            resultados.append({
-                'data': data_jogo,
-                'time_casa': time_casa,
-                'time_fora': time_fora,
-                'mpv_casa': (mpv_casa_raw - 1000) / 10,
-                'mpv_fora': (mpv_fora_raw - 1000) / 10,
-                'ima_casa': ima_casa,
-                'ima_fora': ima_fora,
-                'ovr_casa': ovrall_casa,
-                'ovr_fora': ovrall_fora,
-                'prob_casa': prob_casa, 'imp_casa': imp_casa,
-                'prob_empate': prob_empate, 'imp_empate': imp_empate,
-                'prob_fora': prob_fora, 'imp_fora': imp_fora,
-                'edge_casa': edge_casa, 'edge_empate': edge_empate, 'edge_fora': edge_fora,
-                'selo_casa': selo_casa, 'selo_empate': selo_empate, 'selo_fora': selo_fora,
-                'recomendacao': recomendacao, 'rec_prob': rec_prob,
-                'rec_odd': rec_odd, 'rec_selo': rec_selo,
-                'resultado_real': resultado_real, 'acertou': acertou,
-                'over15_prob': prob_over15, 'over15_real': over15_real,
-                'over25_prob': prob_over25, 'over25_real': over25_real,
-                'btts_prob': prob_bt, 'btts_real': btts_real,
-                'esc_prob': prob_esc, 'esc_real': esc_real,
-                'ht_over05_prob': prob_ht_over05,
-                'ht_over15_prob': prob_ht_over15
-            })
+                prob_over15 = prob_over(media_total, 1.5)
+                prob_over25 = prob_over(media_total, 2.5)
+                prob_bt = prob_btts(ovrall_casa, ovrall_fora, ovrall_fora, ovrall_casa)
+                prob_esc = prob_over(media_esc_total, 9.5)
+                prob_ht_over05 = prob_over(media_total * 0.4, 0.5)
+                prob_ht_over15 = prob_over(media_total * 0.4, 1.5)
 
-            historico.append(casa_info)
-            historico.append(fora_info)
-            progress.progress((idx + 1) / total)
+                resultados.append({
+                    'data': data_jogo,
+                    'time_casa': time_casa,
+                    'time_fora': time_fora,
+                    'mpv_casa': (mpv_casa_raw - 1000) / 10,
+                    'mpv_fora': (mpv_fora_raw - 1000) / 10,
+                    'ima_casa': ima_casa,
+                    'ima_fora': ima_fora,
+                    'ovr_casa': ovrall_casa,
+                    'ovr_fora': ovrall_fora,
+                    'prob_casa': prob_casa, 'imp_casa': imp_casa,
+                    'prob_empate': prob_empate, 'imp_empate': imp_empate,
+                    'prob_fora': prob_fora, 'imp_fora': imp_fora,
+                    'edge_casa': edge_casa, 'edge_empate': edge_empate, 'edge_fora': edge_fora,
+                    'selo_casa': selo_casa, 'selo_empate': selo_empate, 'selo_fora': selo_fora,
+                    'recomendacao': recomendacao, 'rec_prob': rec_prob,
+                    'rec_odd': rec_odd, 'rec_selo': rec_selo,
+                    'resultado_real': resultado_real, 'acertou': acertou,
+                    'over15_prob': prob_over15, 'over15_real': over15_real,
+                    'over25_prob': prob_over25, 'over25_real': over25_real,
+                    'btts_prob': prob_bt, 'btts_real': btts_real,
+                    'esc_prob': prob_esc, 'esc_real': esc_real,
+                    'ht_over05_prob': prob_ht_over05,
+                    'ht_over15_prob': prob_ht_over15
+                })
 
-        # --- 3. Exibição dos Cards ---
-        st.markdown("---")
-        st.subheader("📋 Resultados das Partidas")
-        for res in resultados:
-            # Barra de MPV comparativa
-            total_mpv = res['mpv_casa'] + res['mpv_fora']
-            if total_mpv == 0:
-                perc_casa = 50
-                perc_fora = 50
-            else:
-                perc_casa = (res['mpv_casa'] / total_mpv) * 100
-                perc_fora = 100 - perc_casa
+                historico.append(casa_info)
+                historico.append(fora_info)
+                progress.progress((idx + 1) / total)
 
-            mpv_bar_html = f"""
-            <div style="display:flex; align-items:center; margin:10px 0;">
-                <span style="width:100px; color:#DAA520; font-weight:bold;">{res['time_casa']} ({res['mpv_casa']:.1f})</span>
-                <div style="flex:1; background:#333; height:20px; border-radius:10px; overflow:hidden; display:flex;">
-                    <div style="width:{perc_casa}%; background:#DAA520; height:100%;"></div>
-                    <div style="width:{perc_fora}%; background:#888; height:100%;"></div>
+            st.session_state.resultados = resultados
+
+        # --- 3. Exibição otimizada ---
+        if st.session_state.resultados:
+            resultados = st.session_state.resultados
+            st.markdown("---")
+            st.subheader("📋 Últimas 20 Partidas (Cards)")
+            # Mostra cards apenas para as últimas 20
+            for res in resultados[-20:]:
+                total_mpv = res['mpv_casa'] + res['mpv_fora']
+                if total_mpv == 0:
+                    perc_casa = 50
+                    perc_fora = 50
+                else:
+                    perc_casa = (res['mpv_casa'] / total_mpv) * 100
+                    perc_fora = 100 - perc_casa
+
+                mpv_bar_html = f"""
+                <div style="display:flex; align-items:center; margin:10px 0;">
+                    <span style="width:100px; color:#DAA520; font-weight:bold;">{res['time_casa']} ({res['mpv_casa']:.1f})</span>
+                    <div style="flex:1; background:#333; height:20px; border-radius:10px; overflow:hidden; display:flex;">
+                        <div style="width:{perc_casa}%; background:#DAA520; height:100%;"></div>
+                        <div style="width:{perc_fora}%; background:#888; height:100%;"></div>
+                    </div>
+                    <span style="width:100px; text-align:right; color:#DAA520; font-weight:bold;">({res['mpv_fora']:.1f}) {res['time_fora']}</span>
                 </div>
-                <span style="width:100px; text-align:right; color:#DAA520; font-weight:bold;">({res['mpv_fora']:.1f}) {res['time_fora']}</span>
-            </div>
-            """
+                """
 
-            with st.container():
-                st.markdown(f"""
-                <div class="card">
-                    <div class="card-header">
-                        <div>
-                            <span class="team-name">{res['time_casa']} vs {res['time_fora']}</span><br>
-                            <small>{res['data'].strftime('%d/%m/%Y')}</small>
+                with st.container():
+                    st.markdown(f"""
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <span class="team-name">{res['time_casa']} vs {res['time_fora']}</span><br>
+                                <small>{res['data'].strftime('%d/%m/%Y')}</small>
+                            </div>
+                            <div class="score">{res['resultado_real']}</div>
+                            <div class="acerto">{'✅' if res['recomendacao'] and res['acertou'] else ('❌' if res['recomendacao'] else '')}</div>
                         </div>
-                        <div class="score">{res['resultado_real']}</div>
-                        <div class="acerto">{'✅' if res['recomendacao'] and res['acertou'] else ('❌' if res['recomendacao'] else '')}</div>
-                    </div>
-                    <!-- Comparação MPV em destaque -->
-                    {mpv_bar_html}
-                    <!-- Métricas principais -->
-                    <div class="metric-row">
-                        <div class="metric-item"><div class="metric-label">IMA Casa</div><div class="metric-value">{res['ima_casa']:.1f}</div></div>
-                        <div class="metric-item"><div class="metric-label">IMA Fora</div><div class="metric-value">{res['ima_fora']:.1f}</div></div>
-                        <div class="metric-item"><div class="metric-label">OVR Casa</div><div class="metric-value">{res['ovr_casa']:.1f}</div></div>
-                        <div class="metric-item"><div class="metric-label">OVR Fora</div><div class="metric-value">{res['ovr_fora']:.1f}</div></div>
-                    </div>
-                    <!-- Probabilidades 1X2 (MyPredict vs Bet365) -->
-                    <div class="metric-row">
-                        <div class="metric-item">
-                            <div class="metric-label">Casa (MyPredict)</div>
-                            <div class="metric-value">{res['prob_casa']:.1%}</div>
-                            <small>Bet365: {res['imp_casa']:.1%}</small>
+                        {mpv_bar_html}
+                        <div class="metric-row">
+                            <div class="metric-item"><div class="metric-label">IMA Casa</div><div class="metric-value">{res['ima_casa']:.1f}</div></div>
+                            <div class="metric-item"><div class="metric-label">IMA Fora</div><div class="metric-value">{res['ima_fora']:.1f}</div></div>
+                            <div class="metric-item"><div class="metric-label">OVR Casa</div><div class="metric-value">{res['ovr_casa']:.1f}</div></div>
+                            <div class="metric-item"><div class="metric-label">OVR Fora</div><div class="metric-value">{res['ovr_fora']:.1f}</div></div>
                         </div>
-                        <div class="metric-item">
-                            <div class="metric-label">Empate (MyPredict)</div>
-                            <div class="metric-value">{res['prob_empate']:.1%}</div>
-                            <small>Bet365: {res['imp_empate']:.1%}</small>
+                        <div class="metric-row">
+                            <div class="metric-item">
+                                <div class="metric-label">Casa (MyPredict)</div>
+                                <div class="metric-value">{res['prob_casa']:.1%}</div>
+                                <small>Bet365: {res['imp_casa']:.1%}</small>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-label">Empate (MyPredict)</div>
+                                <div class="metric-value">{res['prob_empate']:.1%}</div>
+                                <small>Bet365: {res['imp_empate']:.1%}</small>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-label">Fora (MyPredict)</div>
+                                <div class="metric-value">{res['prob_fora']:.1%}</div>
+                                <small>Bet365: {res['imp_fora']:.1%}</small>
+                            </div>
                         </div>
-                        <div class="metric-item">
-                            <div class="metric-label">Fora (MyPredict)</div>
-                            <div class="metric-value">{res['prob_fora']:.1%}</div>
-                            <small>Bet365: {res['imp_fora']:.1%}</small>
+                        <div class="metric-row">
+                            <div class="metric-item"><div class="metric-label">Edge Casa</div><div class="metric-value">{res['edge_casa']:+.1%}</div><small>{res['selo_casa']}</small></div>
+                            <div class="metric-item"><div class="metric-label">Edge Empate</div><div class="metric-value">{res['edge_empate']:+.1%}</div><small>{res['selo_empate']}</small></div>
+                            <div class="metric-item"><div class="metric-label">Edge Fora</div><div class="metric-value">{res['edge_fora']:+.1%}</div><small>{res['selo_fora']}</small></div>
+                        </div>
+                        <div style="margin-top:10px;">
+                            <strong>MyPredict Recomenda:</strong>
+                            {f"{res['recomendacao']} (Prob: {res['rec_prob']:.1%}, Selo: {res['rec_selo']})" if res['recomendacao'] else "Nenhuma"}
+                        </div>
+                        <div class="metric-row" style="margin-top:10px;">
+                            <div class="metric-item"><div class="metric-label">Over 1.5 (MYP)</div><div class="metric-value">{res['over15_prob']:.1%}</div><small>{'✅' if res['over15_real'] else '❌'}</small></div>
+                            <div class="metric-item"><div class="metric-label">Over 2.5 (MYP)</div><div class="metric-value">{res['over25_prob']:.1%}</div><small>{'✅' if res['over25_real'] else '❌'}</small></div>
+                            <div class="metric-item"><div class="metric-label">BTTS (MYP)</div><div class="metric-value">{res['btts_prob']:.1%}</div><small>{'✅' if res['btts_real'] else '❌'}</small></div>
+                            <div class="metric-item"><div class="metric-label">Esc. >9.5 (MYP)</div><div class="metric-value">{res['esc_prob']:.1%}</div><small>{'✅' if res['esc_real'] else '❌'}</small></div>
+                        </div>
+                        <div class="metric-row">
+                            <div class="metric-item"><div class="metric-label">HT Over 0.5 (MYP)</div><div class="metric-value">{res['ht_over05_prob']:.1%}</div></div>
+                            <div class="metric-item"><div class="metric-label">HT Over 1.5 (MYP)</div><div class="metric-value">{res['ht_over15_prob']:.1%}</div></div>
                         </div>
                     </div>
-                    <!-- Edge e Selos -->
-                    <div class="metric-row">
-                        <div class="metric-item"><div class="metric-label">Edge Casa</div><div class="metric-value">{res['edge_casa']:+.1%}</div><small>{res['selo_casa']}</small></div>
-                        <div class="metric-item"><div class="metric-label">Edge Empate</div><div class="metric-value">{res['edge_empate']:+.1%}</div><small>{res['selo_empate']}</small></div>
-                        <div class="metric-item"><div class="metric-label">Edge Fora</div><div class="metric-value">{res['edge_fora']:+.1%}</div><small>{res['selo_fora']}</small></div>
-                    </div>
-                    <!-- Recomendação -->
-                    <div style="margin-top:10px;">
-                        <strong>MyPredict Recomenda:</strong>
-                        {f"{res['recomendacao']} (Prob: {res['rec_prob']:.1%}, Selo: {res['rec_selo']})" if res['recomendacao'] else "Nenhuma"}
-                    </div>
-                    <!-- Outros mercados -->
-                    <div class="metric-row" style="margin-top:10px;">
-                        <div class="metric-item"><div class="metric-label">Over 1.5 (MYP)</div><div class="metric-value">{res['over15_prob']:.1%}</div><small>{'✅' if res['over15_real'] else '❌'}</small></div>
-                        <div class="metric-item"><div class="metric-label">Over 2.5 (MYP)</div><div class="metric-value">{res['over25_prob']:.1%}</div><small>{'✅' if res['over25_real'] else '❌'}</small></div>
-                        <div class="metric-item"><div class="metric-label">BTTS (MYP)</div><div class="metric-value">{res['btts_prob']:.1%}</div><small>{'✅' if res['btts_real'] else '❌'}</small></div>
-                        <div class="metric-item"><div class="metric-label">Esc. >9.5 (MYP)</div><div class="metric-value">{res['esc_prob']:.1%}</div><small>{'✅' if res['esc_real'] else '❌'}</small></div>
-                    </div>
-                    <div class="metric-row">
-                        <div class="metric-item"><div class="metric-label">HT Over 0.5 (MYP)</div><div class="metric-value">{res['ht_over05_prob']:.1%}</div></div>
-                        <div class="metric-item"><div class="metric-label">HT Over 1.5 (MYP)</div><div class="metric-value">{res['ht_over15_prob']:.1%}</div></div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                    """, unsafe_allow_html=True)
 
-        # --- 4. Resumo Geral ---
-        st.markdown("---")
-        st.subheader("📊 Desempenho do MyPredict")
-        apostas = [r for r in resultados if r['recomendacao']]
-        total_apostas = len(apostas)
-        if total_apostas > 0:
-            acertos = sum(1 for r in apostas if r['acertou'])
-            taxa = (acertos / total_apostas) * 100
-            lucro = sum([r['rec_odd'] - 1 if r['acertou'] else -1 for r in apostas])
-            roi = (lucro / total_apostas) * 100
-            col1, col2, col3, col4 = st.columns(4)
-            with col1: st.metric("Apostas", total_apostas)
-            with col2: st.metric("Acertos", acertos)
-            with col3: st.metric("Taxa de Acerto", f"{taxa:.1f}%")
-            with col4: st.metric("Lucro/Prejuízo", f"{lucro:+.2f} unidades")
-            st.metric("ROI", f"{roi:.2f}%")
-        else:
-            st.warning("Nenhuma aposta foi recomendada.")
+            # Tabela compacta com todas as partidas
+            st.markdown("---")
+            st.subheader("📋 Todas as Partidas (Tabela Compacta)")
+            df_todas = pd.DataFrame(resultados)
+            # Seleciona colunas principais
+            colunas_visiveis = ['data', 'time_casa', 'time_fora', 'mpv_casa', 'mpv_fora', 'prob_casa', 'prob_empate', 'prob_fora', 'recomendacao', 'acertou']
+            st.dataframe(df_todas[colunas_visiveis], use_container_width=True)
+
+            # --- 4. Resumo Geral ---
+            st.markdown("---")
+            st.subheader("📊 Desempenho do MyPredict")
+            apostas = [r for r in resultados if r['recomendacao']]
+            total_apostas = len(apostas)
+            if total_apostas > 0:
+                acertos = sum(1 for r in apostas if r['acertou'])
+                taxa = (acertos / total_apostas) * 100
+                lucro = sum([r['rec_odd'] - 1 if r['acertou'] else -1 for r in apostas])
+                roi = (lucro / total_apostas) * 100
+                col1, col2, col3, col4 = st.columns(4)
+                with col1: st.metric("Apostas", total_apostas)
+                with col2: st.metric("Acertos", acertos)
+                with col3: st.metric("Taxa de Acerto", f"{taxa:.1f}%")
+                with col4: st.metric("Lucro/Prejuízo", f"{lucro:+.2f} unidades")
+                st.metric("ROI", f"{roi:.2f}%")
+            else:
+                st.warning("Nenhuma aposta foi recomendada.")
