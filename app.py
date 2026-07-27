@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 - Aplicativo Completo com Diagnóstico no Backtest
+MyPredict 2.0 - Aplicativo Completo com Backtest Corrigido
 """
 import streamlit as st
 import pandas as pd
@@ -349,7 +349,7 @@ elif opcao == "Análise de Jogo":
         col4.metric("Over 9.5 esc.", f"{prob_over(total_esc, 8.5):.1%}")
 
 # ============================================================
-# BACKTEST COM DIAGNÓSTICO DETALHADO
+# BACKTEST CORRIGIDO (CHAVE SIMÉTRICA)
 # ============================================================
 elif opcao == "Backtest":
     st.markdown("<h1 style='text-align:center;'>📈 Backtest MyPredict 2.0</h1>", unsafe_allow_html=True)
@@ -360,7 +360,6 @@ elif opcao == "Backtest":
     
     st.write(f"Total de registros: {len(jogos)}")
     
-    # Garantir que as datas são datetime
     for j in jogos:
         if isinstance(j['data'], str):
             j['data'] = pd.to_datetime(j['data'], dayfirst=True)
@@ -371,39 +370,32 @@ elif opcao == "Backtest":
         jogos_ord = sorted(jogos, key=lambda x: x['data'])
         partidas = {}
         for j in jogos_ord:
-            chave = (j['data'], j['time'], j['adv'])
+            # Cria chave simétrica: ordena os times alfabeticamente
+            t1 = j['time']
+            t2 = j['adv']
+            if t1 < t2:
+                chave = (j['data'], t1, t2)
+                lado = 'casa' if j['mando'] == 'casa' else 'fora'
+            else:
+                chave = (j['data'], t2, t1)
+                lado = 'fora' if j['mando'] == 'casa' else 'casa'
+            
             if chave not in partidas:
                 partidas[chave] = {'casa': None, 'fora': None}
-            if j['mando'] == 'casa':
+            
+            if lado == 'casa':
                 partidas[chave]['casa'] = j
             else:
                 partidas[chave]['fora'] = j
         
-        # Diagnóstico das partidas
-        completas = 0
-        incompletas = []
-        for chave, val in partidas.items():
-            if val['casa'] is not None and val['fora'] is not None:
-                completas += 1
-            else:
-                incompletas.append(chave)
-        
+        completas = sum(1 for v in partidas.values() if v['casa'] and v['fora'])
         st.write(f"Partidas únicas: {len(partidas)}")
-        st.write(f"Partidas com ambos os lados (completas): {completas}")
-        st.write(f"Partidas incompletas (faltando casa ou fora): {len(incompletas)}")
-        if incompletas:
-            st.warning(f"Exemplo de partida incompleta: {incompletas[0]}")
-            chave_ex = incompletas[0]
-            st.write(f"Registros para {chave_ex}:")
-            for j in jogos:
-                if (j['data'], j['time'], j['adv']) == chave_ex:
-                    st.write(j)
+        st.write(f"Partidas completas: {completas}")
         
         if completas == 0:
-            st.error("Nenhuma partida está completa. Execute a conversão novamente.")
+            st.error("Nenhuma partida completa. Verifique o arquivo CSV.")
             st.stop()
         
-        st.write("Iniciando processamento...")
         log = []
         progress = st.progress(0)
         total = len(partidas)
@@ -411,18 +403,15 @@ elif opcao == "Backtest":
         
         for idx, (chave, jogo_dict) in enumerate(sorted(partidas.items(), key=lambda x: x[0][0])):
             data_jogo = chave[0]
-            time_casa = chave[1]
-            time_fora = chave[2]
             jogo_casa = jogo_dict['casa']
             jogo_fora = jogo_dict['fora']
-            
             if not jogo_casa or not jogo_fora:
                 continue
             
-            jogos_passados = [j for j in jogos if j['data'] < data_jogo]
+            time_casa = jogo_casa['time']
+            time_fora = jogo_casa['adv']
             
-            if idx < 5:
-                st.write(f"Partida {idx+1}: {data_jogo.date()} {time_casa} x {time_fora} | Jogos passados: {len(jogos_passados)}")
+            jogos_passados = [j for j in jogos if j['data'] < data_jogo]
             
             def media_gols(time, tipo):
                 jogos_time = [j for j in jogos_passados if j['time'] == time]
