@@ -1,4 +1,4 @@
 streamlit>=1.25
 pandas
-requests
-beautifulsoup4
+fbrefdata
+lxml
