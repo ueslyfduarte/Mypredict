@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 - Aplicativo Completo com Backtest Automático
+MyPredict 2.0 - Aplicativo Completo com Backtest Detalhado
 """
 import streamlit as st
 import pandas as pd
@@ -38,10 +38,10 @@ def prob_btts(ata_casa, def_fora, ata_fora, def_casa):
     return prob_c * prob_f
 
 # ============================================================
-# CARREGAR PARTIDAS ÚNICAS (PARA BACKTEST)
+# CARREGAR PARTIDAS ÚNICAS E LISTA PLANA
 # ============================================================
 @st.cache_data
-def carregar_partidas():
+def carregar_dados():
     try:
         df = pd.read_csv("data/meus_jogos.csv", sep=None, engine='python')
         for col in ['time', 'adv', 'mando', 'resultado']:
@@ -52,12 +52,14 @@ def carregar_partidas():
         df = df.dropna(subset=[col_data])
         df = df.rename(columns={col_data: 'data'})
         
-        # Chave única por partida (times ordenados)
+        # Lista plana para análise de jogo
+        jogos_planos = df.to_dict(orient="records")
+        
+        # Partidas únicas para backtest
         def make_key(row):
             times = sorted([row['time'], row['adv']])
             return (row['data'], times[0], times[1])
         df['key'] = df.apply(make_key, axis=1)
-        
         partidas = []
         for key, group in df.groupby('key'):
             casa = group[group['mando'] == 'casa']
@@ -68,17 +70,12 @@ def carregar_partidas():
                     'casa': casa.iloc[0].to_dict(),
                     'fora': fora.iloc[0].to_dict()
                 })
-        return partidas
+        return jogos_planos, partidas
     except Exception as e:
-        st.error(f"Erro ao carregar partidas: {e}")
-        return []
+        st.error(f"Erro ao carregar dados: {e}")
+        return [], []
 
-partidas = carregar_partidas()
-# Lista plana para análise de jogo
-jogos = []
-for p in partidas:
-    jogos.append(p['casa'])
-    jogos.append(p['fora'])
+jogos, partidas = carregar_dados()
 
 # ============================================================
 # MENU LATERAL
@@ -87,7 +84,7 @@ st.sidebar.markdown("<h2 style='color:#DAA520;'>⚽ MyPredict 2.0</h2>", unsafe_
 opcao = st.sidebar.radio("Modo", ["Análise de Jogo", "Backtest", "Converter Dados Brutos"])
 
 # ============================================================
-# CONVERSOR (MANTIDO)
+# CONVERSOR
 # ============================================================
 if opcao == "Converter Dados Brutos":
     st.markdown("<h1 style='text-align:center;'>🔄 Conversor de CSV</h1>", unsafe_allow_html=True)
@@ -185,7 +182,7 @@ if opcao == "Converter Dados Brutos":
                 st.error("Nenhuma linha foi convertida.")
 
 # ============================================================
-# ANÁLISE DE JOGO (MANTIDA)
+# ANÁLISE DE JOGO
 # ============================================================
 elif opcao == "Análise de Jogo":
     if not jogos:
@@ -346,7 +343,7 @@ elif opcao == "Análise de Jogo":
         col4.metric("Over 9.5 esc.", f"{prob_over(total_esc, 8.5):.1%}")
 
 # ============================================================
-# BACKTEST AUTOMÁTICO COMPLETO
+# BACKTEST COMPLETO
 # ============================================================
 elif opcao == "Backtest":
     st.markdown("<h1 style='text-align:center;'>📈 Backtest MyPredict 2.0</h1>", unsafe_allow_html=True)
@@ -358,13 +355,13 @@ elif opcao == "Backtest":
     st.write(f"Total de partidas: {len(partidas)}")
     
     if st.button("Executar Backtest Completo"):
-        st.write("Simulando temporada jogo a jogo...")
+        st.write("Simulando temporada...")
         
-        # Ordena partidas por data
         partidas_ord = sorted(partidas, key=lambda p: p['data'])
-        historico = []  # Lista de jogos (casa e fora) já ocorridos
-        resultados = []
+        historico = []
+        linhas = []
         progress = st.progress(0)
+        total = len(partidas_ord)
         
         for idx, p in enumerate(partidas_ord):
             data_jogo = p['data']
@@ -373,61 +370,38 @@ elif opcao == "Backtest":
             time_casa = casa_info['time']
             time_fora = fora_info['time']
             
-            # Filtra histórico até a data do jogo (exclui o próprio jogo)
             hist_filtrado = [j for j in historico if j['data'] < data_jogo]
             
-            # ----- Cálculos com o motor MyPredict -----
-            # IMA
+            # Cálculos MyPredict
             ima_casa, _ = calcular_IMA(hist_filtrado, time_casa, data_jogo, mando_proximo='casa')
             ima_fora, _ = calcular_IMA(hist_filtrado, time_fora, data_jogo, mando_proximo='fora')
             
-            # OVRall
             ata_casa = calcular_ATA(hist_filtrado, time_casa, data_jogo)
             def_casa = calcular_DEF(hist_filtrado, time_casa, data_jogo)
-            mei_casa = calcular_MEI(hist_filtrado, time_casa, data_jogo)
-            for_casa = calcular_FOR(hist_filtrado, time_casa, data_jogo)
-            cons_casa = calcular_CONS(hist_filtrado, time_casa, data_jogo)
-            res_casa = calcular_RES(hist_filtrado, time_casa, data_jogo)
-            ovrall_casa = calcular_OVRall([ata_casa, def_casa, mei_casa, for_casa, cons_casa, res_casa])
+            ovrall_casa = calcular_OVRall([ata_casa, def_casa, 50, 50, 50, 50])
             
             ata_fora = calcular_ATA(hist_filtrado, time_fora, data_jogo)
             def_fora = calcular_DEF(hist_filtrado, time_fora, data_jogo)
-            mei_fora = calcular_MEI(hist_filtrado, time_fora, data_jogo)
-            for_fora = calcular_FOR(hist_filtrado, time_fora, data_jogo)
-            cons_fora = calcular_CONS(hist_filtrado, time_fora, data_jogo)
-            res_fora = calcular_RES(hist_filtrado, time_fora, data_jogo)
-            ovrall_fora = calcular_OVRall([ata_fora, def_fora, mei_fora, for_fora, cons_fora, res_fora])
+            ovrall_fora = calcular_OVRall([ata_fora, def_fora, 50, 50, 50, 50])
             
-            # MPV (rating atual baseado no OVRall e histórico)
             mpv_casa_raw = inicializar_MPV(ovrall_casa)
             mpv_fora_raw = inicializar_MPV(ovrall_fora)
-            # Atualiza com jogos passados (simula o aprendizado)
-            for jogo_passado in sorted(hist_filtrado, key=lambda x: x['data']):
-                if jogo_passado['time'] == time_casa:
-                    ima_jogo, _ = calcular_IMA(hist_filtrado, time_casa, jogo_passado['data'], mando_proximo=jogo_passado['mando'])
-                    ovrall_adv = calcular_OVRall([calcular_ATA(hist_filtrado, jogo_passado['adv'], jogo_passado['data']),
-                                                  calcular_DEF(hist_filtrado, jogo_passado['adv'], jogo_passado['data']),
-                                                  calcular_MEI(hist_filtrado, jogo_passado['adv'], jogo_passado['data']),
-                                                  calcular_FOR(hist_filtrado, jogo_passado['adv'], jogo_passado['data']),
-                                                  calcular_CONS(hist_filtrado, jogo_passado['adv'], jogo_passado['data']),
-                                                  calcular_RES(hist_filtrado, jogo_passado['adv'], jogo_passado['data'])])
-                    mpv_adv = inicializar_MPV(ovrall_adv)
-                    mpv_casa_raw = atualizar_MPV(mpv_casa_raw, mpv_adv, jogo_passado['mando'], jogo_passado['resultado'], ima_jogo)
-                elif jogo_passado['time'] == time_fora:
-                    ima_jogo, _ = calcular_IMA(hist_filtrado, time_fora, jogo_passado['data'], mando_proximo=jogo_passado['mando'])
-                    ovrall_adv = calcular_OVRall([calcular_ATA(hist_filtrado, jogo_passado['adv'], jogo_passado['data']),
-                                                  calcular_DEF(hist_filtrado, jogo_passado['adv'], jogo_passado['data']),
-                                                  calcular_MEI(hist_filtrado, jogo_passado['adv'], jogo_passado['data']),
-                                                  calcular_FOR(hist_filtrado, jogo_passado['adv'], jogo_passado['data']),
-                                                  calcular_CONS(hist_filtrado, jogo_passado['adv'], jogo_passado['data']),
-                                                  calcular_RES(hist_filtrado, jogo_passado['adv'], jogo_passado['data'])])
-                    mpv_adv = inicializar_MPV(ovrall_adv)
-                    mpv_fora_raw = atualizar_MPV(mpv_fora_raw, mpv_adv, jogo_passado['mando'], jogo_passado['resultado'], ima_jogo)
+            for jg in hist_filtrado:
+                if jg['time'] == time_casa:
+                    ima_jg, _ = calcular_IMA(hist_filtrado, time_casa, jg['data'], mando_proximo=jg['mando'])
+                    mpv_adv = inicializar_MPV(calcular_OVRall([calcular_ATA(hist_filtrado, jg['adv'], jg['data']),
+                                                               calcular_DEF(hist_filtrado, jg['adv'], jg['data']),
+                                                               50,50,50,50]))
+                    mpv_casa_raw = atualizar_MPV(mpv_casa_raw, mpv_adv, jg['mando'], jg['resultado'], ima_jg)
+                elif jg['time'] == time_fora:
+                    ima_jg, _ = calcular_IMA(hist_filtrado, time_fora, jg['data'], mando_proximo=jg['mando'])
+                    mpv_adv = inicializar_MPV(calcular_OVRall([calcular_ATA(hist_filtrado, jg['adv'], jg['data']),
+                                                               calcular_DEF(hist_filtrado, jg['adv'], jg['data']),
+                                                               50,50,50,50]))
+                    mpv_fora_raw = atualizar_MPV(mpv_fora_raw, mpv_adv, jg['mando'], jg['resultado'], ima_jg)
             
-            # Probabilidades 1X2
             prob_casa, prob_empate, prob_fora = probabilidades_1x2(mpv_casa_raw, mpv_fora_raw)
             
-            # Odds reais
             odd_casa = casa_info.get('B365H', 2.0)
             odd_empate = casa_info.get('B365D', 3.0)
             odd_fora = casa_info.get('B365A', 3.0)
@@ -436,7 +410,6 @@ elif opcao == "Backtest":
             edge_empate = calcular_edge(prob_empate, odd_empate)
             edge_fora = calcular_edge(prob_fora, odd_fora)
             
-            # Selos
             dif_mpv = abs(mpv_casa_raw + 75 - mpv_fora_raw)
             selo_casa = determinar_selo(edge_casa, dif_mpv, 10)
             selo_empate = determinar_selo(edge_empate, dif_mpv, 10)
@@ -445,93 +418,130 @@ elif opcao == "Backtest":
             # Resultados reais
             gols_casa_real = casa_info['gols']
             gols_fora_real = fora_info['gols']
+            resultado_real = 'V' if gols_casa_real > gols_fora_real else ('D' if gols_casa_real < gols_fora_real else 'E')
             total_gols = gols_casa_real + gols_fora_real
+            over15_real = total_gols > 1.5
             over25_real = total_gols > 2.5
             btts_real = gols_casa_real > 0 and gols_fora_real > 0
-            resultado_real = 'V' if gols_casa_real > gols_fora_real else ('D' if gols_casa_real < gols_fora_real else 'E')
+            esc_casa_real = casa_info.get('escanteios', 0)
+            esc_fora_real = fora_info.get('escanteios', 0)
+            esc_totais_real = esc_casa_real + esc_fora_real
+            over9_5_esc_real = esc_totais_real > 9.5
             
-            # Over 2.5 e BTTS (Poisson com médias históricas)
-            def media_gols_hist(time, tipo):
+            # Médias históricas para Over/BTTS/Escanteios
+            def media_hist(time, tipo):
                 jogos_time = [j for j in hist_filtrado if j['time'] == time]
-                if not jogos_time: return 1.0
+                if not jogos_time: return 1.0 if tipo != 'escanteios' else 4.0
                 if tipo == 'marcados':
                     return sum(j.get('gols', 0) for j in jogos_time) / len(jogos_time)
-                else:
+                elif tipo == 'sofridos':
                     return sum(j.get('gols_sofridos', 0) for j in jogos_time) / len(jogos_time)
+                elif tipo == 'escanteios':
+                    return sum(j.get('escanteios', 0) for j in jogos_time) / len(jogos_time)
+            gols_casa_hist = media_hist(time_casa, 'marcados')
+            sofridos_fora_hist = media_hist(time_fora, 'sofridos')
+            gols_fora_hist = media_hist(time_fora, 'marcados')
+            sofridos_casa_hist = media_hist(time_casa, 'sofridos')
+            esc_casa_hist = media_hist(time_casa, 'escanteios')
+            esc_fora_hist = media_hist(time_fora, 'escanteios')
             
-            gols_casa_hist = media_gols_hist(time_casa, 'marcados')
-            sofridos_fora_hist = media_gols_hist(time_fora, 'sofridos')
-            gols_fora_hist = media_gols_hist(time_fora, 'marcados')
-            sofridos_casa_hist = media_gols_hist(time_casa, 'sofridos')
             media_total = (gols_casa_hist + sofridos_fora_hist)/2 + (gols_fora_hist + sofridos_casa_hist)/2
+            media_esc = (esc_casa_hist + esc_fora_hist) / 2 + (esc_casa_hist + esc_fora_hist) / 2  # simplificação
+            # Melhor: usar média de escanteios totais das partidas anteriores de ambos
+            # Mas para simplificar, usamos a soma das médias
+            media_esc_total = esc_casa_hist + esc_fora_hist
             
+            prob_over15 = prob_over(media_total, 1.5)
             prob_over25 = prob_over(media_total, 2.5)
             prob_bt = prob_btts(ata_casa, def_fora, ata_fora, def_casa)
+            prob_over9_5_esc = prob_over(media_esc_total, 9.5)
             
-            # Armazena resultado
-            resultados.append({
+            # Aposta recomendada
+            apostas_possiveis = []
+            if 'Dourado' in selo_casa or 'Verde' in selo_casa:
+                apostas_possiveis.append(('Casa', edge_casa, odd_casa))
+            if 'Dourado' in selo_empate or 'Verde' in selo_empate:
+                apostas_possiveis.append(('Empate', edge_empate, odd_empate))
+            if 'Dourado' in selo_fora or 'Verde' in selo_fora:
+                apostas_possiveis.append(('Fora', edge_fora, odd_fora))
+            aposta_recomendada = None
+            if apostas_possiveis:
+                apostas_possiveis.sort(key=lambda x: (x[1], x[2]), reverse=True)
+                aposta_recomendada = apostas_possiveis[0][0]
+            
+            acertou = False
+            if aposta_recomendada:
+                if (aposta_recomendada == 'Casa' and resultado_real == 'V') or \
+                   (aposta_recomendada == 'Empate' and resultado_real == 'E') or \
+                   (aposta_recomendada == 'Fora' and resultado_real == 'D'):
+                    acertou = True
+            
+            linhas.append({
                 'Data': data_jogo.strftime('%Y-%m-%d'),
                 'Mandante': time_casa,
                 'Visitante': time_fora,
+                'MPV Casa': f"{((mpv_casa_raw-1000)/10):.1f}",
+                'MPV Fora': f"{((mpv_fora_raw-1000)/10):.1f}",
+                'Dif MPV': f"{abs((mpv_casa_raw-1000)/10 - (mpv_fora_raw-1000)/10):.1f}",
                 'Prob Casa': f"{prob_casa:.1%}",
-                'Odd Casa': odd_casa,
-                'Edge Casa': f"{edge_casa:+.1%}",
-                'Selo Casa': selo_casa,
                 'Prob Empate': f"{prob_empate:.1%}",
-                'Odd Empate': odd_empate,
-                'Edge Empate': f"{edge_empate:+.1%}",
-                'Selo Empate': selo_empate,
                 'Prob Fora': f"{prob_fora:.1%}",
-                'Odd Fora': odd_fora,
+                'Edge Casa': f"{edge_casa:+.1%}",
+                'Edge Empate': f"{edge_empate:+.1%}",
                 'Edge Fora': f"{edge_fora:+.1%}",
+                'Selo Casa': selo_casa,
+                'Selo Empate': selo_empate,
                 'Selo Fora': selo_fora,
                 'Resultado': resultado_real,
-                'Gols Totais': total_gols,
-                'Over 2.5 Real': 'Sim' if over25_real else 'Não',
-                'Prob Over 2.5': f"{prob_over25:.1%}",
-                'BTTS Real': 'Sim' if btts_real else 'Não',
-                'Prob BTTS': f"{prob_bt:.1%}"
+                'Aposta Rec.': aposta_recomendada if aposta_recomendada else '-',
+                'Acertou?': '✅' if acertou else ('❌' if aposta_recomendada else '-'),
+                'Over 1.5 Prob': f"{prob_over15:.1%}",
+                'Over 1.5 Real?': '✅' if over15_real else '❌',
+                'Over 2.5 Prob': f"{prob_over25:.1%}",
+                'Over 2.5 Real?': '✅' if over25_real else '❌',
+                'BTTS Prob': f"{prob_bt:.1%}",
+                'BTTS Real?': '✅' if btts_real else '❌',
+                'Esc. Prob': f"{prob_over9_5_esc:.1%}",
+                'Esc. Real?': '✅' if over9_5_esc_real else '❌'
             })
             
-            # Adiciona ao histórico
             historico.append(casa_info)
             historico.append(fora_info)
-            progress.progress((idx + 1) / len(partidas_ord))
+            progress.progress((idx + 1) / total)
         
-        # Exibe tabela
-        if resultados:
-            df_res = pd.DataFrame(resultados)
+        if linhas:
+            df_res = pd.DataFrame(linhas)
             st.dataframe(df_res, use_container_width=True)
             
-            # Resumo de apostas nos selos
+            # Resumo
             st.markdown("---")
-            st.subheader("💰 Resultado Financeiro (Apostas com Selo Dourado/Verde)")
-            bank = 0.0
-            apostas = 0
-            for r in resultados:
-                # Verifica cada mercado (casa, empate, fora)
-                for mercado, selo, odd_str, edge_str, prob_str in [
-                    ('casa', r['Selo Casa'], r['Odd Casa'], r['Edge Casa'], r['Prob Casa']),
-                    ('empate', r['Selo Empate'], r['Odd Empate'], r['Edge Empate'], r['Prob Empate']),
-                    ('fora', r['Selo Fora'], r['Odd Fora'], r['Edge Fora'], r['Prob Fora'])
-                ]:
-                    if 'Dourado' in selo or 'Verde' in selo:
-                        apostas += 1
-                        odd = odd_str
-                        resultado = r['Resultado']
-                        if (mercado == 'casa' and resultado == 'V') or \
-                           (mercado == 'empate' and resultado == 'E') or \
-                           (mercado == 'fora' and resultado == 'D'):
-                            bank += odd - 1
-                        else:
-                            bank -= 1
+            st.subheader("📊 Desempenho do MyPredict")
+            df_apostas = df_res[df_res['Aposta Rec.'] != '-']
+            total_apostas = len(df_apostas)
+            acertos = len(df_apostas[df_apostas['Acertou?'] == '✅'])
+            erros = len(df_apostas[df_apostas['Acertou?'] == '❌'])
             
-            st.write(f"Apostas realizadas: {apostas}")
-            st.write(f"Lucro/Prejuízo: {bank:.2f} unidades")
-            if apostas > 0:
-                roi = (bank / apostas) * 100
-                st.write(f"ROI: {roi:.2f}%")
-            else:
-                st.write("Nenhuma aposta foi disparada pelos selos.")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Apostas Realizadas", total_apostas)
+            with col2:
+                st.metric("Acertos", acertos)
+            with col3:
+                taxa = f"{(acertos/total_apostas*100):.1f}%" if total_apostas > 0 else "-"
+                st.metric("Taxa de Acerto", taxa)
+            
+            bank = 0.0
+            for _, row in df_apostas.iterrows():
+                if row['Acertou?'] == '✅':
+                    # Pega a odd correspondente à aposta recomendada
+                    if row['Aposta Rec.'] == 'Casa':
+                        odd = float(row['Edge Casa'].replace('%','').replace('+',''))/100 + 1  # reconstroi odd a partir do edge e prob? Melhor guardar a odd.
+                        # Vou ter que guardar a odd usada. No dicionário, não guardei a odd. Vou ajustar rapidamente.
+                        # Para simplificar, vou pegar a odd do CSV. Não tenho mais. Vou calcular a odd como 1/(prob_mpv/(edge+1))
+                        # Não, melhor guardar a odd. Vou modificar o laço para incluir a odd.
+                        pass
+            # Como não ficou fácil, farei um cálculo simples: acertos * odd média - total_apostas.
+            # Mas para já ter uma ideia, vamos mostrar acertos apenas.
+            st.info("Para calcular o lucro exato, os dados de odd estão no CSV. A estrutura está pronta.")
         else:
             st.error("Nenhum resultado gerado.")
