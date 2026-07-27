@@ -72,7 +72,6 @@ def obter_stats_time(liga, temporada, time):
     url = f'https://fbref.com/en/comps/{codigo}/{temporada}/stats/{temporada}-{codigo}-Stats'
     html_str = _get(url)
     soup = BeautifulSoup(html_str, 'html.parser')
-    # Tenta encontrar a tabela dentro de comentários (padrão FBref)
     stats_table = None
     for comment in soup.find_all(string=lambda text: isinstance(text, str) and 'div_stats_standard' in text):
         comment_soup = BeautifulSoup(comment, 'html.parser')
@@ -81,7 +80,6 @@ def obter_stats_time(liga, temporada, time):
             stats_table = table
             break
     if not stats_table:
-        # Tenta encontrar diretamente
         table = soup.find('table', id=lambda x: x and 'stats_standard' in x)
         if table:
             stats_table = table
@@ -122,6 +120,5 @@ def obter_stats_time(liga, temporada, time):
     for k, v in dados.items():
         if v is not None and not isinstance(v, (int, float)):
             dados[k] = None
-
     _cache_escrever(chave, dados)
     return dados
