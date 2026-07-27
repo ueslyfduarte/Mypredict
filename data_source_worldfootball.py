@@ -1,6 +1,3 @@
-# data_source_worldfootball.py — MyPredict 2.0
-# Fonte de dados: web scraping do worldfootball.net (universal)
-
 import time
 import requests
 import pandas as pd
@@ -8,14 +5,13 @@ from io import StringIO
 from pathlib import Path
 import json
 from datetime import datetime
-from lxml import html
+from bs4 import BeautifulSoup
 
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 REQUEST_DELAY = 3
 CACHE_DIR = Path('cache/worldfootball')
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-# Cache para slugs de ligas
 SLUG_CACHE_FILE = CACHE_DIR / 'slugs.json'
 
 def _cache_ler(chave):
@@ -37,41 +33,31 @@ def _get(url):
     return resp.text
 
 def obter_slug_liga(nome_liga):
-    """
-    Retorna o slug da liga no worldfootball (ex.: 'bra-serie-a') a partir do nome.
-    Se não encontrar, retorna None.
-    """
-    # Carrega cache de slugs, se existir
+    """Retorna o slug da liga no worldfootball.net a partir do nome."""
     slugs = {}
     if SLUG_CACHE_FILE.exists():
         with open(SLUG_CACHE_FILE, 'r', encoding='utf-8') as f:
             slugs = json.load(f)
     else:
-        # Faz scraping da página de competições
         url = 'https://www.worldfootball.net/competitions/'
         html_str = _get(url)
-        tree = html.fromstring(html_str)
-        # Os links para competições estão dentro de tabelas com classe "standard_tabelle"
-        for a in tree.xpath("//table[contains(@class,'standard_tabelle')]//a[contains(@href,'/')]"):
-            href = a.get('href', '')
-            nome = a.text.strip() if a.text else ''
-            if href and nome:
-                # Extrai slug da URL: ex: /bra-serie-a-2024/
-                partes = href.strip('/').split('/')
-                if len(partes) >= 1:
-                    slug = partes[0]  # pode conter temporada, mas ignoramos
-                    # Remove temporada se estiver no slug (ex.: 'bra-serie-a-2024' -> 'bra-serie-a')
-                    slug_base = '-'.join([p for p in slug.split('-') if not p.isdigit()])
-                    slugs[nome.lower()] = slug_base
-        # Salva cache
+        soup = BeautifulSoup(html_str, 'html.parser')
+        for table in soup.find_all('table', class_='standard_tabelle'):
+            for a in table.find_all('a', href=True):
+                href = a['href']
+                nome = a.get_text(strip=True)
+                if not nome:
+                    continue
+                # Extrai slug base (sem temporada)
+                slug_completo = href.strip('/').split('/')[0]
+                slug_base = '-'.join([p for p in slug_completo.split('-') if not p.isdigit()])
+                slugs[nome.lower()] = slug_base
         with open(SLUG_CACHE_FILE, 'w', encoding='utf-8') as f:
             json.dump(slugs, f, ensure_ascii=False, indent=2)
 
-    # Busca pelo nome (case-insensitive)
     nome_lower = nome_liga.lower()
     if nome_lower in slugs:
         return slugs[nome_lower]
-    # Tenta correspondência parcial
     for nome, slug in slugs.items():
         if nome_lower in nome or nome in nome_lower:
             return slug
@@ -82,10 +68,9 @@ def obter_classificacao(liga_slug, temporada):
     cached = _cache_ler(chave)
     if cached:
         return {int(k): v for k, v in cached.items()}
-    
     url = f'https://www.worldfootball.net/table/{liga_slug}-{temporada}/'
     html_str = _get(url)
-    dfs = pd.read_html(StringIO(html_str))
+    dfs = pd.read_html(StringIO(html_str), flavor='html.parser')
     classif = {}
     for df in dfs:
         if 'Team' in df.columns and '#' in df.columns:
@@ -108,10 +93,9 @@ def obter_partidas_time(liga_slug, temporada, time):
     cached = _cache_ler(chave)
     if cached:
         return cached
-
     url = f'https://www.worldfootball.net/schedule/{liga_slug}-{temporada}/'
     html_str = _get(url)
-    dfs = pd.read_html(StringIO(html_str))
+    dfs = pd.read_html(StringIO(html_str), flavor='html.parser')
     jogos = []
     for df in dfs:
         if 'Home' not in df.columns or 'Away' not in df.columns:
@@ -137,7 +121,6 @@ def obter_partidas_time(liga_slug, temporada, time):
 
                 if time.lower() not in mandante.lower() and time.lower() not in visitante.lower():
                     continue
-
                 if time.lower() in mandante.lower():
                     adversario = visitante
                     mandante_flag = True
@@ -152,7 +135,6 @@ def obter_partidas_time(liga_slug, temporada, time):
                     ht = [ht_placar[1], ht_placar[0]] if ht_placar else None
 
                 resultado = 'V' if gols_pro > gols_contra else ('E' if gols_pro == gols_contra else 'D')
-
                 jogos.append({
                     'data': data,
                     'resultado': resultado,
@@ -169,7 +151,7 @@ def obter_partidas_time(liga_slug, temporada, time):
                     'escanteios': None, 'escanteios_sofridos': None,
                     'gols_ultimos_15': None,
                 })
-            except Exception:
+            except:
                 continue
     jogos.sort(key=lambda x: x['data'])
     _cache_escrever(chave, jogos)
