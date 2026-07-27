@@ -1,6 +1,4 @@
-# data_source_fbref_stats.py — MyPredict 2.0
-# Fonte de dados: FBref (classificação, partidas com HT, estatísticas agregadas)
-
+# data_source_fbref_stats.py — MyPredict 2.0 (versão final funcional)
 import time
 import random
 import requests
@@ -19,7 +17,6 @@ HEADERS = {
 CACHE_DIR = Path('cache/fbref_stats')
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-# Mapeamento estático de nomes de liga → código FBref (fallback)
 FBREF_CODES = {
     "brasileirão": 24,
     "campeonato brasileiro série a": 24,
@@ -57,15 +54,12 @@ def _get(url):
     return resp.text
 
 def _extrair_tabela_por_id(html_str, table_id):
-    """Extrai tabela do HTML, procurando dentro de comentários também."""
     soup = BeautifulSoup(html_str, 'html.parser')
-    # Tenta primeiro dentro de comentários
     for comment in soup.find_all(string=lambda text: isinstance(text, str) and table_id in text):
         comment_soup = BeautifulSoup(comment, 'html.parser')
         table = comment_soup.find('table', id=table_id)
         if table:
             return table
-    # Fallback direto
     table = soup.find('table', id=table_id)
     return table
 
@@ -73,11 +67,9 @@ def _extrair_tabela_por_id(html_str, table_id):
 # 1. CÓDIGO DA LIGA
 # ------------------------------------------------------------
 def obter_codigo_fbref(nome_liga):
-    """Retorna código numérico da liga no FBref."""
     nome_lower = nome_liga.lower().strip()
     if nome_lower in FBREF_CODES:
         return FBREF_CODES[nome_lower]
-    # Busca automática
     cache_file = CACHE_DIR / 'fbref_codes.json'
     if cache_file.exists():
         with open(cache_file, 'r', encoding='utf-8') as f:
@@ -108,56 +100,35 @@ def obter_codigo_fbref(nome_liga):
 # 2. CLASSIFICAÇÃO
 # ------------------------------------------------------------
 def obter_classificacao(liga_codigo, temporada):
-    """Retorna {posicao: nome_time} da tabela oficial da liga."""
     chave = f'class_{liga_codigo}_{temporada}'
     cached = _cache_ler(chave)
     if cached:
         return {int(k): v for k, v in cached.items()}
 
-    # A classificação está na página inicial da competição, ex.:
     url = f'https://fbref.com/en/comps/{liga_codigo}/{temporada}/'
     html_str = _get(url)
     soup = BeautifulSoup(html_str, 'html.parser')
 
-    # Procura a tabela de classificação (id varia, ex: 'results2024-20251-overall')
-    # Vamos buscar pela classe "stats_table" e que contenha coluna "W" (vitórias)
     table = None
     for tbl in soup.find_all('table', class_='stats_table'):
-        # Verifica se tem cabeçalho típico de classificação
-        if tbl.find('th', {'data-stat': 'wins'}):
+        headers = [th.get('data-stat', '') for th in tbl.find_all('th')]
+        if 'wins' in headers and 'losses' in headers:
             table = tbl
             break
     if not table:
-        # Último recurso: tenta usar a tabela de stats (já sabemos que ela lista times)
-        url_stats = f'https://fbref.com/en/comps/{liga_codigo}/{temporada}/stats/{temporada}-{liga_codigo}-Stats'
-        html_stats = _get(url_stats)
-        table_stats = _extrair_tabela_por_id(html_stats, 'stats_standard')
-        if table_stats:
-            df_stats = pd.read_html(StringIO(str(table_stats)), flavor='html.parser')[0]
-            df_stats.columns = ['_'.join(col).strip() if 'Unnamed' not in col[0] else col[1] for col in df_stats.columns]
-            df_stats = df_stats.rename(columns={'Squad': 'team'})
-            df_stats = df_stats[~df_stats['team'].str.contains('Squad')]
-            # Ordem da tabela = classificação? Nem sempre, mas serve como fallback
-            classif = {i+1: row['team'] for i, (_, row) in enumerate(df_stats.iterrows())}
-            _cache_escrever(chave, classif)
-            return classif
+        for tbl in soup.find_all('table'):
+            if tbl.find('th', {'data-stat': 'rank'}):
+                table = tbl
+                break
+    if not table:
         raise ValueError(f'Classificação não encontrada para código {liga_codigo} temporada {temporada}')
 
-    # Se encontrou a tabela de classificação, parseia
     df = pd.read_html(StringIO(str(table)), flavor='html.parser')[0]
-    # As colunas podem vir com multi-nível; vamos simplificar
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = [col[1] if 'Unnamed' not in col[0] else col[0] for col in df.columns]
-    # Identifica as colunas: Rank (ou Rk) e Squad (ou Team)
-    if 'Rk' in df.columns:
-        pos_col = 'Rk'
-    elif 'Rank' in df.columns:
-        pos_col = 'Rank'
-    else:
-        # Assume que a primeira coluna é a posição
-        pos_col = df.columns[0]
+
+    pos_col = 'Rk' if 'Rk' in df.columns else 'Rank'
     team_col = 'Squad' if 'Squad' in df.columns else 'Team'
-    
     classif = {}
     for _, row in df.iterrows():
         try:
@@ -167,7 +138,7 @@ def obter_classificacao(liga_codigo, temporada):
         except:
             continue
     if not classif:
-        raise ValueError(f'Não foi possível extrair a classificação da tabela.')
+        raise ValueError('Não foi possível extrair a classificação.')
     _cache_escrever(chave, classif)
     return classif
 
@@ -175,68 +146,77 @@ def obter_classificacao(liga_codigo, temporada):
 # 3. PARTIDAS DE UM TIME (com HT)
 # ------------------------------------------------------------
 def obter_partidas_time(liga_codigo, temporada, time):
-    """Retorna lista de partidas do time na temporada, com resultado e HT."""
     chave = f'partidas_{liga_codigo}_{temporada}_{time}'
     cached = _cache_ler(chave)
     if cached:
         return cached
 
-    # URL da página de schedule da liga
     url = f'https://fbref.com/en/comps/{liga_codigo}/{temporada}/schedule/{temporada}-{liga_codigo}-Scores-and-Fixtures'
     html_str = _get(url)
     soup = BeautifulSoup(html_str, 'html.parser')
-    
-    # A tabela de partidas geralmente tem id 'sched_2024-...' (varia), então buscamos por classe
+
     table = soup.find('table', class_='stats_table')
     if not table:
         raise ValueError(f'Tabela de partidas não encontrada em {url}')
-    
+
     df = pd.read_html(StringIO(str(table)), flavor='html.parser')[0]
-    # Limpeza de colunas multi-nível
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = ['_'.join(col).strip() if 'Unnamed' not in col[0] else col[1] for col in df.columns]
-    
+
     jogos = []
     for _, row in df.iterrows():
         try:
-            mandante = str(row['Home']).strip()
-            visitante = str(row['Away']).strip()
-            gols_casa = int(row['GF']) if 'GF' in row else None
-            gols_fora = int(row['GA']) if 'GA' in row else None
-            if gols_casa is None or gols_fora is None:
-                continue  # jogo ainda não disputado
-            # HT placar (coluna 'HT')
-            ht_str = str(row.get('HT', '')).strip()
+            mandante = str(row['Home']).strip() if 'Home' in row else None
+            visitante = str(row['Away']).strip() if 'Away' in row else None
+            if not mandante or not visitante:
+                continue
+
+            gols_casa = row.get('GF')
+            gols_fora = row.get('GA')
+            if pd.isna(gols_casa) or pd.isna(gols_fora):
+                continue
+            gols_casa = int(gols_casa)
+            gols_fora = int(gols_fora)
+
+            ht_str = ''
+            for col in ['HT', 'Half-time', 'Ht']:
+                if col in row and isinstance(row[col], str):
+                    ht_str = row[col]
+                    break
             ht_placar = None
-            if '-' in ht_str:
-                ht_casa, ht_fora = map(int, ht_str.split('-'))
-                ht_placar = [ht_casa, ht_fora]
-            
-            # Data
+            if ht_str and '–' in ht_str:
+                try:
+                    ht_casa, ht_fora = map(int, ht_str.split('–'))
+                    if time.lower() == mandante.lower():
+                        ht_placar = [ht_casa, ht_fora]
+                    else:
+                        ht_placar = [ht_fora, ht_casa]
+                except:
+                    pass
+
             data_str = str(row.get('Date', ''))
             try:
                 data = datetime.strptime(data_str, '%Y-%m-%d')
             except:
                 data = datetime.now()
-            
-            # Identificar se o time é mandante ou visitante
-            if time.lower() not in mandante.lower() and time.lower() not in visitante.lower():
-                continue
-            if time.lower() in mandante.lower():
+
+            if time.lower() == mandante.lower():
                 adversario = visitante
                 mandante_flag = True
                 gols_pro = gols_casa
                 gols_contra = gols_fora
-                ht = ht_placar
-            else:
+                ht = ht_placar if ht_placar else None
+            elif time.lower() == visitante.lower():
                 adversario = mandante
                 mandante_flag = False
                 gols_pro = gols_fora
                 gols_contra = gols_casa
                 ht = [ht_placar[1], ht_placar[0]] if ht_placar else None
-            
+            else:
+                continue
+
             resultado = 'V' if gols_pro > gols_contra else ('E' if gols_pro == gols_contra else 'D')
-            
+
             jogos.append({
                 'data': data,
                 'resultado': resultado,
@@ -255,14 +235,63 @@ def obter_partidas_time(liga_codigo, temporada, time):
             })
         except:
             continue
+
     jogos.sort(key=lambda x: x['data'])
     _cache_escrever(chave, jogos)
     return jogos
 
 # ------------------------------------------------------------
-# 4. ESTATÍSTICAS AGREGADAS (OVRall) – já existente
+# 4. ESTATÍSTICAS AGREGADAS (OVRall)
 # ------------------------------------------------------------
 def obter_stats_time(liga, temporada, time):
-    # (mantenha o código anterior que já funciona, com a busca em comentários)
-    # ... (o mesmo que você já tem, apenas certifique-se de que funciona)
-    pass  # substitua pelo bloco real, que não vou repetir para não alongar
+    chave = f'stats_{liga}_{temporada}_{time}'
+    cached = _cache_ler(chave)
+    if cached:
+        return cached
+
+    codigo = obter_codigo_fbref(liga) if isinstance(liga, str) else liga
+    if not codigo:
+        raise ValueError(f"Liga '{liga}' não encontrada.")
+    url = f'https://fbref.com/en/comps/{codigo}/{temporada}/stats/{temporada}-{codigo}-Stats'
+    html_str = _get(url)
+    stats_table = _extrair_tabela_por_id(html_str, 'stats_standard')
+    if not stats_table:
+        raise ValueError(f"Tabela de estatísticas não encontrada para {liga} {temporada}")
+
+    df = pd.read_html(StringIO(str(stats_table)), flavor='html.parser')[0]
+    df.columns = ['_'.join(col).strip() if 'Unnamed' not in col[0] else col[1] for col in df.columns]
+    df = df.rename(columns={'Squad': 'team'})
+    df = df[~df['team'].str.contains('Squad')]
+    df = df.set_index('team')
+
+    match = None
+    for t in df.index:
+        if time.lower() in t.lower():
+            match = t
+            break
+    if not match:
+        raise ValueError(f"Time '{time}' não encontrado na tabela de stats do FBref.")
+
+    row = df.loc[match]
+    dados = {
+        'gols_media': row.get('Gls_Per 90 Minutes') or row.get('Gls'),
+        'gols_sofridos_media': row.get('GA_Per 90 Minutes') or row.get('GA'),
+        'xg_media': row.get('xG_Per 90 Minutes') or row.get('xG'),
+        'xga_media': row.get('xGA_Per 90 Minutes') or row.get('xGA'),
+        'finalizacoes_tot_media': row.get('Sh_Per 90 Minutes') or row.get('Sh'),
+        'finalizacoes_alvo_media': row.get('SoT_Per 90 Minutes') or row.get('SoT'),
+        'posse_media': row.get('Poss_Per 90 Minutes') or row.get('Poss'),
+        'passes_certos_pct': row.get('Cmp%'),
+        'passes_chave_media': row.get('KP'),
+        'assistencias_media': row.get('Ast_Per 90 Minutes') or row.get('Ast'),
+        'desarmes_media': row.get('Tkl_Per 90 Minutes') or row.get('Tkl'),
+        'interceptacoes_media': row.get('Int_Per 90 Minutes') or row.get('Int'),
+        'escanteios_media': None,
+        'escanteios_sofridos_media': None,
+    }
+    for k, v in dados.items():
+        if v is not None and not isinstance(v, (int, float)):
+            dados[k] = None
+
+    _cache_escrever(chave, dados)
+    return dados
