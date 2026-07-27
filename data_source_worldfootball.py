@@ -11,7 +11,6 @@ USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 REQUEST_DELAY = 3
 CACHE_DIR = Path('cache/worldfootball')
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
 SLUG_CACHE_FILE = CACHE_DIR / 'slugs.json'
 
 def _cache_ler(chave):
@@ -33,7 +32,6 @@ def _get(url):
     return resp.text
 
 def obter_slug_liga(nome_liga):
-    """Retorna o slug da liga no worldfootball.net a partir do nome."""
     slugs = {}
     if SLUG_CACHE_FILE.exists():
         with open(SLUG_CACHE_FILE, 'r', encoding='utf-8') as f:
@@ -46,9 +44,7 @@ def obter_slug_liga(nome_liga):
             for a in table.find_all('a', href=True):
                 href = a['href']
                 nome = a.get_text(strip=True)
-                if not nome:
-                    continue
-                # Extrai slug base (sem temporada)
+                if not nome: continue
                 slug_completo = href.strip('/').split('/')[0]
                 slug_base = '-'.join([p for p in slug_completo.split('-') if not p.isdigit()])
                 slugs[nome.lower()] = slug_base
@@ -105,8 +101,7 @@ def obter_partidas_time(liga_slug, temporada, time):
                 mandante = str(row['Home']).strip()
                 visitante = str(row['Away']).strip()
                 gols_str = str(row.get('Result', '')).strip()
-                if ':' not in gols_str:
-                    continue
+                if ':' not in gols_str: continue
                 gols_casa, gols_fora = map(int, gols_str.split(':'))
                 ht_str = str(row.get('HT', '')).strip()
                 ht_placar = None
