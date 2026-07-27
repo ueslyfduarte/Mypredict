@@ -20,13 +20,15 @@ time_fora = st.text_input("Time de fora", "Palmeiras")
 
 if st.button("Prever"):
     with st.spinner("Buscando dados e calculando..."):
-        # Carrega classificação e prateleiras
         class_ant = classificação_anterior(liga, temporada)
         prateleiras = gerar_prateleiras(liga, temporada)
 
-        # Dados OVRall (só usamos os brutos para mercados)
         dados_casa = obter_dados_ovrall_time(time_casa, liga, temporada, class_ant)
         dados_fora = obter_dados_ovrall_time(time_fora, liga, temporada, class_ant)
+
+        if not dados_casa or not dados_fora:
+            st.error("Não foi possível carregar os dados. Verifique os nomes ou a conexão.")
+            st.stop()
 
         # IMA
         jogos_casa = obter_ultimos_jogos_com_heranca(time_casa, liga, temporada, class_ant, n=20)
@@ -45,12 +47,10 @@ if st.button("Prever"):
         ic_casa = 50.0
         ic_fora = 50.0
 
-        # MPV e bônus casa
         mpv_casa = calcular_mpv(ima_casa, ovrall_casa, ic_casa)
         mpv_fora = calcular_mpv(ima_fora, ovrall_fora, ic_fora)
-        bonus_casa = calcular_bonus_casa(dados_casa.get('diff_aprov_casa_fora', 0))
+        bonus_casa = calcular_bonus_casa(dados_casa.get('diff_aprov_casa_fora'))
 
-        # Mercados
         p1, pX, p2 = prob_1x2(mpv_casa, mpv_fora, bonus_casa)
 
         over25 = prob_over_2_5(
@@ -60,14 +60,13 @@ if st.button("Prever"):
 
         gols_esp_casa = _gols_esperados(dados_casa.get('gols_media'), dados_fora.get('gols_sofridos_media'), MEDIA_GOLS_CASA_LIGA)
         gols_esp_fora = _gols_esperados(dados_fora.get('gols_media'), dados_casa.get('gols_sofridos_media'), MEDIA_GOLS_FORA_LIGA)
-        btts = prob_ambas_marcam(gols_esp_casa, gols_esp_fora)
+        btts = prob_ambas_marcam(gols_esp_casa, gols_esp_fora) if gols_esp_casa and gols_esp_fora else None
 
         gol_ht = prob_gol_ht(
             dados_casa.get('gols_ht_media'), dados_fora.get('gols_ht_media'),
             dados_casa.get('gols_ht_sofridos_media'), dados_fora.get('gols_ht_sofridos_media')
         )
 
-    # Exibição
     st.subheader("Probabilidades")
     col1, col2, col3 = st.columns(3)
     col1.metric("Casa", f"{p1:.1%}")
@@ -75,10 +74,9 @@ if st.button("Prever"):
     col3.metric("Fora", f"{p2:.1%}")
 
     col4, col5 = st.columns(2)
-    col4.metric("Over 2.5 gols", f"{over25:.1%}")
-    col5.metric("Ambas Marcam", f"{btts:.1%}")
+    col4.metric("Over 2.5 gols", f"{over25:.1%}" if over25 else "N/D")
+    col5.metric("Ambas Marcam", f"{btts:.1%}" if btts else "N/D")
     st.metric("Gol no 1º tempo", f"{gol_ht:.1%}" if gol_ht else "N/D")
 
-    # Detalhes das métricas
     st.caption(f"MPV {time_casa}: {mpv_casa:.1f} | MPV {time_fora}: {mpv_fora:.1f} | Bônus casa: {bonus_casa:.1f}")
     st.caption(f"IMA {time_casa}: {ima_casa:.1f} | IMA {time_fora}: {ima_fora:.1f}")
