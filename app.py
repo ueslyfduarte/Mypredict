@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 – Aplicativo Completo (Selos pela Probabilidade MyPredict)
+MyPredict 2.0 – Análise por Prateleira e Dupla Chance
 """
 import streamlit as st
 import pandas as pd
@@ -9,11 +9,12 @@ from math import exp, factorial
 import os
 
 # ============================================================
-# LIMIARES PARA SELOS (BASEADOS NA PROBABILIDADE MYPREDICT)
+# LIMIARES E CONFIGURAÇÕES
 # ============================================================
-LIMITE_OURO = 0.50
-LIMITE_VERDE = 0.40
+LIMITE_OURO = 0.65
+LIMITE_VERDE = 0.50
 LIMITE_MARGINAL = 0.33
+LIMITE_DUPLA_CHANCE = 0.70  # Soma de duas probabilidades para disparar dupla chance
 
 def get_selo(probabilidade):
     if probabilidade >= LIMITE_OURO:
@@ -119,6 +120,11 @@ def classification_to_shelves(games):
     return shelves
 
 # ============================================================
+# MAPEAMENTO DE PRATELEIRA PARA VALORES BASE (MEI, FOR, CONS, RES)
+# ============================================================
+SHELF_VALUES = {1: 80, 2: 65, 3: 50, 4: 35, 5: 20}
+
+# ============================================================
 # MENU LATERAL
 # ============================================================
 st.sidebar.markdown("<h2 style='color:#DAA520;'>⚽ MyPredict 2.0</h2>", unsafe_allow_html=True)
@@ -171,44 +177,87 @@ elif opcao == "Análise de Jogo":
         data_ref_dt = datetime.combine(data_ref, datetime.min.time())
         jogos_passados = [j for j in jogos if j['data'] < data_ref_dt]
 
+        # Função auxiliar para obter OVRall com placeholders baseados na prateleira
+        def get_ovrall(time, hist):
+            prat = prats.get(time, 3)
+            base = SHELF_VALUES[prat]
+            if not any(j['time'] == time for j in hist):
+                return base
+            ata = calcular_ATA(hist, time, data_ref_dt)
+            de = calcular_DEF(hist, time, data_ref_dt)
+            return calcular_OVRall([ata, de, base, base, base, base])
+
+        ovrall_casa = get_ovrall(time_casa, jogos_passados)
+        ovrall_fora = get_ovrall(time_fora, jogos_passados)
+
         def calcular_MPV_final(time):
             jogos_time = [j for j in jogos_passados if j['time'] == time]
-            if not jogos_time: return inicializar_MPV(50.0)
+            if not jogos_time:
+                return inicializar_MPV(ovrall_casa if time == time_casa else ovrall_fora)
             jogos_time = sorted(jogos_time, key=lambda x: x['data'])
-            ovrall = calcular_OVRall([calcular_ATA(jogos_passados, time, data_ref_dt),
-                                      calcular_DEF(jogos_passados, time, data_ref_dt),
-                                      calcular_MEI(jogos_passados, time, data_ref_dt),
-                                      calcular_FOR(jogos_passados, time, data_ref_dt),
-                                      calcular_CONS(jogos_passados, time, data_ref_dt),
-                                      calcular_RES(jogos_passados, time, data_ref_dt)])
+            ovrall = get_ovrall(time, jogos_passados)
             mpv = inicializar_MPV(ovrall)
             for jogo in jogos_time:
                 ima_jogo, _ = calcular_IMA(jogos_passados, time, jogo['data'], mando_proximo=jogo['mando'])
-                ovrall_adv = calcular_OVRall([calcular_ATA(jogos_passados, jogo['adv'], jogo['data']),
-                                              calcular_DEF(jogos_passados, jogo['adv'], jogo['data']),
-                                              50,50,50,50])
+                ovrall_adv = get_ovrall(jogo['adv'], jogos_passados)
                 mpv_adv = inicializar_MPV(ovrall_adv)
                 mpv = atualizar_MPV(mpv, mpv_adv, jogo['mando'], jogo['resultado'], ima_jogo)
             return mpv
 
         mpv_casa_raw = calcular_MPV_final(time_casa)
         mpv_fora_raw = calcular_MPV_final(time_fora)
+
+        ima_casa, _ = calcular_IMA(jogos_passados, time_casa, data_ref_dt, mando_proximo='casa')
+        ima_fora, _ = calcular_IMA(jogos_passados, time_fora, data_ref_dt, mando_proximo='fora')
+
+        if ima_fora > 70:
+            mpv_fora_raw += 50
+
         prob_casa, prob_empate, prob_fora = probabilidades_1x2(mpv_casa_raw, mpv_fora_raw)
 
-        # Recomendação e selo
-        probs = {'Vitória Casa': prob_casa, 'Empate': prob_empate, 'Vitória Fora': prob_fora}
-        rec = max(probs, key=probs.get)
-        rec_prob = probs[rec]
+        # Recomendação principal
+        probs = [('Vitória Casa', prob_casa), ('Empate', prob_empate), ('Vitória Fora', prob_fora)]
+        probs.sort(key=lambda x: x[1], reverse=True)
+        maior, segunda = probs[0], probs[1]
+        if maior[1] < 0.50 and (maior[1] - segunda[1]) < 0.05:
+            rec = "Empate Técnico"
+            rec_prob = prob_empate
+        else:
+            rec = maior[0]
+            rec_prob = maior[1]
         selo_rec = get_selo(rec_prob)
+
+        # Dupla chance
+        dupla = None
+        if prob_casa + prob_empate >= LIMITE_DUPLA_CHANCE:
+            dupla = f"Dupla Chance Casa/Empate ({prob_casa + prob_empate:.1%})"
+        elif prob_fora + prob_empate >= LIMITE_DUPLA_CHANCE:
+            dupla = f"Dupla Chance Fora/Empate ({prob_fora + prob_empate:.1%})"
+
+        # Análise por prateleira (apenas para exibição)
+        prat_adv = prats.get(time_fora if rec != 'Vitória Fora' else time_casa, 3)
+        hist_prat = [j for j in jogos_passados if prats.get(j['adv'], 3) == prat_adv]
+        v = sum(1 for j in hist_prat if j['resultado'] == 'V')
+        e = sum(1 for j in hist_prat if j['resultado'] == 'E')
+        d = sum(1 for j in hist_prat if j['resultado'] == 'D')
+        total_prat = len(hist_prat)
+        if total_prat > 0:
+            analise_prat = f"Contra mesma prateleira ({prat_adv}): V:{v} E:{e} D:{d} ({(v/total_prat)*100:.1f}% vit.)"
+        else:
+            analise_prat = "Sem histórico recente contra essa prateleira."
 
         st.markdown("---")
         st.success(f"MyPredict Recomenda: **{rec}** (Probabilidade: {rec_prob:.1%})")
         st.info(f"Selo de confiança: {selo_rec}")
+        if dupla:
+            st.warning(f"🔄 {dupla}")
 
         col1, col2, col3 = st.columns(3)
         with col1: st.metric("MPV Casa", f"{(mpv_casa_raw-1000)/10:.1f}")
         with col2: st.metric("Diferença MPV", f"{abs((mpv_casa_raw-1000)/10 - (mpv_fora_raw-1000)/10):.1f}")
         with col3: st.metric("MPV Fora", f"{(mpv_fora_raw-1000)/10:.1f}")
+
+        st.caption(analise_prat)
 
         st.markdown("---")
         st.subheader("🎯 Outros Mercados")
@@ -229,7 +278,7 @@ elif opcao == "Análise de Jogo":
         col4.metric("Over 9.5 esc.", f"{prob_over(total_esc, 8.5):.1%}")
 
 # ============================================================
-# BACKTEST VISUAL (SELOS POR PROBABILIDADE)
+# BACKTEST VISUAL (PRATELEIRA, DUPLA CHANCE, SELOS PROBABILÍSTICOS)
 # ============================================================
 elif opcao == "Backtest Visual":
     st.markdown("<h1 style='text-align:center;'>📈 Backtest MyPredict 2.0</h1>", unsafe_allow_html=True)
@@ -237,7 +286,6 @@ elif opcao == "Backtest Visual":
         st.error("Nenhuma partida carregada.")
         st.stop()
 
-    # Prateleiras fixas
     todas_datas = sorted([p['data'] for p in partidas])
     data_inicio_temporada = todas_datas[0]
     jogos_anteriores = [j for j in jogos if j['data'] < data_inicio_temporada]
@@ -265,62 +313,78 @@ elif opcao == "Backtest Visual":
             time_casa = casa_info['time']
             time_fora = fora_info['time']
 
-            casa_info['prat_time'] = prateleiras_fixas.get(time_casa, 3)
-            casa_info['prat_adv'] = prateleiras_fixas.get(time_fora, 3)
-            fora_info['prat_time'] = prateleiras_fixas.get(time_fora, 3)
-            fora_info['prat_adv'] = prateleiras_fixas.get(time_casa, 3)
+            prat_casa = prateleiras_fixas.get(time_casa, 3)
+            prat_fora = prateleiras_fixas.get(time_fora, 3)
+            casa_info['prat_time'] = prat_casa
+            casa_info['prat_adv'] = prat_fora
+            fora_info['prat_time'] = prat_fora
+            fora_info['prat_adv'] = prat_casa
 
             hist_filtrado = [j for j in historico if j['data'] < data_jogo]
 
-            ima_casa, _ = calcular_IMA(hist_filtrado, time_casa, data_jogo, mando_proximo='casa')
-            ima_fora, _ = calcular_IMA(hist_filtrado, time_fora, data_jogo, mando_proximo='fora')
+            def get_ovrall(time, prat):
+                if not any(j['time'] == time for j in hist_filtrado):
+                    return SHELF_VALUES[prat]
+                ata = calcular_ATA(hist_filtrado, time, data_jogo)
+                de = calcular_DEF(hist_filtrado, time, data_jogo)
+                base = SHELF_VALUES[prat]
+                return calcular_OVRall([ata, de, base, base, base, base])
 
-            if not any(j['time'] == time_casa for j in hist_filtrado):
-                prat = prateleiras_fixas.get(time_casa, 3)
-                ovrall_casa = {1: 80, 2: 65, 3: 50, 4: 35, 5: 20}.get(prat, 50)
-            else:
-                ovrall_casa = calcular_OVRall([calcular_ATA(hist_filtrado, time_casa, data_jogo),
-                                               calcular_DEF(hist_filtrado, time_casa, data_jogo),
-                                               calcular_MEI(hist_filtrado, time_casa, data_jogo),
-                                               calcular_FOR(hist_filtrado, time_casa, data_jogo),
-                                               calcular_CONS(hist_filtrado, time_casa, data_jogo),
-                                               calcular_RES(hist_filtrado, time_casa, data_jogo)])
-            if not any(j['time'] == time_fora for j in hist_filtrado):
-                prat = prateleiras_fixas.get(time_fora, 3)
-                ovrall_fora = {1: 80, 2: 65, 3: 50, 4: 35, 5: 20}.get(prat, 50)
-            else:
-                ovrall_fora = calcular_OVRall([calcular_ATA(hist_filtrado, time_fora, data_jogo),
-                                               calcular_DEF(hist_filtrado, time_fora, data_jogo),
-                                               calcular_MEI(hist_filtrado, time_fora, data_jogo),
-                                               calcular_FOR(hist_filtrado, time_fora, data_jogo),
-                                               calcular_CONS(hist_filtrado, time_fora, data_jogo),
-                                               calcular_RES(hist_filtrado, time_fora, data_jogo)])
+            ovrall_casa = get_ovrall(time_casa, prat_casa)
+            ovrall_fora = get_ovrall(time_fora, prat_fora)
 
             mpv_casa_raw = inicializar_MPV(ovrall_casa)
             mpv_fora_raw = inicializar_MPV(ovrall_fora)
             for jg in hist_filtrado:
                 if jg['time'] == time_casa:
                     ima_jg, _ = calcular_IMA(hist_filtrado, time_casa, jg['data'], mando_proximo=jg['mando'])
-                    ovrall_adv = calcular_OVRall([calcular_ATA(hist_filtrado, jg['adv'], jg['data']),
-                                                  calcular_DEF(hist_filtrado, jg['adv'], jg['data']),
-                                                  50,50,50,50])
+                    ovrall_adv = get_ovrall(jg['adv'], prateleiras_fixas.get(jg['adv'], 3))
                     mpv_adv = inicializar_MPV(ovrall_adv)
                     mpv_casa_raw = atualizar_MPV(mpv_casa_raw, mpv_adv, jg['mando'], jg['resultado'], ima_jg)
                 elif jg['time'] == time_fora:
                     ima_jg, _ = calcular_IMA(hist_filtrado, time_fora, jg['data'], mando_proximo=jg['mando'])
-                    ovrall_adv = calcular_OVRall([calcular_ATA(hist_filtrado, jg['adv'], jg['data']),
-                                                  calcular_DEF(hist_filtrado, jg['adv'], jg['data']),
-                                                  50,50,50,50])
+                    ovrall_adv = get_ovrall(jg['adv'], prateleiras_fixas.get(jg['adv'], 3))
                     mpv_adv = inicializar_MPV(ovrall_adv)
                     mpv_fora_raw = atualizar_MPV(mpv_fora_raw, mpv_adv, jg['mando'], jg['resultado'], ima_jg)
 
+            ima_casa, _ = calcular_IMA(hist_filtrado, time_casa, data_jogo, mando_proximo='casa')
+            ima_fora, _ = calcular_IMA(hist_filtrado, time_fora, data_jogo, mando_proximo='fora')
+
+            if ima_fora > 70:
+                mpv_fora_raw += 50
+
             prob_casa, prob_empate, prob_fora = probabilidades_1x2(mpv_casa_raw, mpv_fora_raw)
 
-            # Recomendação e selo
-            probs = {'Vitória Casa': prob_casa, 'Empate': prob_empate, 'Vitória Fora': prob_fora}
-            rec = max(probs, key=probs.get)
-            rec_prob = probs[rec]
+            # Recomendação principal
+            probs = [('Vitória Casa', prob_casa), ('Empate', prob_empate), ('Vitória Fora', prob_fora)]
+            probs.sort(key=lambda x: x[1], reverse=True)
+            maior, segunda = probs[0], probs[1]
+            if maior[1] < 0.50 and (maior[1] - segunda[1]) < 0.05:
+                rec = "Empate Técnico"
+                rec_prob = prob_empate
+            else:
+                rec = maior[0]
+                rec_prob = maior[1]
             selo_rec = get_selo(rec_prob)
+
+            # Dupla chance
+            dupla = None
+            if prob_casa + prob_empate >= LIMITE_DUPLA_CHANCE:
+                dupla = f"Dupla Chance Casa/Empate ({prob_casa + prob_empate:.1%})"
+            elif prob_fora + prob_empate >= LIMITE_DUPLA_CHANCE:
+                dupla = f"Dupla Chance Fora/Empate ({prob_fora + prob_empate:.1%})"
+
+            # Análise por prateleira
+            prat_adv_atual = prat_fora  # prateleira do adversário da casa (que é o time do visitante)
+            hist_prat_casa = [j for j in hist_filtrado if j['time'] == time_casa and prateleiras_fixas.get(j['adv'], 3) == prat_adv_atual]
+            v_c = sum(1 for j in hist_prat_casa if j['resultado'] == 'V')
+            e_c = sum(1 for j in hist_prat_casa if j['resultado'] == 'E')
+            d_c = sum(1 for j in hist_prat_casa if j['resultado'] == 'D')
+            total_c = len(hist_prat_casa)
+            if total_c > 0:
+                analise_prat = f"{time_casa} vs prateleira {prat_adv_atual}: V:{v_c} E:{e_c} D:{d_c} ({(v_c/total_c)*100:.1f}% vit.)"
+            else:
+                analise_prat = f"Sem histórico de {time_casa} contra prateleira {prat_adv_atual}."
 
             # Resultado real
             gols_casa_real = casa_info['gols']
@@ -337,6 +401,8 @@ elif opcao == "Backtest Visual":
             acertou = (rec == 'Vitória Casa' and resultado_real == 'V') or \
                       (rec == 'Empate' and resultado_real == 'E') or \
                       (rec == 'Vitória Fora' and resultado_real == 'D')
+            if rec == "Empate Técnico":
+                acertou = (resultado_real == 'E')
 
             def media_hist(time, tipo):
                 jogos_time = [j for j in hist_filtrado if j['time'] == time]
@@ -362,7 +428,6 @@ elif opcao == "Backtest Visual":
             prob_ht_over05 = prob_over(media_total * 0.4, 0.5)
             prob_ht_over15 = prob_over(media_total * 0.4, 1.5)
 
-            # Probabilidades implícitas (Bet365) – apenas para exibição
             imp_casa = 1 / float(casa_info.get('B365H', 2.0)) if float(casa_info.get('B365H', 2.0)) > 0 else 0
             imp_empate = 1 / float(casa_info.get('B365D', 3.0)) if float(casa_info.get('B365D', 3.0)) > 0 else 0
             imp_fora = 1 / float(casa_info.get('B365A', 3.0)) if float(casa_info.get('B365A', 3.0)) > 0 else 0
@@ -381,6 +446,8 @@ elif opcao == "Backtest Visual":
                 'prob_empate': prob_empate, 'imp_empate': imp_empate,
                 'prob_fora': prob_fora, 'imp_fora': imp_fora,
                 'recomendacao': rec, 'rec_prob': rec_prob, 'selo': selo_rec,
+                'dupla': dupla,
+                'analise_prat': analise_prat,
                 'resultado_real': resultado_real, 'acertou': acertou,
                 'over15_prob': prob_over15, 'over15_real': over15_real,
                 'over25_prob': prob_over25, 'over25_real': over25_real,
@@ -427,6 +494,8 @@ elif opcao == "Backtest Visual":
                     st.write(f"Prob MyPredict: {res['rec_prob']:.1%}")
                     st.write(f"Selo: {res['selo']}")
                     st.write(f"Acertou: {'✅' if res['acertou'] else '❌'}")
+                    if res['dupla']:
+                        st.write(f"🔄 {res['dupla']}")
 
                 st.write("**Probabilidades 1X2**")
                 col_p1, col_p2, col_p3 = st.columns(3)
@@ -436,6 +505,8 @@ elif opcao == "Backtest Visual":
                     st.metric("Empate (MyPredict)", f"{res['prob_empate']:.1%}", delta=f"Bet365: {res['imp_empate']:.1%}")
                 with col_p3:
                     st.metric("Fora (MyPredict)", f"{res['prob_fora']:.1%}", delta=f"Bet365: {res['imp_fora']:.1%}")
+
+                st.caption(res['analise_prat'])
 
                 st.write("**Outros Mercados (MyPredict)**")
                 col_m1, col_m2, col_m3, col_m4 = st.columns(4)
@@ -459,12 +530,12 @@ elif opcao == "Backtest Visual":
         st.subheader("📊 Desempenho do MyPredict")
         total_jogos = len(resultados)
         acertos = sum(1 for r in resultados if r['acertou'])
-        taxa = (acertos / total_jogos) * 100
+        taxa = (acertos / total_jogos) * 100 if total_jogos > 0 else 0
         st.metric("Total de Jogos", total_jogos)
         st.metric("Acertos", acertos)
         st.metric("Taxa de Acerto", f"{taxa:.1f}%")
 
-        # Desempenho por selo
+        st.subheader("Desempenho por Selo")
         for selo_nome in ["🥇 Ouro", "🟢 Verde", "⚪ Marginal", "🔴 Sem selo"]:
             jogos_selo = [r for r in resultados if r['selo'] == selo_nome]
             if jogos_selo:
