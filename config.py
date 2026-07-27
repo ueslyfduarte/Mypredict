@@ -55,14 +55,14 @@ PESOS_RECORTES = {
 # NORMALIZAÇÃO IMA (0–100)
 # ------------------------------------------------------------
 
-PISO_IMA = -2.0   # pior caso: derrota de Elite para Crítica
-TETO_IMA = 5.0    # melhor caso: vitória de Crítica sobre Elite
+PISO_IMA = -2.0
+TETO_IMA = 5.0
 
 # ------------------------------------------------------------
 # OVRALL
 # ------------------------------------------------------------
 
-JOGOS_BASE_OVRALL = 38          # quantidade padrão de jogos para análise
+JOGOS_BASE_OVRALL = 38
 PESOS_OVRALL = {
     'Ataque':       0.25,
     'Defesa':       0.25,
@@ -72,16 +72,36 @@ PESOS_OVRALL = {
 }
 
 # ------------------------------------------------------------
-# MPV
+# MPV — Pesos dos três pilares
 # ------------------------------------------------------------
 
-ALPHA_MPV = 0.4   # peso do IMA na fusão (IMA vs OVRall)
+PESOS_MPV = {
+    'IMA':    1/3,
+    'OVRall': 1/3,
+    'IC':     1/3,
+}
+
+# ------------------------------------------------------------
+# IC (Índice de Contexto) — Fatores e pesos iniciais
+# ------------------------------------------------------------
+
+# Pesos dos fatores dentro do IC (somam 1)
+PESOS_IC = {
+    'confronto_direto':              0.25,
+    'mesmo_escalao':                 0.20,
+    'contra_escalao_adversario':     0.20,
+    'fator_casa':                    0.20,
+    'odds':                          0.15,
+}
+
+# Número de jogos para cálculo do confronto direto
+JOGOS_CONFRONTO_DIRETO = 6
 
 # ------------------------------------------------------------
 # HERANÇA ESTATÍSTICA (times promovidos / rebaixados)
 # ------------------------------------------------------------
 
-POS_REF_PROMOVIDO = 16   # 1º fora da zona de rebaixamento (ex.: 17º a 20º)
-POS_REF_REBAIXADO = 5    # 1º fora da zona de acesso (ex.: G4)
+POS_REF_PROMOVIDO = 16
+POS_REF_REBAIXADO = 5
 NUM_REBAIXADOS = 4
 NUM_PROMOVIDOS = 4
