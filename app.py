@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 – Aplicativo Principal com Backtest Detalhado
+MyPredict 2.0 – Aplicativo Completo (Backtest Fiel ao Vivo)
 """
 import streamlit as st
 import pandas as pd
@@ -124,9 +124,10 @@ elif opcao == "Análise de Jogo":
         jogos_passados = [j for j in jogos if j['data'] < data_ref_dt]
 
         def get_ovrall(time):
-            if not any(j['time'] == time for j in jogos_passados): return OVRALL_INICIAL.get(time, 50.0)
-            ata = calcular_ATA(jogos_passados, time, data_ref_dt)
-            de = calcular_DEF(jogos_passados, time, data_ref_dt)
+            if not any(j['time'] == time for j in jogos_passados):
+                return OVRALL_INICIAL.get(time, 50.0)
+            ata = calcular_ATA(jogos_passados, time, data_ref_dt, valor_inicial=OVRALL_INICIAL[time])
+            de = calcular_DEF(jogos_passados, time, data_ref_dt, valor_inicial=OVRALL_INICIAL[time])
             mei = calcular_MEI(jogos_passados, time, data_ref_dt)
             forc = calcular_FOR(jogos_passados, time, data_ref_dt)
             cons = calcular_CONS(jogos_passados, time, data_ref_dt)
@@ -157,11 +158,11 @@ elif opcao == "Análise de Jogo":
         selo = "🥇 Ouro" if rec_prob>=0.695 else ("🟢 Verde" if rec_prob>=0.5 else ("⚪ Marginal" if rec_prob>=0.33 else "🔴 Sem selo"))
         recomendacao_final = rec if selo in ("🥇 Ouro", "🟢 Verde") else "Sem recomendação"
 
-        # ... restante da análise ...
+        # ... restante da análise (odds, exibição) ...
         st.success(f"MyPredict Recomenda: **{recomendacao_final}** (Prob: {rec_prob:.1%}, Selo: {selo})")
 
 # ============================================================
-# BACKTEST DETALHADO (PASSO A PASSO, FIEL AO MÉTODO)
+# BACKTEST DETALHADO (AGORA COM OVRall ESTÁVEL)
 # ============================================================
 elif opcao == "Backtest Detalhado":
     st.markdown("<h1 style='text-align:center;'>📈 Backtest MyPredict 2.0 – Detalhado</h1>", unsafe_allow_html=True)
@@ -209,17 +210,18 @@ elif opcao == "Backtest Detalhado":
                 ima_casa = max(0, min(100, ima_casa))
                 ima_fora = max(0, min(100, ima_fora))
 
-                # OVRall
+                # OVRall com valor_inicial (EVITA QUEDAS BRUSCAS)
                 def ovrall_time(time):
                     if not any(j['time'] == time for j in hist_filtrado):
                         return OVRALL_INICIAL[time]
-                    ata = calcular_ATA(hist_filtrado, time, data_jogo)
-                    de = calcular_DEF(hist_filtrado, time, data_jogo)
+                    ata = calcular_ATA(hist_filtrado, time, data_jogo, valor_inicial=OVRALL_INICIAL[time])
+                    de = calcular_DEF(hist_filtrado, time, data_jogo, valor_inicial=OVRALL_INICIAL[time])
                     mei = calcular_MEI(hist_filtrado, time, data_jogo)
                     forc = calcular_FOR(hist_filtrado, time, data_jogo)
                     cons = calcular_CONS(hist_filtrado, time, data_jogo)
                     res = calcular_RES(hist_filtrado, time, data_jogo)
                     return calcular_OVRall([ata, de, mei, forc, cons, res])
+
                 ovr_casa = ovrall_time(time_casa)
                 ovr_fora = ovrall_time(time_fora)
 
@@ -260,7 +262,7 @@ elif opcao == "Backtest Detalhado":
                         lucro = -stake
                     banca += lucro
 
-                # Guarda resultado com todos os detalhes
+                # Guarda resultado
                 resultados.append({
                     'idx': idx, 'data': data_jogo,
                     'time_casa': time_casa, 'time_fora': time_fora,
