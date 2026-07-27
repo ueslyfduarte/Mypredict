@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 – Motor de Cálculo (conforme documento oficial)
+MyPredict 2.0 – Motor de Cálculo (conforme documento oficial, com OVRall estável)
 """
 import statistics
 
@@ -76,7 +76,7 @@ def calcular_IMA(jogos, time, data_ref, mando_proximo=None):
         desvio = 10.0
     return ima, desvio
 
-# ---------- OVRALL (versão simplificada para dados disponíveis) ----------
+# ---------- OVRall (versão com estabilidade inicial) ----------
 def media_ponderada_38_10(serie):
     if not serie:
         return 0.0
@@ -84,28 +84,40 @@ def media_ponderada_38_10(serie):
     curta = sum(serie[-10:]) / len(serie[-10:]) if len(serie) >= 10 else sum(serie)/len(serie)
     return 0.6 * longa + 0.4 * curta
 
-def calcular_ATA(jogos, time, data_ref):
+def calcular_ATA(jogos, time, data_ref, valor_inicial=None):
     jogos_time = [j for j in jogos if j['time'] == time and j['data'] <= data_ref]
-    if not jogos_time:
-        return 50.0
+    n = len(jogos_time)
+    if n < 5:
+        return valor_inicial if valor_inicial is not None else 50.0
     gols = [j.get('gols', 0) for j in jogos_time]
     alvo = [j.get('finalizacoes_alvo', 0) for j in jogos_time]
     media_gols = media_ponderada_38_10(gols)
     conv = sum(gols[-10:]) / sum(alvo[-10:]) if sum(alvo[-10:]) > 0 else 0.1
     nota_gols = min(100, max(0, (media_gols / 3) * 100))
     nota_conv = min(100, max(0, (conv / 0.5) * 100)) if conv else 50
-    return 0.6 * nota_gols + 0.4 * nota_conv
+    nota_calculada = 0.6 * nota_gols + 0.4 * nota_conv
 
-def calcular_DEF(jogos, time, data_ref):
+    if valor_inicial is not None and n < 10:
+        peso_inicial = (10 - n) / 5   # n=5 -> peso=1.0, n=9 -> peso=0.2
+        return peso_inicial * valor_inicial + (1 - peso_inicial) * nota_calculada
+    return nota_calculada
+
+def calcular_DEF(jogos, time, data_ref, valor_inicial=None):
     jogos_time = [j for j in jogos if j['time'] == time and j['data'] <= data_ref]
-    if not jogos_time:
-        return 50.0
+    n = len(jogos_time)
+    if n < 5:
+        return valor_inicial if valor_inicial is not None else 50.0
     sofridos = [j.get('gols_sofridos', 0) for j in jogos_time]
     media_sofridos = media_ponderada_38_10(sofridos)
     clean = sum(1 for g in sofridos[-10:] if g == 0) / len(sofridos[-10:]) if sofridos else 0
     nota_sofridos = min(100, max(0, 100 - (media_sofridos / 3) * 100))
     nota_clean = clean * 100
-    return 0.6 * nota_sofridos + 0.4 * nota_clean
+    nota_calculada = 0.6 * nota_sofridos + 0.4 * nota_clean
+
+    if valor_inicial is not None and n < 10:
+        peso_inicial = (10 - n) / 5
+        return peso_inicial * valor_inicial + (1 - peso_inicial) * nota_calculada
+    return nota_calculada
 
 def calcular_MEI(jogos, time, data_ref):
     jogos_time = [j for j in jogos if j['time'] == time and j['data'] <= data_ref]
@@ -113,8 +125,8 @@ def calcular_MEI(jogos, time, data_ref):
         return 50.0
     escanteios = [j.get('escanteios', 0) for j in jogos_time]
     faltas = [j.get('faltas_sofridas', 0) for j in jogos_time]
-    media_esc = sum(escanteios[-10:]) / len(escanteios[-10:]) if escanteios else 3
-    media_faltas = sum(faltas[-10:]) / len(faltas[-10:]) if faltas else 10
+    media_esc = sum(escanteios[-10:])/len(escanteios[-10:]) if escanteios else 3
+    media_faltas = sum(faltas[-10:])/len(faltas[-10:]) if faltas else 10
     nota_esc = min(100, max(0, (media_esc/8)*100))
     nota_faltas = min(100, max(0, (media_faltas/15)*100))
     return 0.5*nota_esc + 0.5*nota_faltas
@@ -124,7 +136,7 @@ def calcular_FOR(jogos, time, data_ref):
     if not jogos_time:
         return 50.0
     escanteios = [j.get('escanteios', 0) for j in jogos_time]
-    media_esc = sum(escanteios[-10:]) / len(escanteios[-10:]) if escanteios else 3
+    media_esc = sum(escanteios[-10:])/len(escanteios[-10:]) if escanteios else 3
     return min(100, max(0, (media_esc/8)*100))
 
 def calcular_CONS(jogos, time, data_ref):
@@ -166,7 +178,6 @@ def calcular_edge(prob_mpv, odd):
     return (prob_mpv * odd) - 1
 
 def determinar_selo(edge, dif_mpv, desvio_ima):
-    # Mantido para compatibilidade, mas não será usado na nova versão.
     if dif_mpv > PARAMS['limiar_confianca_alta'] and desvio_ima <= PARAMS['limiar_estabilidade_alta']:
         confianca = 'alta'
     elif dif_mpv > PARAMS['limiar_confianca_media'] and desvio_ima <= PARAMS['limiar_estabilidade_media']:
