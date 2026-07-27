@@ -41,7 +41,8 @@ def gerar_prateleiras(liga, temporada):
             nova_class[pos_rebaixados[i]] = time_prom
     from ratings import obter_prateleira
     return {time: obter_prateleira(pos) for pos, time in nova_class.items()}
-    def classificação_anterior(liga, temporada):
+
+def classificação_anterior(liga, temporada):
     return obter_classificacao(liga, temporada)
 
 def carregar_jogos_temporada(time, liga, temporada):
@@ -88,7 +89,8 @@ def extrair_recortes_ima(jogos, time_mandante):
     recortes['5CF'] = jogos_mando[:5]
     recortes['3CF'] = jogos_mando[:3]
     return recortes
-    def _media(lista):
+
+def _media(lista):
     return mean(lista) if lista else None
 
 def _desvio(lista):
@@ -181,4 +183,3 @@ def obter_dados_ovrall_time(time, liga, temporada_atual, classificacao_ant):
         pass
 
     return {k: v for k, v in dados.items() if v is not None}
-    
