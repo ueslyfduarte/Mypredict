@@ -1,4 +1,4 @@
-# data_source_fbref_stats.py — MyPredict 2.0 (versão final funcional)
+# data_source_fbref_stats.py — MyPredict 2.0 (versão anti-bloqueio)
 import time
 import random
 import requests
@@ -13,10 +13,14 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.5',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Referer': 'https://www.google.com/',
+    'Connection': 'keep-alive',
 }
 CACHE_DIR = Path('cache/fbref_stats')
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
+# Fallback estático expandido (principais ligas mundiais)
 FBREF_CODES = {
     "brasileirão": 24,
     "campeonato brasileiro série a": 24,
@@ -28,6 +32,10 @@ FBREF_CODES = {
     "eredivisie": 23,
     "primeira liga": 32,
     "mls": 22,
+    "j1 league": 44,
+    "primera división": 10,
+    "championship": 10,
+    "série b": 38,
 }
 
 def _cache_ler(chave):
@@ -48,7 +56,7 @@ def _criar_sessao():
 
 def _get(url):
     sessao = _criar_sessao()
-    time.sleep(random.uniform(4, 7))
+    time.sleep(random.uniform(6, 9))  # delay maior para evitar bloqueios
     resp = sessao.get(url, timeout=30)
     resp.raise_for_status()
     return resp.text
@@ -64,18 +72,23 @@ def _extrair_tabela_por_id(html_str, table_id):
     return table
 
 # ------------------------------------------------------------
-# 1. CÓDIGO DA LIGA
+# 1. CÓDIGO DA LIGA (com fallback estático e tentativa única)
 # ------------------------------------------------------------
 def obter_codigo_fbref(nome_liga):
     nome_lower = nome_liga.lower().strip()
+    # 1. Fallback estático (rápido e sem internet)
     if nome_lower in FBREF_CODES:
         return FBREF_CODES[nome_lower]
+
+    # 2. Cache em disco (tentativas anteriores)
     cache_file = CACHE_DIR / 'fbref_codes.json'
     if cache_file.exists():
         with open(cache_file, 'r', encoding='utf-8') as f:
             codes = json.load(f)
         if nome_lower in codes:
             return codes[nome_lower]
+
+    # 3. Tentativa única de scraping (se falhar, não tenta mais nesta sessão)
     try:
         url = 'https://fbref.com/en/comps/'
         html_str = _get(url)
@@ -90,10 +103,14 @@ def obter_codigo_fbref(nome_liga):
                         nome = link.get_text(strip=True).lower()
                         codigo = int(link['href'].split('/')[-1])
                         codes[nome] = codigo
+        # Mescla com fallback e salva
+        all_codes = FBREF_CODES.copy()
+        all_codes.update(codes)
         with open(cache_file, 'w', encoding='utf-8') as f:
-            json.dump(codes, f, ensure_ascii=False, indent=2)
-        return codes.get(nome_lower)
+            json.dump(all_codes, f, ensure_ascii=False, indent=2)
+        return all_codes.get(nome_lower)
     except:
+        # Se falhar, usa fallback (já verificado) ou retorna None
         return None
 
 # ------------------------------------------------------------
