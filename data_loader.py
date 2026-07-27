@@ -1,7 +1,4 @@
-## data_loader.py — MyPredict 2.0 (Fonte única: FBref)
-import json
 from statistics import stdev, mean
-from pathlib import Path
 from config import JOGOS_BASE_OVRALL, POS_REF_PROMOVIDO, POS_REF_REBAIXADO, PONTOS_BASE
 from data_source_fbref_stats import (
     obter_codigo_fbref,
@@ -10,11 +7,7 @@ from data_source_fbref_stats import (
     obter_stats_time
 )
 
-# ------------------------------------------------------------
-# Funções de apoio (promoção/rebaixamento automáticos)
-# ------------------------------------------------------------
 def _obter_promovidos_ordenados(liga_codigo, temporada):
-    """Retorna promovidos da temporada atual (ordem alfabética)."""
     try:
         class_atual = fb_classificacao(liga_codigo, temporada)
         class_ant = fb_classificacao(liga_codigo, temporada - 1) if temporada > 2010 else {}
@@ -26,7 +19,6 @@ def _obter_promovidos_ordenados(liga_codigo, temporada):
     return sorted(promovidos)
 
 def _obter_rebaixados(liga_codigo, temporada):
-    """Retorna rebaixados da temporada anterior."""
     try:
         class_atual = fb_classificacao(liga_codigo, temporada)
         class_ant = fb_classificacao(liga_codigo, temporada - 1) if temporada > 2010 else {}
@@ -36,9 +28,6 @@ def _obter_rebaixados(liga_codigo, temporada):
         return []
     return [t for t in class_ant.values() if t not in class_atual.values()]
 
-# ------------------------------------------------------------
-# Projeção de prateleiras
-# ------------------------------------------------------------
 def gerar_prateleiras(liga_codigo, temporada):
     class_ant = fb_classificacao(liga_codigo, temporada)
     if not class_ant:
@@ -59,9 +48,6 @@ def classificação_anterior(liga_codigo, temporada):
 def carregar_jogos_temporada(time, liga_codigo, temporada):
     return fb_partidas(liga_codigo, temporada, time)
 
-# ------------------------------------------------------------
-# Herança de dados
-# ------------------------------------------------------------
 def obter_ultimos_jogos_com_heranca(time, liga_codigo, temporada_atual, classificacao_ant, n=JOGOS_BASE_OVRALL):
     jogos_reais = []
     temp = temporada_atual
@@ -104,9 +90,6 @@ def extrair_recortes_ima(jogos, time_mandante):
     recortes['3CF'] = jogos_mando[:3]
     return recortes
 
-# ------------------------------------------------------------
-# Agregadores para OVRall
-# ------------------------------------------------------------
 def _media(lista):
     return mean(lista) if lista else None
 def _desvio(lista):
@@ -198,9 +181,8 @@ def obter_dados_ovrall_time(time, liga_codigo, temporada_atual, classificacao_an
         'escanteios_sofridos_media': _escanteios_media(jogos, 'escanteios_sofridos'),
     }
 
-    # Complementar com estatísticas agregadas do FBref (se disponíveis)
     try:
-        stats = obter_stats_time(liga_codigo, temporada_atual, time)  # Passa código numérico
+        stats = obter_stats_time(liga_codigo, temporada_atual, time)
         for chave, valor in stats.items():
             if dados.get(chave) is None and valor is not None:
                 dados[chave] = valor
