@@ -1,28 +1,16 @@
 # data_source_fbref_stats.py — MyPredict 2.0
-# Scraping de estatísticas agregadas por time no FBref (médias da temporada).
-# Baseado nas técnicas da biblioteca soccerdata, adaptado para requests + lxml.
-
 import time
 import requests
 import pandas as pd
 from io import StringIO
 from pathlib import Path
 import json
-import warnings
-from lxml import html, etree
+from lxml import html
 
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-REQUEST_DELAY = 4  # segundos entre requisições
-
+REQUEST_DELAY = 4
 CACHE_DIR = Path('cache/fbref_stats')
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-# Mapeamento liga -> (slug do FBref, nome da pasta)
-LIGAS_FBREF = {
-    'Brasileirão': ('24', 'Serie-A'),
-    'Premier League': ('9', 'Premier-League'),
-    'La Liga': ('12', 'La-Liga'),
-}
 
 def _cache_ler(chave):
     arq = CACHE_DIR / f"{chave}.json"
@@ -42,60 +30,77 @@ def _get(url):
     resp.raise_for_status()
     return resp.text
 
+def obter_codigo_fbref(nome_liga):
+    """
+    Busca o código da competição no FBref (ex.: '24' para Brasileirão)
+    a partir do nome da liga. Retorna None se não encontrar.
+    """
+    cache_file = CACHE_DIR / 'fbref_codes.json'
+    codes = {}
+    if cache_file.exists():
+        with open(cache_file, 'r', encoding='utf-8') as f:
+            codes = json.load(f)
+    else:
+        url = 'https://fbref.com/en/comps/'
+        html_str = _get(url)
+        tree = html.fromstring(html_str)
+        for table in tree.xpath("//table[contains(@id, 'comps')]"):
+            for row in table.xpath(".//tr"):
+                cells = row.xpath("./td")
+                if len(cells) >= 2:
+                    link = cells[0].xpath("./a")
+                    if link:
+                        nome = link[0].text.strip()
+                        href = link[0].get('href', '')
+                        codigo = href.split('/')[-1]
+                        codes[nome.lower()] = codigo
+        with open(cache_file, 'w', encoding='utf-8') as f:
+            json.dump(codes, f, ensure_ascii=False, indent=2)
+
+    nome_lower = nome_liga.lower()
+    if nome_lower in codes:
+        return codes[nome_lower]
+    for nome, codigo in codes.items():
+        if nome_lower in nome or nome in nome_lower:
+            return codigo
+    return None
+
 def obter_stats_time(liga, temporada, time):
-    """
-    Retorna um dicionário com médias da temporada para o time:
-    - gols_media, gols_sofridos_media, xg_media, xga_media,
-    - finalizacoes_tot_media, finalizacoes_alvo_media,
-    - posse_media, passes_certos_pct, passes_chave_media,
-    - assistencias_media, escanteios_media, escanteios_sofridos_media,
-    - desarmes_media, interceptacoes_media, etc.
-    """
     chave = f'stats_{liga}_{temporada}_{time}'
     cached = _cache_ler(chave)
     if cached:
         return cached
 
-    comp, slug = LIGAS_FBREF[liga]
-    # URL da página de estatísticas de equipes da liga (standard stats)
-    url = f'https://fbref.com/en/comps/{comp}/{temporada}/stats/{temporada}-{slug}-Stats'
+    codigo = obter_codigo_fbref(liga)
+    if not codigo:
+        raise ValueError(f"Liga '{liga}' não encontrada no FBref.")
+    
+    url = f'https://fbref.com/en/comps/{codigo}/{temporada}/stats/{temporada}-{codigo}-Stats'
     html_str = _get(url)
-
-    # Parse com lxml
     tree = html.fromstring(html_str)
 
-    # A tabela "stats_standard" geralmente está dentro de um comentário no HTML
-    # O soccerdata usa: tree.xpath("//comment()[contains(.,'div_stats_standard')]")
-    # Vamos replicar isso.
+    # Procura tabela dentro de comentários (padrão FBref)
     stats_table = None
     for comment in tree.xpath("//comment()"):
         if 'div_stats_standard' in comment.text:
-            # Extrai o HTML do comentário
             inner_tree = html.fromstring(comment.text)
-            # Procura pela tabela id="stats_standard"
             stats_table = inner_tree.xpath("//table[contains(@id, 'stats_standard')]")
             if stats_table:
                 stats_table = stats_table[0]
                 break
-
     if stats_table is None:
-        # Fallback: tenta achar diretamente (pode não funcionar)
         stats_table = tree.xpath("//table[contains(@id, 'stats_standard')]")
         if stats_table:
             stats_table = stats_table[0]
-
     if stats_table is None:
         raise ValueError(f"Tabela de estatísticas não encontrada para {liga} {temporada}")
 
-    # Converter para DataFrame
     df = pd.read_html(StringIO(html.tostring(stats_table, encoding='unicode')), flavor='lxml')[0]
-    # Limpeza de colunas multi-nível (como no soccerdata)
     df.columns = ['_'.join(col).strip() if 'Unnamed' not in col[0] else col[1] for col in df.columns]
     df = df.rename(columns={'Squad': 'team'})
-    df = df[~df['team'].str.contains('Squad')]  # remove cabeçalhos extras
+    df = df[~df['team'].str.contains('Squad')]
     df = df.set_index('team')
 
-    # Procurar o time (case-insensitive)
     match = None
     for t in df.index:
         if time.lower() in t.lower():
@@ -105,14 +110,6 @@ def obter_stats_time(liga, temporada, time):
         raise ValueError(f"Time '{time}' não encontrado na tabela de stats do FBref.")
 
     row = df.loc[match]
-    # Converter para numérico
-    for col in row.index:
-        try:
-            row[col] = pd.to_numeric(row[col])
-        except (ValueError, TypeError):
-            row[col] = None
-
-    # Mapear campos de interesse
     dados = {
         'gols_media': row.get('Gls_Per 90 Minutes') or row.get('Gls'),
         'gols_sofridos_media': row.get('GA_Per 90 Minutes') or row.get('GA'),
@@ -126,14 +123,9 @@ def obter_stats_time(liga, temporada, time):
         'assistencias_media': row.get('Ast_Per 90 Minutes') or row.get('Ast'),
         'desarmes_media': row.get('Tkl_Per 90 Minutes') or row.get('Tkl'),
         'interceptacoes_media': row.get('Int_Per 90 Minutes') or row.get('Int'),
-        'escanteios_media': None,  # Não está na standard; pode ser obtido em outra página
+        'escanteios_media': None,
         'escanteios_sofridos_media': None,
     }
-
-    # Ajustar se valores são por 90 min ou totais (se for total, precisamos dividir por jogos)
-    # A maioria das colunas "Per 90 Minutes" já está normalizada.
-    # Se não, poderíamos pegar o número de jogos e dividir, mas a tabela padrão já oferece por 90 min.
-    # Vamos garantir que sejam números.
     for k, v in dados.items():
         if v is not None and not isinstance(v, (int, float)):
             dados[k] = None
