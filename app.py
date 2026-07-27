@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 – Aplicativo Oficial (Prateleiras por Odds da Temporada)
+MyPredict 2.0 – Aplicativo Oficial (Prateleiras por Odds da Temporada Inteira)
 """
 import streamlit as st
 import pandas as pd
@@ -103,10 +103,10 @@ def carregar_dados():
 jogos, partidas = carregar_dados()
 
 # ============================================================
-# FUNÇÕES DE PRATELEIRAS E OVRall INICIAL (VIA ODDS DA TEMPORADA INTEIRA)
+# FUNÇÕES DE PRATELEIRAS E OVRall INICIAL (VIA MENOR ODD DA TEMPORADA)
 # ============================================================
 def compute_initial_shelves_and_ovrall(jogos):
-    # Para cada time, encontra a menor odd em que aparece como mandante (B365H) ou visitante (B365A)
+    # Para cada time, encontra a menor odd em que aparece (B365H se mandante, B365A se visitante)
     min_odds = {}
     for j in jogos:
         time = j['time']
@@ -136,6 +136,11 @@ def compute_initial_shelves_and_ovrall(jogos):
         # OVRall inicial linear centrado em 50 (odd 3.0 -> 50, odd 1.0 -> 100, odd 5.0 -> 0)
         odd = min_odds[t]
         ovrall_ini[t] = max(0, min(100, 100 - (odd - 1.0) * 25))
+    # Times que não apareceram recebem prateleira 3 e OVRall 50
+    for t in set(j['time'] for j in jogos):
+        if t not in shelves:
+            shelves[t] = 3
+            ovrall_ini[t] = 50.0
     return shelves, ovrall_ini
 
 PRATELEIRAS, OVRALL_INICIAL = compute_initial_shelves_and_ovrall(jogos)
@@ -261,7 +266,7 @@ elif opcao == "Análise de Jogo":
         col_p3.metric("Fora (MyPredict)", f"{prob_fora:.1%}", delta=f"Bet365: {imp_fora:.1%}")
 
 # ============================================================
-# BACKTEST OFICIAL (PRATELEIRAS E OVRALL POR TEMPORADA INTEIRA)
+# BACKTEST OFICIAL (PRATELEIRAS E OVRALL POR TEMPORADA INTEIRA, BANCA R$100, STAKE R$10)
 # ============================================================
 elif opcao == "Backtest Oficial":
     st.markdown("<h1 style='text-align:center;'>📈 Backtest MyPredict 2.0 (Oficial)</h1>", unsafe_allow_html=True)
@@ -270,19 +275,19 @@ elif opcao == "Backtest Oficial":
         st.stop()
 
     st.success("Prateleiras e OVRall inicial definidos pelas odds de toda a temporada.")
-    # Exibe as prateleiras
     st.write("Prateleiras fixas:", {t: f"{s} ({SHELF_NAMES[s]})" for t, s in PRATELEIRAS.items()})
 
     if 'resultados_backtest' not in st.session_state:
         st.session_state.resultados_backtest = None
         st.session_state.backtest_executado = False
 
-    if st.button("Iniciar Backtest Oficial"):
+    if st.button("Iniciar Backtest Oficial (R$100)"):
         st.session_state.backtest_executado = True
         partidas_ord = sorted(partidas, key=lambda p: p['data'])
         historico = []
         resultados = []
-        banca = 10.0
+        banca = 100.0  # Banca inicial
+        stake = 10.0   # Valor apostado por recomendação
         progress = st.progress(0)
         total = len(partidas_ord)
 
@@ -347,9 +352,6 @@ elif opcao == "Backtest Oficial":
             resultado_real = 'V' if gols_casa_real > gols_fora_real else ('D' if gols_casa_real < gols_fora_real else 'E')
 
             # Atualiza MPV após o jogo
-            res_casa = 1.0 if resultado_real == 'V' else (0.5 if resultado_real == 'E' else 0.0)
-            res_fora = 1.0 if resultado_real == 'D' else (0.5 if resultado_real == 'E' else 0.0)
-
             k_casa = PARAMS['K']['normal'] if 40 <= ima_casa <= 60 else (PARAMS['K']['atencao'] if 25 <= ima_casa < 40 or 60 < ima_casa <= 75 else PARAMS['K']['alerta'])
             k_fora = PARAMS['K']['normal'] if 40 <= ima_fora <= 60 else (PARAMS['K']['atencao'] if 25 <= ima_fora < 40 or 60 < ima_fora <= 75 else PARAMS['K']['alerta'])
 
@@ -358,7 +360,7 @@ elif opcao == "Backtest Oficial":
                                                   'V' if resultado_real == 'D' else ('D' if resultado_real == 'V' else 'E'),
                                                   ima_fora)
 
-            # Lucro
+            # Lucro (com stake fixo)
             odd_utilizada = None
             lucro_partida = 0.0
             if aposta_valida:
@@ -371,10 +373,15 @@ elif opcao == "Backtest Oficial":
                 if (rec == f"Vitória do {time_casa}" and resultado_real == 'V') or \
                    (rec == "Empate" and resultado_real == 'E') or \
                    (rec == f"Vitória do {time_fora}" and resultado_real == 'D'):
-                    lucro_partida = odd_utilizada - 1
+                    lucro_partida = stake * (odd_utilizada - 1)
                 else:
-                    lucro_partida = -1.0
+                    lucro_partida = -stake
                 banca += lucro_partida
+
+            # Implícitas Bet365 para exibição
+            imp_casa = 1 / float(casa_info.get('B365H', 2.0)) if float(casa_info.get('B365H', 2.0)) > 0 else 0
+            imp_empate = 1 / float(casa_info.get('B365D', 3.0)) if float(casa_info.get('B365D', 3.0)) > 0 else 0
+            imp_fora = 1 / float(casa_info.get('B365A', 3.0)) if float(casa_info.get('B365A', 3.0)) > 0 else 0
 
             resultados.append({
                 'data': data_jogo,
@@ -385,6 +392,7 @@ elif opcao == "Backtest Oficial":
                 'ima_casa': ima_casa, 'ima_fora': ima_fora,
                 'ovr_casa': ovrall_casa, 'ovr_fora': ovrall_fora,
                 'prob_casa': prob_casa, 'prob_empate': prob_empate, 'prob_fora': prob_fora,
+                'imp_casa': imp_casa, 'imp_empate': imp_empate, 'imp_fora': imp_fora,
                 'recomendacao': recomendacao, 'rec_prob': rec_prob, 'selo': selo,
                 'aposta_valida': aposta_valida, 'odd_utilizada': odd_utilizada,
                 'lucro_partida': lucro_partida, 'banca_apos': banca,
@@ -439,25 +447,25 @@ elif opcao == "Backtest Oficial":
                 <div style="font-size:0.7rem; color:#aaa; margin-bottom:4px;">{tendencia}</div>
                 <hr>
                 <div style="margin-bottom:4px;"><strong>MyPredict Recomenda:</strong> {res['recomendacao']} (Prob: {res['rec_prob']:.1%}, Selo: {res['selo']})</div>
-                <div style="color:#DAA520; font-weight:bold;">Lucro: {res['lucro_partida']:+.2f} | Banca: R$ {res['banca_apos']:.2f}</div>
+                <div style="color:#DAA520; font-weight:bold;">Lucro: R$ {res['lucro_partida']:+.2f} | Banca: R$ {res['banca_apos']:.2f}</div>
                 <div class="metric-row">
-                    <div class="prob-cell"><div class="prob-market">Casa (MyPredict)</div><div class="prob-value">{res['prob_casa']:.1%}</div></div>
-                    <div class="prob-cell"><div class="prob-market">Empate (MyPredict)</div><div class="prob-value">{res['prob_empate']:.1%}</div></div>
-                    <div class="prob-cell"><div class="prob-market">Fora (MyPredict)</div><div class="prob-value">{res['prob_fora']:.1%}</div></div>
+                    <div class="prob-cell"><div class="prob-market">Casa (MyPredict)</div><div class="prob-value">{res['prob_casa']:.1%}</div><div style="font-size:0.7rem; color:#aaa;">Bet365: {res['imp_casa']:.1%}</div></div>
+                    <div class="prob-cell"><div class="prob-market">Empate (MyPredict)</div><div class="prob-value">{res['prob_empate']:.1%}</div><div style="font-size:0.7rem; color:#aaa;">Bet365: {res['imp_empate']:.1%}</div></div>
+                    <div class="prob-cell"><div class="prob-market">Fora (MyPredict)</div><div class="prob-value">{res['prob_fora']:.1%}</div><div style="font-size:0.7rem; color:#aaa;">Bet365: {res['imp_fora']:.1%}</div></div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
         # Resumo
         st.markdown("---")
-        st.subheader("💰 Resultado Financeiro (Banca Inicial: R$ 10,00)")
+        st.subheader("💰 Resultado Financeiro (Banca Inicial: R$ 100,00)")
         apostas_validas = [r for r in resultados if r['aposta_valida']]
         total_apostas = len(apostas_validas)
         if total_apostas > 0:
             acertos = sum(1 for r in apostas_validas if r['acertou'])
             banca_final = resultados[-1]['banca_apos']
-            lucro_total = banca_final - 10.0
-            roi = (lucro_total / 10.0) * 100
+            lucro_total = banca_final - 100.0
+            roi = (lucro_total / 100.0) * 100
             col1, col2, col3, col4 = st.columns(4)
             col1.metric("Apostas", total_apostas)
             col2.metric("Acertos", acertos)
@@ -467,4 +475,4 @@ elif opcao == "Backtest Oficial":
         else:
             st.warning("Nenhuma aposta realizada.")
     else:
-        st.info("Clique em 'Iniciar Backtest Oficial'.")
+        st.info("Clique em 'Iniciar Backtest Oficial (R$100)'.")
