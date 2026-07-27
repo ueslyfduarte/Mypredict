@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 - Aplicativo Completo (Leitura Robusta de CSV)
+MyPredict 2.0 - Aplicativo Completo (Backtest Simplificado)
 """
 import streamlit as st
 import pandas as pd
@@ -38,18 +38,12 @@ def prob_btts(ata_casa, def_fora, ata_fora, def_casa):
     return prob_c * prob_f
 
 # ============================================================
-# CARREGAR DADOS (COM DETECÇÃO DE DELIMITADOR)
+# CARREGAR DADOS
 # ============================================================
 @st.cache_data
 def carregar_dados():
     try:
-        # Detecta automaticamente o separador (vírgula, tabulação, etc.)
         df = pd.read_csv("data/meus_jogos.csv", sep=None, engine='python')
-        st.write("Colunas encontradas:", list(df.columns))
-        st.write("Primeiras 3 linhas:")
-        st.write(df.head(3))
-        
-        # Localiza coluna de data
         col_data = None
         for col in df.columns:
             if 'data' in col.lower() or 'date' in col.lower():
@@ -60,8 +54,12 @@ def carregar_dados():
             df = df.dropna(subset=[col_data])
             df = df.rename(columns={col_data: 'data'})
         else:
-            st.error("Coluna de data não encontrada no CSV.")
+            st.error("Coluna de data não encontrada.")
             return []
+        # Limpar espaços
+        for col in ['time', 'adv', 'mando', 'resultado']:
+            if col in df.columns:
+                df[col] = df[col].astype(str).str.strip()
         return df.to_dict(orient="records")
     except FileNotFoundError:
         return []
@@ -78,7 +76,7 @@ st.sidebar.markdown("<h2 style='color:#DAA520;'>⚽ MyPredict 2.0</h2>", unsafe_
 opcao = st.sidebar.radio("Modo", ["Análise de Jogo", "Backtest", "Converter Dados Brutos"])
 
 # ============================================================
-# CONVERSOR (MANTIDO)
+# CONVERSOR
 # ============================================================
 if opcao == "Converter Dados Brutos":
     st.markdown("<h1 style='text-align:center;'>🔄 Conversor de CSV</h1>", unsafe_allow_html=True)
@@ -137,11 +135,11 @@ if opcao == "Converter Dados Brutos":
                 try:
                     data_str = str(jogo.iloc[COL_DATE]).split(' ')[0]
                     data = pd.to_datetime(data_str, format='%d/%m/%Y', exact=False).strftime('%Y-%m-%d')
-                    home = str(jogo.iloc[COL_HOME])
-                    away = str(jogo.iloc[COL_AWAY])
+                    home = str(jogo.iloc[COL_HOME]).strip()
+                    away = str(jogo.iloc[COL_AWAY]).strip()
                     fthg = int(jogo.iloc[COL_FTHG])
                     ftag = int(jogo.iloc[COL_FTAG])
-                    ftr = str(jogo.iloc[COL_FTR])
+                    ftr = str(jogo.iloc[COL_FTR]).strip()
                     
                     def res_casa(r): return 'V' if r == 'H' else ('D' if r == 'A' else 'E')
                     def res_fora(r): return 'V' if r == 'A' else ('D' if r == 'H' else 'E')
@@ -194,7 +192,7 @@ if opcao == "Converter Dados Brutos":
                 st.error("Nenhuma linha foi convertida.")
 
 # ============================================================
-# ANÁLISE DE JOGO (MANTIDA)
+# ANÁLISE DE JOGO
 # ============================================================
 elif opcao == "Análise de Jogo":
     if not jogos:
@@ -355,7 +353,7 @@ elif opcao == "Análise de Jogo":
         col4.metric("Over 9.5 esc.", f"{prob_over(total_esc, 8.5):.1%}")
 
 # ============================================================
-# BACKTEST CORRIGIDO (CHAVE SIMÉTRICA)
+# BACKTEST SIMPLIFICADO (PROCESSA LINHA POR LINHA)
 # ============================================================
 elif opcao == "Backtest":
     st.markdown("<h1 style='text-align:center;'>📈 Backtest MyPredict 2.0</h1>", unsafe_allow_html=True)
@@ -364,68 +362,44 @@ elif opcao == "Backtest":
         st.error("Nenhum dado carregado.")
         st.stop()
     
-    st.write(f"Total de registros: {len(jogos)}")
+    # Diagnóstico rápido
+    total_casa = sum(1 for j in jogos if j.get('mando', '').strip().lower() == 'casa')
+    total_fora = sum(1 for j in jogos if j.get('mando', '').strip().lower() == 'fora')
+    st.write(f"Total de registros: {len(jogos)} (Casa: {total_casa}, Fora: {total_fora})")
     
     for j in jogos:
         if isinstance(j['data'], str):
             j['data'] = pd.to_datetime(j['data'], dayfirst=True)
     
     if st.button("Executar Backtest"):
-        st.write("Montando partidas...")
-        
+        # Ordena por data
         jogos_ord = sorted(jogos, key=lambda x: x['data'])
-        partidas = {}
-        for j in jogos_ord:
-            t1 = j['time']
-            t2 = j['adv']
-            if t1 < t2:
-                chave = (j['data'], t1, t2)
-                lado = 'casa' if j['mando'] == 'casa' else 'fora'
-            else:
-                chave = (j['data'], t2, t1)
-                lado = 'fora' if j['mando'] == 'casa' else 'casa'
-            
-            if chave not in partidas:
-                partidas[chave] = {'casa': None, 'fora': None}
-            
-            if lado == 'casa':
-                partidas[chave]['casa'] = j
-            else:
-                partidas[chave]['fora'] = j
-        
-        completas = sum(1 for v in partidas.values() if v['casa'] and v['fora'])
-        st.write(f"Partidas únicas: {len(partidas)}")
-        st.write(f"Partidas completas: {completas}")
-        
-        if completas == 0:
-            st.error("Nenhuma partida completa. Verifique o arquivo CSV.")
-            st.stop()
         
         log = []
         progress = st.progress(0)
-        total = len(partidas)
+        total = len(jogos_ord)
         processados = 0
         
-        for idx, (chave, jogo_dict) in enumerate(sorted(partidas.items(), key=lambda x: x[0][0])):
-            data_jogo = chave[0]
-            jogo_casa = jogo_dict['casa']
-            jogo_fora = jogo_dict['fora']
-            if not jogo_casa or not jogo_fora:
-                continue
+        for idx, j in enumerate(jogos_ord):
+            data_jogo = j['data']
+            time_casa = j['time'] if j['mando'].strip().lower() == 'casa' else None
+            time_fora = j['adv'] if j['mando'].strip().lower() == 'casa' else None
             
-            time_casa = jogo_casa['time']
-            time_fora = jogo_casa['adv']
+            # Se a linha for do visitante, ajusta os nomes
+            if time_casa is None:
+                time_casa = j['adv']
+                time_fora = j['time']
             
-            jogos_passados = [j for j in jogos if j['data'] < data_jogo]
+            jogos_passados = [p for p in jogos if p['data'] < data_jogo]
             
             def media_gols(time, tipo):
-                jogos_time = [j for j in jogos_passados if j['time'] == time]
+                jogos_time = [p for p in jogos_passados if p['time'].strip().lower() == time.strip().lower()]
                 if not jogos_time:
                     return 1.0
                 if tipo == 'marcados':
-                    return sum(j.get('gols', 0) for j in jogos_time) / len(jogos_time)
+                    return sum(p.get('gols', 0) for p in jogos_time) / len(jogos_time)
                 else:
-                    return sum(j.get('gols_sofridos', 0) for j in jogos_time) / len(jogos_time)
+                    return sum(p.get('gols_sofridos', 0) for p in jogos_time) / len(jogos_time)
             
             gols_casa = media_gols(time_casa, 'marcados')
             sofridos_fora = media_gols(time_fora, 'sofridos')
@@ -441,17 +415,15 @@ elif opcao == "Backtest":
             prob_over25 = prob_over(media_total, 2.5)
             prob_bt = prob_btts(ata_casa, def_fora, ata_fora, def_casa)
             
-            total_gols = jogo_casa.get('gols', 0) + jogo_casa.get('gols_sofridos', 0)
+            total_gols = j.get('gols', 0) + j.get('gols_sofridos', 0)
             over25_real = total_gols > 2.5
-            btts_real = (jogo_casa.get('gols', 0) > 0 and jogo_casa.get('gols_sofridos', 0) > 0)
+            btts_real = (j.get('gols', 0) > 0 and j.get('gols_sofridos', 0) > 0)
             
             log.append({
                 'Data': str(data_jogo)[:10],
-                'Casa': time_casa,
-                'Fora': time_fora,
-                'Gols Casa Hist': f"{gols_casa:.2f}",
-                'Gols Fora Hist': f"{gols_fora:.2f}",
-                'Media Total': f"{media_total:.2f}",
+                'Time': j['time'],
+                'Adversário': j['adv'],
+                'Mando': j['mando'],
                 'Prob Over 2.5': f"{prob_over25:.1%}",
                 'Over 2.5 Real': 'Sim' if over25_real else 'Não',
                 'Prob BTTS': f"{prob_bt:.1%}",
