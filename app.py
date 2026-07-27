@@ -3,6 +3,11 @@ MyPredict 2.0 – Análise por Prateleira e Dupla Chance
 """
 import streamlit as st
 import pandas as pd
+from dat"""
+MyPredict 2.0 – Aplicativo Completo com Recomendações Over 1.5 e BTTS
+"""
+import streamlit as st
+import pandas as pd
 from datetime import datetime
 from mypredict.core import *
 from math import exp, factorial
@@ -14,7 +19,7 @@ import os
 LIMITE_OURO = 0.65
 LIMITE_VERDE = 0.50
 LIMITE_MARGINAL = 0.33
-LIMITE_DUPLA_CHANCE = 0.70  # Soma de duas probabilidades para disparar dupla chance
+LIMITE_DUPLA_CHANCE = 0.70
 
 def get_selo(probabilidade):
     if probabilidade >= LIMITE_OURO:
@@ -150,7 +155,7 @@ if opcao == "Converter Dados Brutos":
             st.write("Conversor mantido. Use o código completo do arquivo real.")
 
 # ============================================================
-# ANÁLISE DE JOGO (RECOMENDAÇÃO + SELO POR PROBABILIDADE)
+# ANÁLISE DE JOGO (RECOMENDAÇÕES COMPLETAS)
 # ============================================================
 elif opcao == "Análise de Jogo":
     if not jogos:
@@ -177,7 +182,6 @@ elif opcao == "Análise de Jogo":
         data_ref_dt = datetime.combine(data_ref, datetime.min.time())
         jogos_passados = [j for j in jogos if j['data'] < data_ref_dt]
 
-        # Função auxiliar para obter OVRall com placeholders baseados na prateleira
         def get_ovrall(time, hist):
             prat = prats.get(time, 3)
             base = SHELF_VALUES[prat]
@@ -215,7 +219,7 @@ elif opcao == "Análise de Jogo":
 
         prob_casa, prob_empate, prob_fora = probabilidades_1x2(mpv_casa_raw, mpv_fora_raw)
 
-        # Recomendação principal
+        # Recomendação Resultado
         probs = [('Vitória Casa', prob_casa), ('Empate', prob_empate), ('Vitória Fora', prob_fora)]
         probs.sort(key=lambda x: x[1], reverse=True)
         maior, segunda = probs[0], probs[1]
@@ -234,17 +238,31 @@ elif opcao == "Análise de Jogo":
         elif prob_fora + prob_empate >= LIMITE_DUPLA_CHANCE:
             dupla = f"Dupla Chance Fora/Empate ({prob_fora + prob_empate:.1%})"
 
-        # Análise por prateleira (apenas para exibição)
-        prat_adv = prats.get(time_fora if rec != 'Vitória Fora' else time_casa, 3)
-        hist_prat = [j for j in jogos_passados if prats.get(j['adv'], 3) == prat_adv]
+        # Médias para Over/BTTS
+        def media_gols(time, tipo):
+            jogos_time = [j for j in jogos_passados if j['time'] == time][-10:]
+            if not jogos_time: return 1.0
+            if tipo == 'marcados': return sum(j['gols'] for j in jogos_time) / len(jogos_time)
+            else: return sum(j['gols_sofridos'] for j in jogos_time) / len(jogos_time)
+        gols_casa = media_gols(time_casa, 'marcados'); sofridos_fora = media_gols(time_fora, 'sofridos')
+        gols_fora = media_gols(time_fora, 'marcados'); sofridos_casa = media_gols(time_casa, 'sofridos')
+        media_total = (gols_casa + sofridos_fora)/2 + (gols_fora + sofridos_casa)/2
+
+        prob_over15 = prob_over(media_total, 1.5)
+        prob_bt = prob_btts(ata_casa, def_fora, ata_fora, def_casa)
+
+        # Recomendações Over 1.5 e BTTS
+        rec_over15 = "Over 1.5" if prob_over15 >= 0.5 else "Under 1.5"
+        rec_btts = "Sim" if prob_bt >= 0.5 else "Não"
+
+        # Análise por prateleira
+        prat_adv = prats.get(time_fora, 3)
+        hist_prat = [j for j in jogos_passados if j['time'] == time_casa and prats.get(j['adv'], 3) == prat_adv]
         v = sum(1 for j in hist_prat if j['resultado'] == 'V')
         e = sum(1 for j in hist_prat if j['resultado'] == 'E')
         d = sum(1 for j in hist_prat if j['resultado'] == 'D')
         total_prat = len(hist_prat)
-        if total_prat > 0:
-            analise_prat = f"Contra mesma prateleira ({prat_adv}): V:{v} E:{e} D:{d} ({(v/total_prat)*100:.1f}% vit.)"
-        else:
-            analise_prat = "Sem histórico recente contra essa prateleira."
+        analise_prat = f"Contra mesma prateleira ({prat_adv}): V:{v} E:{e} D:{d} ({(v/total_prat)*100:.1f}% vit.)" if total_prat > 0 else "Sem histórico contra essa prateleira."
 
         st.markdown("---")
         st.success(f"MyPredict Recomenda: **{rec}** (Probabilidade: {rec_prob:.1%})")
@@ -260,25 +278,24 @@ elif opcao == "Análise de Jogo":
         st.caption(analise_prat)
 
         st.markdown("---")
-        st.subheader("🎯 Outros Mercados")
-        def media_gols(time, tipo):
-            jogos_time = [j for j in jogos_passados if j['time'] == time][-10:]
-            if not jogos_time: return 1.0
-            if tipo == 'marcados': return sum(j['gols'] for j in jogos_time) / len(jogos_time)
-            else: return sum(j['gols_sofridos'] for j in jogos_time) / len(jogos_time)
-        gols_casa = media_gols(time_casa, 'marcados'); sofridos_fora = media_gols(time_fora, 'sofridos')
-        gols_fora = media_gols(time_fora, 'marcados'); sofridos_casa = media_gols(time_casa, 'sofridos')
-        media_total = (gols_casa + sofridos_fora)/2 + (gols_fora + sofridos_casa)/2
+        st.subheader("🎯 Recomendações de Mercados")
+        col_rec1, col_rec2 = st.columns(2)
+        with col_rec1:
+            st.metric("Over/Under 1.5 gols", f"{rec_over15} ({prob_over15:.1%})")
+        with col_rec2:
+            st.metric("Ambas Marcam", f"{rec_btts} ({prob_bt:.1%})")
+
+        st.subheader("Outros Mercados")
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Over 1.5 gols", f"{prob_over(media_total, 1.5):.1%}")
+        col1.metric("Over 1.5 gols", f"{prob_over15:.1%}")
         col2.metric("Over 2.5 gols", f"{prob_over(media_total, 2.5):.1%}")
-        col3.metric("Ambas Marcam", f"{prob_btts(ata_casa, def_fora, ata_fora, def_casa):.1%}")
+        col3.metric("Ambas Marcam", f"{prob_bt:.1%}")
         esc_casa = for_casa/5 if for_casa else 4; esc_fora = for_fora/5 if for_fora else 4
         total_esc = esc_casa + esc_fora
         col4.metric("Over 9.5 esc.", f"{prob_over(total_esc, 8.5):.1%}")
 
 # ============================================================
-# BACKTEST VISUAL (PRATELEIRA, DUPLA CHANCE, SELOS PROBABILÍSTICOS)
+# BACKTEST VISUAL (PRATELEIRA, DUPLA CHANCE, OVER 1.5, BTTS)
 # ============================================================
 elif opcao == "Backtest Visual":
     st.markdown("<h1 style='text-align:center;'>📈 Backtest MyPredict 2.0</h1>", unsafe_allow_html=True)
@@ -289,10 +306,7 @@ elif opcao == "Backtest Visual":
     todas_datas = sorted([p['data'] for p in partidas])
     data_inicio_temporada = todas_datas[0]
     jogos_anteriores = [j for j in jogos if j['data'] < data_inicio_temporada]
-    if len(jogos_anteriores) > 0:
-        prateleiras_fixas = classification_to_shelves(jogos_anteriores)
-    else:
-        prateleiras_fixas = classification_to_shelves(jogos)
+    prateleiras_fixas = classification_to_shelves(jogos_anteriores) if jogos_anteriores else classification_to_shelves(jogos)
 
     if 'resultados_backtest' not in st.session_state:
         st.session_state.resultados_backtest = None
@@ -355,7 +369,7 @@ elif opcao == "Backtest Visual":
 
             prob_casa, prob_empate, prob_fora = probabilidades_1x2(mpv_casa_raw, mpv_fora_raw)
 
-            # Recomendação principal
+            # Recomendação Resultado
             probs = [('Vitória Casa', prob_casa), ('Empate', prob_empate), ('Vitória Fora', prob_fora)]
             probs.sort(key=lambda x: x[1], reverse=True)
             maior, segunda = probs[0], probs[1]
@@ -370,40 +384,11 @@ elif opcao == "Backtest Visual":
             # Dupla chance
             dupla = None
             if prob_casa + prob_empate >= LIMITE_DUPLA_CHANCE:
-                dupla = f"Dupla Chance Casa/Empate ({prob_casa + prob_empate:.1%})"
+                dupla = f"DC Casa/Empate ({prob_casa + prob_empate:.1%})"
             elif prob_fora + prob_empate >= LIMITE_DUPLA_CHANCE:
-                dupla = f"Dupla Chance Fora/Empate ({prob_fora + prob_empate:.1%})"
+                dupla = f"DC Fora/Empate ({prob_fora + prob_empate:.1%})"
 
-            # Análise por prateleira
-            prat_adv_atual = prat_fora  # prateleira do adversário da casa (que é o time do visitante)
-            hist_prat_casa = [j for j in hist_filtrado if j['time'] == time_casa and prateleiras_fixas.get(j['adv'], 3) == prat_adv_atual]
-            v_c = sum(1 for j in hist_prat_casa if j['resultado'] == 'V')
-            e_c = sum(1 for j in hist_prat_casa if j['resultado'] == 'E')
-            d_c = sum(1 for j in hist_prat_casa if j['resultado'] == 'D')
-            total_c = len(hist_prat_casa)
-            if total_c > 0:
-                analise_prat = f"{time_casa} vs prateleira {prat_adv_atual}: V:{v_c} E:{e_c} D:{d_c} ({(v_c/total_c)*100:.1f}% vit.)"
-            else:
-                analise_prat = f"Sem histórico de {time_casa} contra prateleira {prat_adv_atual}."
-
-            # Resultado real
-            gols_casa_real = casa_info['gols']
-            gols_fora_real = fora_info['gols']
-            resultado_real = 'V' if gols_casa_real > gols_fora_real else ('D' if gols_casa_real < gols_fora_real else 'E')
-            total_gols = gols_casa_real + gols_fora_real
-            over15_real = total_gols > 1.5
-            over25_real = total_gols > 2.5
-            btts_real = gols_casa_real > 0 and gols_fora_real > 0
-            esc_casa_real = casa_info.get('escanteios', 0)
-            esc_fora_real = fora_info.get('escanteios', 0)
-            esc_real = (esc_casa_real + esc_fora_real) > 9.5
-
-            acertou = (rec == 'Vitória Casa' and resultado_real == 'V') or \
-                      (rec == 'Empate' and resultado_real == 'E') or \
-                      (rec == 'Vitória Fora' and resultado_real == 'D')
-            if rec == "Empate Técnico":
-                acertou = (resultado_real == 'E')
-
+            # Over 1.5 e BTTS
             def media_hist(time, tipo):
                 jogos_time = [j for j in hist_filtrado if j['time'] == time]
                 if not jogos_time:
@@ -428,6 +413,35 @@ elif opcao == "Backtest Visual":
             prob_ht_over05 = prob_over(media_total * 0.4, 0.5)
             prob_ht_over15 = prob_over(media_total * 0.4, 1.5)
 
+            rec_over15 = "Over 1.5" if prob_over15 >= 0.5 else "Under 1.5"
+            rec_btts = "Sim" if prob_bt >= 0.5 else "Não"
+
+            # Análise por prateleira
+            hist_prat_casa = [j for j in hist_filtrado if j['time'] == time_casa and prateleiras_fixas.get(j['adv'], 3) == prat_fora]
+            v_c = sum(1 for j in hist_prat_casa if j['resultado'] == 'V')
+            e_c = sum(1 for j in hist_prat_casa if j['resultado'] == 'E')
+            d_c = sum(1 for j in hist_prat_casa if j['resultado'] == 'D')
+            total_c = len(hist_prat_casa)
+            analise_prat = f"{time_casa} vs prat {prat_fora}: V:{v_c} E:{e_c} D:{d_c} ({(v_c/total_c)*100:.1f}% vit.)" if total_c > 0 else f"Sem histórico vs prat {prat_fora}"
+
+            # Resultado real
+            gols_casa_real = casa_info['gols']
+            gols_fora_real = fora_info['gols']
+            resultado_real = 'V' if gols_casa_real > gols_fora_real else ('D' if gols_casa_real < gols_fora_real else 'E')
+            total_gols = gols_casa_real + gols_fora_real
+            over15_real = total_gols > 1.5
+            over25_real = total_gols > 2.5
+            btts_real = gols_casa_real > 0 and gols_fora_real > 0
+            esc_casa_real = casa_info.get('escanteios', 0)
+            esc_fora_real = fora_info.get('escanteios', 0)
+            esc_real = (esc_casa_real + esc_fora_real) > 9.5
+
+            acertou = (rec == 'Vitória Casa' and resultado_real == 'V') or \
+                      (rec == 'Empate' and resultado_real == 'E') or \
+                      (rec == 'Vitória Fora' and resultado_real == 'D')
+            if rec == "Empate Técnico":
+                acertou = (resultado_real == 'E')
+
             imp_casa = 1 / float(casa_info.get('B365H', 2.0)) if float(casa_info.get('B365H', 2.0)) > 0 else 0
             imp_empate = 1 / float(casa_info.get('B365D', 3.0)) if float(casa_info.get('B365D', 3.0)) > 0 else 0
             imp_fora = 1 / float(casa_info.get('B365A', 3.0)) if float(casa_info.get('B365A', 3.0)) > 0 else 0
@@ -449,9 +463,9 @@ elif opcao == "Backtest Visual":
                 'dupla': dupla,
                 'analise_prat': analise_prat,
                 'resultado_real': resultado_real, 'acertou': acertou,
-                'over15_prob': prob_over15, 'over15_real': over15_real,
+                'over15_prob': prob_over15, 'over15_real': over15_real, 'rec_over15': rec_over15,
                 'over25_prob': prob_over25, 'over25_real': over25_real,
-                'btts_prob': prob_bt, 'btts_real': btts_real,
+                'btts_prob': prob_bt, 'btts_real': btts_real, 'rec_btts': rec_btts,
                 'esc_prob': prob_esc, 'esc_real': esc_real,
                 'ht_over05_prob': prob_ht_over05,
                 'ht_over15_prob': prob_ht_over15
@@ -490,9 +504,8 @@ elif opcao == "Backtest Visual":
                     st.metric("OVR Fora", f"{res['ovr_fora']:.1f}")
                 with col4:
                     st.write(f"Resultado: {res['resultado_real']}")
-                    st.write(f"Recomendação: **{res['recomendacao']}**")
-                    st.write(f"Prob MyPredict: {res['rec_prob']:.1%}")
-                    st.write(f"Selo: {res['selo']}")
+                    st.write(f"**Recomendação: {res['recomendacao']}**")
+                    st.write(f"Prob: {res['rec_prob']:.1%} | Selo: {res['selo']}")
                     st.write(f"Acertou: {'✅' if res['acertou'] else '❌'}")
                     if res['dupla']:
                         st.write(f"🔄 {res['dupla']}")
@@ -506,22 +519,24 @@ elif opcao == "Backtest Visual":
                 with col_p3:
                     st.metric("Fora (MyPredict)", f"{res['prob_fora']:.1%}", delta=f"Bet365: {res['imp_fora']:.1%}")
 
+                st.write("**Recomendações de Mercados**")
+                col_rec1, col_rec2 = st.columns(2)
+                with col_rec1:
+                    st.metric("Over 1.5", f"{res['rec_over15']} ({res['over15_prob']:.1%})", delta=f"{'✅' if res['over15_real'] else '❌'}")
+                with col_rec2:
+                    st.metric("BTTS", f"{res['rec_btts']} ({res['btts_prob']:.1%})", delta=f"{'✅' if res['btts_real'] else '❌'}")
+
                 st.caption(res['analise_prat'])
 
-                st.write("**Outros Mercados (MyPredict)**")
+                st.write("**Outros Mercados**")
                 col_m1, col_m2, col_m3, col_m4 = st.columns(4)
                 with col_m1:
-                    st.metric("Over 1.5", f"{res['over15_prob']:.1%}", delta=f"{'✅' if res['over15_real'] else '❌'}")
-                with col_m2:
                     st.metric("Over 2.5", f"{res['over25_prob']:.1%}", delta=f"{'✅' if res['over25_real'] else '❌'}")
-                with col_m3:
-                    st.metric("BTTS", f"{res['btts_prob']:.1%}", delta=f"{'✅' if res['btts_real'] else '❌'}")
-                with col_m4:
+                with col_m2:
                     st.metric("Esc. >9.5", f"{res['esc_prob']:.1%}", delta=f"{'✅' if res['esc_real'] else '❌'}")
-                col_m5, col_m6 = st.columns(2)
-                with col_m5:
+                with col_m3:
                     st.metric("HT Over 0.5", f"{res['ht_over05_prob']:.1%}")
-                with col_m6:
+                with col_m4:
                     st.metric("HT Over 1.5", f"{res['ht_over15_prob']:.1%}")
                 st.markdown("---")
 
