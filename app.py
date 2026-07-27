@@ -1,9 +1,4 @@
 """
-MyPredict 2.0 – Análise por Prateleira e Dupla Chance
-"""
-import streamlit as st
-import pandas as pd
-from dat"""
 MyPredict 2.0 – Aplicativo Completo com Recomendações Over 1.5 e BTTS
 """
 import streamlit as st
