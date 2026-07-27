@@ -282,7 +282,7 @@ elif opcao == "Análise de Jogo":
         col4.metric("Over 9.5 esc.", f"{prob_over(total_esc, 8.5):.1%}")
 
 # ============================================================
-# BACKTEST VISUAL (CORRIGIDO – PROBABILIDADES NORMALIZADAS, DIFERENÇA MPV, ANÁLISE)
+# BACKTEST VISUAL (PRATELEIRAS PELA CLASSIFICAÇÃO FINAL, RECOMENDAÇÃO NEUTRA)
 # ============================================================
 elif opcao == "Backtest Visual":
     st.markdown("<h1 style='text-align:center;'>📈 Backtest MyPredict 2.0</h1>", unsafe_allow_html=True)
@@ -290,25 +290,18 @@ elif opcao == "Backtest Visual":
         st.error("Nenhuma partida carregada.")
         st.stop()
 
-    # Prateleiras fixas (temporada anterior)
-    todas_datas = sorted([p['data'] for p in partidas])
-    data_inicio_temporada = todas_datas[0]
-    jogos_anteriores = [j for j in jogos if j['data'] < data_inicio_temporada]
-    if len(jogos_anteriores) > 0:
-        prateleiras_fixas = classification_to_shelves(jogos_anteriores)
-    else:
-        prateleiras_fixas = classification_to_shelves(jogos)
+    # --- PRATELEIRAS FIXAS: classificação final da temporada ---
+    prateleiras_fixas = classification_to_shelves(jogos)  # usa todos os jogos do CSV (classificação final)
+    st.success("Prateleiras definidas a partir da classificação final da temporada.")
 
-    # Função de probabilidades corrigida (evita negativos e normaliza soma = 1)
+    # Função de probabilidades corrigida (normaliza soma = 1)
     def prob_1x2_corrigida(mpv_casa, mpv_fora):
-        # Usa a lógica original, mas força limites e normaliza
         P_casa = 1 / (1 + 10 ** ((mpv_fora - (mpv_casa + PARAMS['V_mando'])) / PARAMS['S']))
         dif_norm = abs(mpv_casa + PARAMS['V_mando'] - mpv_fora) / PARAMS['S']
         P_empate = max(0.14, min(0.32, 0.30 - 0.05 * dif_norm))
         P_casa_final = max(0.0, P_casa - 0.5 * P_empate)
         P_empate_final = max(0.0, P_empate)
         P_fora_final = max(0.0, 1.0 - P_casa_final - P_empate_final)
-        # Normaliza se necessário (soma pode não ser 1 por arredondamento)
         total = P_casa_final + P_empate_final + P_fora_final
         if total > 0:
             P_casa_final /= total
@@ -344,7 +337,7 @@ elif opcao == "Backtest Visual":
 
             hist_filtrado = [j for j in historico if j['data'] < data_jogo]
 
-            # --- IMA detalhado (mantido) ---
+            # --- IMA detalhado ---
             def calc_ima_detalhado(time, mando_prox):
                 jogos_time = [j for j in hist_filtrado if j['time'] == time]
                 jogos_time.sort(key=lambda x: x['data'], reverse=True)
@@ -374,7 +367,7 @@ elif opcao == "Backtest Visual":
             ima_casa, jan_casa = calc_ima_detalhado(time_casa, 'casa')
             ima_fora, jan_fora = calc_ima_detalhado(time_fora, 'fora')
 
-            # --- OVRall detalhado (mantido) ---
+            # --- OVRall detalhado ---
             def ovrall_detalhado(time, prat):
                 if not any(j['time'] == time for j in hist_filtrado):
                     base = SHELF_VALUES[prat]
@@ -418,26 +411,27 @@ elif opcao == "Backtest Visual":
 
             prob_casa, prob_empate, prob_fora = prob_1x2_corrigida(mpv_casa_raw, mpv_fora_raw)
 
-            # Recomendação
-            probs = {'Vitória Casa': prob_casa, 'Empate': prob_empate, 'Vitória Fora': prob_fora}
+            # Recomendação com nomes dos times
+            probs = {
+                f"Vitória do {time_casa}": prob_casa,
+                "Empate": prob_empate,
+                f"Vitória do {time_fora}": prob_fora
+            }
             rec = max(probs, key=probs.get)
             rec_prob = probs[rec]
             selo = get_selo(rec_prob)
 
-            # Resultado real
             gols_casa_real = casa_info['gols']
             gols_fora_real = fora_info['gols']
             resultado_real = 'V' if gols_casa_real > gols_fora_real else ('D' if gols_casa_real < gols_fora_real else 'E')
-            acertou = (rec == 'Vitória Casa' and resultado_real == 'V') or \
-                      (rec == 'Empate' and resultado_real == 'E') or \
-                      (rec == 'Vitória Fora' and resultado_real == 'D')
+            acertou = (rec == f"Vitória do {time_casa}" and resultado_real == 'V') or \
+                      (rec == "Empate" and resultado_real == 'E') or \
+                      (rec == f"Vitória do {time_fora}" and resultado_real == 'D')
 
-            # Odds implícitas
             imp_casa = 1 / float(casa_info.get('B365H', 2.0)) if float(casa_info.get('B365H', 2.0)) > 0 else 0
             imp_empate = 1 / float(casa_info.get('B365D', 3.0)) if float(casa_info.get('B365D', 3.0)) > 0 else 0
             imp_fora = 1 / float(casa_info.get('B365A', 3.0)) if float(casa_info.get('B365A', 3.0)) > 0 else 0
 
-            # Diferença de MPV (com mando)
             dif_mpv = (mpv_casa_raw - 1000)/10 - (mpv_fora_raw - 1000)/10
 
             resultados.append({
@@ -478,7 +472,6 @@ elif opcao == "Backtest Visual":
         st.markdown(f"Mostrando {inicio+1}–{min(fim, total_jogos)} de {total_jogos} partidas")
 
         for res in pagina_atual:
-            # Determinar ícone de tendência (se o time mais forte pelo MPV tem maior probabilidade)
             if res['dif_mpv'] > 0:
                 tendencia = f"MPV Casa maior em {res['dif_mpv']:.1f} pontos"
             elif res['dif_mpv'] < 0:
