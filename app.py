@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 – Aplicativo Completo (Backtest Focado em 1X2, Selos Corrigidos)
+MyPredict 2.0 – Aplicativo Completo com Simulação de Apostas (Banca R$10)
 """
 import streamlit as st
 import pandas as pd
@@ -289,19 +289,19 @@ elif opcao == "Análise de Jogo":
         col4.metric("Over 9.5 esc.", f"{prob_over(total_esc, 8.5):.1%}")
 
 # ============================================================
-# BACKTEST VISUAL (CORRIGIDO – SELOS DEFINITIVOS, PRATELEIRAS FIXAS)
+# BACKTEST COM SIMULAÇÃO DE BANCA (R$ 10 INICIAL, STAKE FIXO R$ 1)
 # ============================================================
 elif opcao == "Backtest Visual":
-    st.markdown("<h1 style='text-align:center;'>📈 Backtest MyPredict 2.0</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center;'>📈 Backtest MyPredict 2.0 – Simulação Financeira</h1>", unsafe_allow_html=True)
     if not partidas:
         st.error("Nenhuma partida carregada.")
         st.stop()
 
-    # --- PRATELEIRAS FIXAS: classificação final da temporada ---
+    # Prateleiras fixas (classificação final)
     prateleiras_fixas = classification_to_shelves(jogos)
-    st.success("Prateleiras definidas a partir da classificação final da temporada.")
+    st.success("Prateleiras baseadas na classificação final da temporada.")
 
-    # Função de probabilidades corrigida (normaliza soma = 1)
+    # Função de probabilidades corrigida
     def prob_1x2_corrigida(mpv_casa, mpv_fora):
         P_casa = 1 / (1 + 10 ** ((mpv_fora - (mpv_casa + PARAMS['V_mando'])) / PARAMS['S']))
         dif_norm = abs(mpv_casa + PARAMS['V_mando'] - mpv_fora) / PARAMS['S']
@@ -320,11 +320,12 @@ elif opcao == "Backtest Visual":
         st.session_state.resultados_backtest = None
         st.session_state.backtest_executado = False
 
-    if st.button("Iniciar Backtest 1X2"):
+    if st.button("Iniciar Backtest e Simulação"):
         st.session_state.backtest_executado = True
         partidas_ord = sorted(partidas, key=lambda p: p['data'])
         historico = []
         resultados = []
+        banca = 10.0  # Banca inicial
         progress = st.progress(0)
         total = len(partidas_ord)
 
@@ -428,7 +429,6 @@ elif opcao == "Backtest Visual":
             rec_prob = probs[rec]
             selo = get_selo(rec_prob)
 
-            # Só considera recomendação se for Ouro ou Verde
             if selo in ("🥇 Ouro", "🟢 Verde"):
                 recomendacao = rec
                 aposta_valida = True
@@ -441,11 +441,28 @@ elif opcao == "Backtest Visual":
             resultado_real = 'V' if gols_casa_real > gols_fora_real else ('D' if gols_casa_real < gols_fora_real else 'E')
 
             acertou = False
+            odd_utilizada = None
             if aposta_valida:
+                if rec.startswith('Vitória do '):
+                    time_rec = rec.replace('Vitória do ', '')
+                    if time_rec == time_casa:
+                        odd_utilizada = float(casa_info.get('B365H', 2.0))
+                    else:
+                        odd_utilizada = float(casa_info.get('B365A', 3.0))
+                else:  # Empate
+                    odd_utilizada = float(casa_info.get('B365D', 3.0))
+
                 if (rec == f"Vitória do {time_casa}" and resultado_real == 'V') or \
                    (rec == "Empate" and resultado_real == 'E') or \
                    (rec == f"Vitória do {time_fora}" and resultado_real == 'D'):
                     acertou = True
+                    lucro_partida = odd_utilizada - 1
+                else:
+                    lucro_partida = -1.0
+
+                banca += lucro_partida  # Atualiza banca
+            else:
+                lucro_partida = 0.0
 
             imp_casa = 1 / float(casa_info.get('B365H', 2.0)) if float(casa_info.get('B365H', 2.0)) > 0 else 0
             imp_empate = 1 / float(casa_info.get('B365D', 3.0)) if float(casa_info.get('B365D', 3.0)) > 0 else 0
@@ -468,6 +485,9 @@ elif opcao == "Backtest Visual":
                 'imp_casa': imp_casa, 'imp_empate': imp_empate, 'imp_fora': imp_fora,
                 'recomendacao': recomendacao, 'rec_prob': rec_prob, 'selo': selo,
                 'aposta_valida': aposta_valida,
+                'odd_utilizada': odd_utilizada,
+                'lucro_partida': lucro_partida,
+                'banca_apos': banca,
                 'resultado_real': resultado_real, 'acertou': acertou
             })
 
@@ -478,7 +498,7 @@ elif opcao == "Backtest Visual":
         st.session_state.resultados_backtest = resultados
 
     # ============================================================
-    # EXIBIÇÃO PAGINADA (10 POR VEZ, CARDS ABERTOS)
+    # EXIBIÇÃO PAGINADA COM INFORMAÇÕES FINANCEIRAS
     # ============================================================
     if st.session_state.resultados_backtest:
         resultados = st.session_state.resultados_backtest
@@ -499,10 +519,12 @@ elif opcao == "Backtest Visual":
             else:
                 tendencia = "MPV igual"
 
-            # Destacar recomendação apenas se for válida
+            # Linha financeira
             if res['aposta_valida']:
-                rec_text = f"**MyPredict Recomenda:** {res['recomendacao']} (Prob: {res['rec_prob']:.1%}, Selo: {res['selo']})"
+                lucro_str = f"Lucro: {res['lucro_partida']:+.2f} | Banca: R$ {res['banca_apos']:.2f}"
+                rec_text = f"**MyPredict Recomenda:** {res['recomendacao']} (Prob: {res['rec_prob']:.1%}, Selo: {res['selo']}, Odd: {res['odd_utilizada']:.2f})"
             else:
+                lucro_str = ""
                 rec_text = f"MyPredict: **{res['recomendacao']}** (Prob: {res['rec_prob']:.1%}, Selo: {res['selo']})"
 
             st.markdown(f"""
@@ -539,6 +561,7 @@ elif opcao == "Backtest Visual":
                 </div>
                 <hr>
                 <div style="margin-bottom:4px;">{rec_text}</div>
+                <div style="color:#DAA520; font-weight:bold;">{lucro_str}</div>
                 <div class="metric-row">
                     <div class="prob-cell">
                         <div class="prob-market">Casa (MyPredict)</div>
@@ -560,49 +583,30 @@ elif opcao == "Backtest Visual":
             """, unsafe_allow_html=True)
 
         # ============================================================
-        # RESUMO (APENAS RECOMENDAÇÕES VÁLIDAS – OURO E VERDE)
+        # RESUMO FINANCEIRO
         # ============================================================
         st.markdown("---")
-        st.subheader("📊 Desempenho do MyPredict (apenas recomendações Ouro e Verde)")
+        st.subheader("💰 Resultado Financeiro (Banca Inicial: R$ 10,00)")
 
         apostas_validas = [r for r in resultados if r['aposta_valida']]
         total_apostas = len(apostas_validas)
 
         if total_apostas > 0:
-            acertos = sum(1 for r in apostas_validas if r['acertou'])
-            taxa = (acertos / total_apostas) * 100
-            lucro = 0.0
-            for r in apostas_validas:
-                if r['recomendacao'].startswith('Vitória do '):
-                    time_rec = r['recomendacao'].replace('Vitória do ', '')
-                    if time_rec == r['time_casa']:
-                        odd = float(r['imp_casa'] and (1/r['imp_casa']) or 2.0)  # odd da casa
-                    else:
-                        odd = float(r['imp_fora'] and (1/r['imp_fora']) or 3.0)
-                else:
-                    odd = float(r['imp_empate'] and (1/r['imp_empate']) or 3.0)
-                if r['acertou']:
-                    lucro += odd - 1
-                else:
-                    lucro -= 1
-
-            roi = (lucro / total_apostas) * 100
+            banca_final = resultados[-1]['banca_apos']  # Último valor da banca
+            lucro_total = banca_final - 10.0
+            roi = (lucro_total / 10.0) * 100
 
             col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Total de Recomendações", total_apostas)
-            col2.metric("Acertos", acertos)
-            col3.metric("Taxa de Acerto", f"{taxa:.1f}%")
-            col4.metric("Lucro/Prejuízo", f"{lucro:+.2f} unidades")
+            col1.metric("Apostas Realizadas", total_apostas)
+            col2.metric("Acertos", sum(1 for r in apostas_validas if r['acertou']))
+            col3.metric("Banca Final", f"R$ {banca_final:.2f}")
+            col4.metric("Lucro/Prejuízo", f"R$ {lucro_total:+.2f}")
             st.metric("ROI", f"{roi:.2f}%")
 
-            st.subheader("Desempenho por Selo")
-            for selo_nome in ["🥇 Ouro", "🟢 Verde"]:
-                jogos_selo = [r for r in apostas_validas if r['selo'] == selo_nome]
-                if jogos_selo:
-                    acertos_selo = sum(1 for r in jogos_selo if r['acertou'])
-                    taxa_selo = (acertos_selo / len(jogos_selo)) * 100
-                    st.write(f"{selo_nome}: {len(jogos_selo)} jogos, {acertos_selo} acertos ({taxa_selo:.1f}%)")
+            # Gráfico simples da evolução da banca (opcional)
+            bancas = [r['banca_apos'] for r in apostas_validas]
+            st.line_chart(bancas, height=200)
         else:
-            st.warning("Nenhuma recomendação foi emitida (apenas Ouro ou Verde).")
+            st.warning("Nenhuma aposta foi realizada (apenas Ouro e Verde).")
     else:
-        st.info("Clique em 'Iniciar Backtest 1X2' para processar os jogos.")
+        st.info("Clique em 'Iniciar Backtest e Simulação' para processar os jogos.")
