@@ -1,54 +1,98 @@
 # data_loader.py — MyPredict 2.0
-# Carregamento de dados, herança estatística e extração de recortes.
+# Carregamento de dados, herança estatística, projeção de prateleiras.
 
-from config import JOGOS_BASE_OVRALL, POS_REF_PROMOVIDO, POS_REF_REBAIXADO, JOGOS_CONFRONTO_DIRETO
+from config import (
+    JOGOS_BASE_OVRALL, POS_REF_PROMOVIDO, POS_REF_REBAIXADO,
+    NUM_PROMOVIDOS, PONTOS_BASE, JOGOS_CONFRONTO_DIRETO
+)
+from statistics import stdev, mean
 
+
+# ------------------------------------------------------------
+# FUNÇÕES PLACEHOLDER DE FONTE DE DADOS (substituir por API/CSV)
+# ------------------------------------------------------------
 
 def carregar_jogos_temporada(time: str, liga: str, temporada: int) -> list:
     """
-    Retorna lista de todos os jogos de um time em uma determinada liga e temporada.
-    Placeholder — conectar com API/CSV real.
-    Campos esperados: data, resultado, adversario, mandante, gols_pro, gols_contra, ...
+    Retorna lista de jogos de um time na temporada/liga.
+    Campos esperados: data, resultado ('V','E','D'), adversario, mandante (bool),
+    gols_pro, gols_contra, finalizacoes_tot, finalizacoes_alvo, posse,
+    passes_certos, passes_totais, passes_chave, assistencias, xg, xga,
+    desarmes, interceptacoes, ht_placar (lista [gols_time, gols_adv]), etc.
     """
     return []
 
 
-def carregar_confrontos_diretos(time: str, adversario: str, liga: str, limite: int = JOGOS_CONFRONTO_DIRETO) -> list:
-    """
-    Retorna lista dos últimos confrontos entre time e adversário (qualquer competição/temporada).
-    Campos: data, resultado (do ponto de vista do time), etc.
-    Placeholder.
-    """
+def carregar_confrontos_diretos(time: str, adversario: str, liga: str) -> list:
+    """Últimos confrontos entre time e adversário (independente de temporada)."""
     return []
 
 
 def classificação_anterior(liga: str, temporada: int) -> dict:
-    """Retorna {posicao: nome_time} da temporada anterior."""
+    """Retorna {posicao: nome_time} da classificação final."""
     return {}
 
 
-def time_eh_promovido(time: str, liga: str, temporada_atual: int) -> bool:
-    return False
+def _obter_promovidos_ordenados(liga: str, temporada_atual: int) -> list:
+    """Retorna lista de nomes dos times promovidos, do 1º ao 4º colocado."""
+    return []
 
 
-def time_eh_rebaixado(time: str, liga: str, temporada_atual: int) -> bool:
-    return False
+def _obter_rebaixados(liga: str, temporada: int) -> list:
+    """Retorna lista de nomes dos times rebaixados na temporada."""
+    return []
 
 
-def obter_time_por_posicao(classificacao: dict, posicao: int) -> str:
-    return classificacao.get(posicao)
+def carregar_odds_partida(casa: str, fora: str, liga: str) -> tuple:
+    """Retorna (odds_casa, odds_empate, odds_fora) ou (None, None, None)."""
+    return None, None, None
 
+
+# ------------------------------------------------------------
+# PROJEÇÃO DE PRATELEIRAS (início de temporada)
+# ------------------------------------------------------------
+
+def gerar_prateleiras(liga: str, temporada_atual: int) -> dict:
+    """
+    Retorna {time: prateleira} com base na classificação anterior,
+    substituindo rebaixados pelos promovidos (ordenados) nas mesmas posições.
+    """
+    class_ant = classificação_anterior(liga, temporada_atual - 1)
+    if not class_ant:
+        return {}
+
+    promovidos = _obter_promovidos_ordenados(liga, temporada_atual)
+    rebaixados = _obter_rebaixados(liga, temporada_atual - 1)
+
+    # Posições ocupadas pelos rebaixados (ordenadas)
+    pos_rebaixados = sorted([pos for pos, time in class_ant.items() if time in rebaixados])
+
+    # Nova classificação: substitui rebaixados pelos promovidos
+    nova_class = class_ant.copy()
+    for i, time_prom in enumerate(promovidos):
+        if i < len(pos_rebaixados):
+            nova_class[pos_rebaixados[i]] = time_prom
+
+    # Converter posições para prateleiras
+    from ratings import obter_prateleira  # evita circular import se bem estruturado
+    prateleiras = {}
+    for pos, time in nova_class.items():
+        prateleiras[time] = obter_prateleira(pos)
+
+    return prateleiras
+
+
+# ------------------------------------------------------------
+# HERANÇA DE DADOS (OVRall / IMA)
+# ------------------------------------------------------------
 
 def obter_ultimos_jogos_com_heranca(
-    time: str,
-    liga: str,
-    temporada_atual: int,
-    classificacao_anterior: dict,
-    n: int = JOGOS_BASE_OVRALL
+    time: str, liga: str, temporada_atual: int,
+    classificação_anterior: dict, n: int = JOGOS_BASE_OVRALL
 ) -> list:
     """
-    Retorna lista com os últimos n jogos do time na divisão.
-    Se o time não possui histórico suficiente, completa com jogos do time de referência.
+    Últimos n jogos do time na divisão, herdando jogos do time de referência
+    se o time não tem histórico suficiente.
     """
     jogos_reais = []
     temp = temporada_atual
@@ -61,12 +105,15 @@ def obter_ultimos_jogos_com_heranca(
     if len(jogos_reais) >= n:
         return jogos_reais[:n]
 
-    if time_eh_promovido(time, liga, temporada_atual):
-        ref_time = obter_time_por_posicao(classificacao_anterior, POS_REF_PROMOVIDO)
-    elif time_eh_rebaixado(time, liga, temporada_atual):
-        ref_time = obter_time_por_posicao(classificacao_anterior, POS_REF_REBAIXADO)
+    # Determinar time de referência
+    if _time_subiu(time, liga, temporada_atual):
+        ref_pos = POS_REF_PROMOVIDO
+    elif _time_desceu(time, liga, temporada_atual):
+        ref_pos = POS_REF_REBAIXADO
     else:
         ref_time = None
+
+    ref_time = classificação_anterior.get(ref_pos) if ref_pos else None
 
     if ref_time:
         jogos_ref = []
@@ -84,10 +131,26 @@ def obter_ultimos_jogos_com_heranca(
     return jogos_reais[:n]
 
 
+def _time_subiu(time: str, liga: str, temporada: int) -> bool:
+    """Verifica se o time é promovido na temporada atual."""
+    promovidos = _obter_promovidos_ordenados(liga, temporada)
+    return time in promovidos
+
+
+def _time_desceu(time: str, liga: str, temporada: int) -> bool:
+    """Verifica se o time é rebaixado na temporada anterior."""
+    rebaixados = _obter_rebaixados(liga, temporada - 1)
+    return time in rebaixados
+
+
+# ------------------------------------------------------------
+# EXTRAÇÃO DE RECORTES (IMA)
+# ------------------------------------------------------------
+
 def extrair_recortes_ima(jogos: list, time_mandante: bool) -> dict:
     """
-    A partir da lista de jogos (ordenados por data decrescente),
-    retorna dict com os recortes: 10G, 5G, 3G, 5CF, 3CF.
+    A partir da lista de jogos (mais recente primeiro), retorna:
+        {'10G': [...], '5G': [...], '3G': [...], '5CF': [...], '3CF': [...]}
     """
     recortes = {
         '10G': jogos[:10],
@@ -101,9 +164,126 @@ def extrair_recortes_ima(jogos: list, time_mandante: bool) -> dict:
     return recortes
 
 
-def carregar_odds_partida(casa: str, fora: str, liga: str) -> tuple:
+# ------------------------------------------------------------
+# AGREGADORES DE ESTATÍSTICAS (OVRall)
+# ------------------------------------------------------------
+
+def _media(lista):
+    return mean(lista) if lista else None
+
+def _desvio(lista):
+    return stdev(lista) if len(lista) > 1 else 0.0
+
+def _aproveitamento(jogos):
+    if not jogos: return None
+    pontos = sum(PONTOS_BASE[j['resultado']] for j in jogos)
+    return (pontos / (len(jogos) * 3)) * 100
+
+def _gols_ultimos_15min(jogos):
+    """Gols marcados nos últimos 15 minutos por jogo (média)."""
+    gols = [j.get('gols_ultimos_15', 0) for j in jogos]
+    return _media(gols)
+
+def _pontos_pos_desvantagem(jogos):
+    """Média de pontos em jogos que saiu atrás no HT."""
+    desv = [j for j in jogos if j.get('ht_placar') and j['ht_placar'][0] < j['ht_placar'][1]]
+    return _aproveitamento(desv)
+
+def _pontos_apos_derrota(jogos):
+    """Aproveitamento no jogo seguinte a uma derrota."""
+    # Necessita da lista de jogos ordenada; aqui simplificamos.
+    return None  # placeholder
+
+def _diff_casa_fora(jogos):
+    casa = [j for j in jogos if j['mandante']]
+    fora = [j for j in jogos if not j['mandante']]
+    ap_casa = _aproveitamento(casa) if casa else 0
+    ap_fora = _aproveitamento(fora) if fora else 0
+    return ap_casa - ap_fora
+
+def _aprov_viradas_favor(jogos):
+    """Aproveitamento ao sair perdendo no HT."""
+    desv = [j for j in jogos if j.get('ht_placar') and j['ht_placar'][0] < j['ht_placar'][1]]
+    return _aproveitamento(desv)
+
+def _aprov_viradas_contra(jogos):
+    """Pontos perdidos ao sair vencendo no HT (quanto menor, melhor)."""
+    vant = [j for j in jogos if j.get('ht_placar') and j['ht_placar'][0] > j['ht_placar'][1]]
+    if not vant:
+        return None
+    pontos_obtidos = sum(PONTOS_BASE[j['resultado']] for j in vant)
+    max_pontos = len(vant) * 3
+    pontos_perdidos = max_pontos - pontos_obtidos
+    return (pontos_perdidos / max_pontos) * 100
+
+
+def obter_dados_ovrall_time(time: str, liga: str, temporada_atual: int,
+                            classificacao_ant: dict) -> dict:
     """
-    Retorna (odds_casa, odds_empate, odds_fora) para a partida.
-    Placeholder — integrar com API de odds.
+    Retorna dicionário com todas as estatísticas agregadas do time
+    nos últimos JOGOS_BASE_OVRALL jogos (com herança).
     """
-    return None, None, None
+    jogos = obter_ultimos_jogos_com_heranca(time, liga, temporada_atual,
+                                            classificacao_ant, JOGOS_BASE_OVRALL)
+    if not jogos:
+        return {}
+
+    n = len(jogos)
+    gols = [j['gols_pro'] for j in jogos]
+    gols_sofridos = [j['gols_contra'] for j in jogos]
+    xg = [j.get('xg') for j in jogos if j.get('xg') is not None]
+    xga = [j.get('xga') for j in jogos if j.get('xga') is not None]
+    finalizacoes_alvo = [j.get('finalizacoes_alvo') for j in jogos if j.get('finalizacoes_alvo') is not None]
+    finalizacoes_alvo_sofridas = [j.get('finalizacoes_alvo_sofridas') for j in jogos if j.get('finalizacoes_alvo_sofridas') is not None]
+    chutes = [j.get('finalizacoes_tot', 0) for j in jogos]
+    desarmes_intercep = [j.get('desarmes', 0) + j.get('interceptacoes', 0) for j in jogos]
+    posse = [j.get('posse') for j in jogos if j.get('posse') is not None]
+    passes_certos = [j.get('passes_certos') for j in jogos if j.get('passes_certos') is not None]
+    passes_totais = [j.get('passes_totais') for j in jogos if j.get('passes_totais') is not None]
+    passes_chave = [j.get('passes_chave') for j in jogos if j.get('passes_chave') is not None]
+    assistencias = [j.get('assistencias') for j in jogos if j.get('assistencias') is not None]
+    pontos_por_jogo = [PONTOS_BASE[j['resultado']] for j in jogos]
+
+    dados = {
+        'gols_media': _media(gols),
+        'gols_sofridos_media': _media(gols_sofridos),
+        'xg_media': _media(xg),
+        'xga_media': _media(xga),
+        'finalizacoes_alvo_media': _media(finalizacoes_alvo),
+        'finalizacoes_alvo_sofridas_media': _media(finalizacoes_alvo_sofridas),
+        'chutes_media': _media(chutes),
+        'desarmes_intercep_media': _media(desarmes_intercep),
+        'posse_media': _media(posse),
+        'passes_certos_pct': (sum(passes_certos)/sum(passes_totais))*100 if passes_totais and sum(passes_totais)>0 else None,
+        'passes_chave_media': _media(passes_chave),
+        'assistencias_media': _media(assistencias),
+        'conversao': (sum(gols)/sum(chutes))*100 if sum(chutes)>0 else None,
+        'clean_sheets_pct': (sum(1 for g in gols_sofridos if g==0)/n)*100,
+        'desvio_pontos': _desvio(pontos_por_jogo),
+        'desvio_gols_pro': _desvio(gols),
+        'desvio_gols_sofridos': _desvio(gols_sofridos),
+        'pontos_pos_desvantagem_media': _pontos_pos_desvantagem(jogos),
+        'gols_ultimos_15min_media': _gols_ultimos_15min(jogos),
+        'pontos_apos_derrota_media': _pontos_apos_derrota(jogos),
+        'diff_aprov_casa_fora': _diff_casa_fora(jogos),
+        'aprov_viradas_favor': _aprov_viradas_favor(jogos),
+        'aprov_viradas_contra': _aprov_viradas_contra(jogos),
+    }
+    return {k: v for k, v in dados.items() if v is not None}
+
+
+# Função para compilar dados de toda a liga (necessário para normalização)
+def obter_dados_liga(liga: str, temporada_atual: int) -> dict:
+    """
+    Retorna um dicionário com listas de valores de cada indicador
+    para todos os times da liga.
+    """
+    # Obter lista de times (via projeção de prateleiras ou outro método)
+    prateleiras = gerar_prateleiras(liga, temporada_atual)
+    times = list(prateleiras.keys())
+    dados_liga = {}
+    for time in times:
+        dados_time = obter_dados_ovrall_time(time, liga, temporada_atual, classificacao_anterior(liga, temporada_atual-1))
+        for chave, valor in dados_time.items():
+            dados_liga.setdefault(chave, []).append(valor)
+    return dados_liga
