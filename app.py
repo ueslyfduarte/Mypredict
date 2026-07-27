@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 – Aplicativo Completo (Backtest Paginado)
+MyPredict 2.0 – Aplicativo Completo (Selos pela Probabilidade MyPredict)
 """
 import streamlit as st
 import pandas as pd
@@ -9,7 +9,24 @@ from math import exp, factorial
 import os
 
 # ============================================================
-# CONFIGURAÇÃO VISUAL (Tema Escuro Dourado)
+# LIMIARES PARA SELOS (BASEADOS NA PROBABILIDADE MYPREDICT)
+# ============================================================
+LIMITE_OURO = 0.50
+LIMITE_VERDE = 0.40
+LIMITE_MARGINAL = 0.33
+
+def get_selo(probabilidade):
+    if probabilidade >= LIMITE_OURO:
+        return "🥇 Ouro"
+    elif probabilidade >= LIMITE_VERDE:
+        return "🟢 Verde"
+    elif probabilidade >= LIMITE_MARGINAL:
+        return "⚪ Marginal"
+    else:
+        return "🔴 Sem selo"
+
+# ============================================================
+# CONFIGURAÇÃO VISUAL
 # ============================================================
 st.set_page_config(page_title="MyPredict 2.0", page_icon="⚽", layout="wide")
 st.markdown("""
@@ -108,7 +125,7 @@ st.sidebar.markdown("<h2 style='color:#DAA520;'>⚽ MyPredict 2.0</h2>", unsafe_
 opcao = st.sidebar.radio("Modo", ["Análise de Jogo", "Backtest Visual", "Converter Dados Brutos"])
 
 # ============================================================
-# CONVERSOR (mantido funcional)
+# CONVERSOR (mantido)
 # ============================================================
 if opcao == "Converter Dados Brutos":
     st.markdown("<h1 style='text-align:center;'>🔄 Conversor de CSV</h1>", unsafe_allow_html=True)
@@ -127,7 +144,7 @@ if opcao == "Converter Dados Brutos":
             st.write("Conversor mantido. Use o código completo do arquivo real.")
 
 # ============================================================
-# ANÁLISE DE JOGO (SIMPLIFICADA)
+# ANÁLISE DE JOGO (RECOMENDAÇÃO + SELO POR PROBABILIDADE)
 # ============================================================
 elif opcao == "Análise de Jogo":
     if not jogos:
@@ -177,38 +194,21 @@ elif opcao == "Análise de Jogo":
         mpv_casa_raw = calcular_MPV_final(time_casa)
         mpv_fora_raw = calcular_MPV_final(time_fora)
         prob_casa, prob_empate, prob_fora = probabilidades_1x2(mpv_casa_raw, mpv_fora_raw)
-        odds_jogos = [j for j in jogos if j['time'] == time_casa and j['adv'] == time_fora]
-        odd_casa = float(odds_jogos[-1].get('B365H', 2.0)) if odds_jogos else 2.0
-        odd_empate = float(odds_jogos[-1].get('B365D', 3.0)) if odds_jogos else 3.0
-        odd_fora = float(odds_jogos[-1].get('B365A', 3.0)) if odds_jogos else 3.0
-        edge_casa = calcular_edge(prob_casa, odd_casa)
-        edge_empate = calcular_edge(prob_empate, odd_empate)
-        edge_fora = calcular_edge(prob_fora, odd_fora)
-        dif_mpv = abs(mpv_casa_raw + 75 - mpv_fora_raw)
-        selo_casa = determinar_selo(edge_casa, dif_mpv, 10)
-        selo_empate = determinar_selo(edge_empate, dif_mpv, 10)
-        selo_fora = determinar_selo(edge_fora, dif_mpv, 10)
-        mpv_casa = (mpv_casa_raw - 1000) / 10
-        mpv_fora = (mpv_fora_raw - 1000) / 10
 
-        rec = None; rec_prob = 0; rec_selo = ""
-        if 'Dourado' in selo_casa or 'Verde' in selo_casa:
-            rec = f"Vitória {time_casa}"; rec_prob = prob_casa; rec_selo = selo_casa
-        elif 'Dourado' in selo_empate or 'Verde' in selo_empate:
-            rec = "Empate"; rec_prob = prob_empate; rec_selo = selo_empate
-        elif 'Dourado' in selo_fora or 'Verde' in selo_fora:
-            rec = f"Vitória {time_fora}"; rec_prob = prob_fora; rec_selo = selo_fora
+        # Recomendação e selo
+        probs = {'Vitória Casa': prob_casa, 'Empate': prob_empate, 'Vitória Fora': prob_fora}
+        rec = max(probs, key=probs.get)
+        rec_prob = probs[rec]
+        selo_rec = get_selo(rec_prob)
 
         st.markdown("---")
-        if rec:
-            st.success(f"MyPredict Recomenda: **{rec}** (Prob: {rec_prob:.1%}, Selo: {rec_selo})")
-        else:
-            st.info("Sem recomendação de alto valor.")
+        st.success(f"MyPredict Recomenda: **{rec}** (Probabilidade: {rec_prob:.1%})")
+        st.info(f"Selo de confiança: {selo_rec}")
 
         col1, col2, col3 = st.columns(3)
-        with col1: st.metric(f"MPV {time_casa}", f"{mpv_casa:.1f}")
-        with col2: st.metric("Diferença MPV", f"{abs(mpv_casa - mpv_fora):.1f}")
-        with col3: st.metric(f"MPV {time_fora}", f"{mpv_fora:.1f}")
+        with col1: st.metric("MPV Casa", f"{(mpv_casa_raw-1000)/10:.1f}")
+        with col2: st.metric("Diferença MPV", f"{abs((mpv_casa_raw-1000)/10 - (mpv_fora_raw-1000)/10):.1f}")
+        with col3: st.metric("MPV Fora", f"{(mpv_fora_raw-1000)/10:.1f}")
 
         st.markdown("---")
         st.subheader("🎯 Outros Mercados")
@@ -229,7 +229,7 @@ elif opcao == "Análise de Jogo":
         col4.metric("Over 9.5 esc.", f"{prob_over(total_esc, 8.5):.1%}")
 
 # ============================================================
-# BACKTEST VISUAL (PAGINADO, 10 POR VEZ)
+# BACKTEST VISUAL (SELOS POR PROBABILIDADE)
 # ============================================================
 elif opcao == "Backtest Visual":
     st.markdown("<h1 style='text-align:center;'>📈 Backtest MyPredict 2.0</h1>", unsafe_allow_html=True)
@@ -237,7 +237,7 @@ elif opcao == "Backtest Visual":
         st.error("Nenhuma partida carregada.")
         st.stop()
 
-    # Prateleiras fixas (temporada anterior)
+    # Prateleiras fixas
     todas_datas = sorted([p['data'] for p in partidas])
     data_inicio_temporada = todas_datas[0]
     jogos_anteriores = [j for j in jogos if j['data'] < data_inicio_temporada]
@@ -246,7 +246,6 @@ elif opcao == "Backtest Visual":
     else:
         prateleiras_fixas = classification_to_shelves(jogos)
 
-    # Estado da sessão
     if 'resultados_backtest' not in st.session_state:
         st.session_state.resultados_backtest = None
         st.session_state.backtest_executado = False
@@ -273,9 +272,8 @@ elif opcao == "Backtest Visual":
 
             hist_filtrado = [j for j in historico if j['data'] < data_jogo]
 
-            ima_casa, desvio_casa = calcular_IMA(hist_filtrado, time_casa, data_jogo, mando_proximo='casa')
-            ima_fora, desvio_fora = calcular_IMA(hist_filtrado, time_fora, data_jogo, mando_proximo='fora')
-            desvio_medio = (desvio_casa + desvio_fora) / 2
+            ima_casa, _ = calcular_IMA(hist_filtrado, time_casa, data_jogo, mando_proximo='casa')
+            ima_fora, _ = calcular_IMA(hist_filtrado, time_fora, data_jogo, mando_proximo='fora')
 
             if not any(j['time'] == time_casa for j in hist_filtrado):
                 prat = prateleiras_fixas.get(time_casa, 3)
@@ -318,43 +316,13 @@ elif opcao == "Backtest Visual":
 
             prob_casa, prob_empate, prob_fora = probabilidades_1x2(mpv_casa_raw, mpv_fora_raw)
 
-            odd_casa = casa_info.get('B365H', 2.0)
-            odd_empate = casa_info.get('B365D', 3.0)
-            odd_fora = casa_info.get('B365A', 3.0)
+            # Recomendação e selo
+            probs = {'Vitória Casa': prob_casa, 'Empate': prob_empate, 'Vitória Fora': prob_fora}
+            rec = max(probs, key=probs.get)
+            rec_prob = probs[rec]
+            selo_rec = get_selo(rec_prob)
 
-            imp_casa = 1 / odd_casa if odd_casa > 0 else 0
-            imp_empate = 1 / odd_empate if odd_empate > 0 else 0
-            imp_fora = 1 / odd_fora if odd_fora > 0 else 0
-
-            edge_casa = calcular_edge(prob_casa, odd_casa)
-            edge_empate = calcular_edge(prob_empate, odd_empate)
-            edge_fora = calcular_edge(prob_fora, odd_fora)
-
-            dif_mpv = abs(mpv_casa_raw + 75 - mpv_fora_raw)
-            selo_casa = determinar_selo(edge_casa, dif_mpv, desvio_medio)
-            selo_empate = determinar_selo(edge_empate, dif_mpv, desvio_medio)
-            selo_fora = determinar_selo(edge_fora, dif_mpv, desvio_medio)
-
-            recomendacao = None
-            rec_prob = 0
-            rec_selo = ""
-            rec_odd = 0
-            if 'Dourado' in selo_casa or 'Verde' in selo_casa:
-                recomendacao = f"Vitória {time_casa}"
-                rec_prob = prob_casa
-                rec_odd = odd_casa
-                rec_selo = selo_casa
-            elif 'Dourado' in selo_empate or 'Verde' in selo_empate:
-                recomendacao = "Empate"
-                rec_prob = prob_empate
-                rec_odd = odd_empate
-                rec_selo = selo_empate
-            elif 'Dourado' in selo_fora or 'Verde' in selo_fora:
-                recomendacao = f"Vitória {time_fora}"
-                rec_prob = prob_fora
-                rec_odd = odd_fora
-                rec_selo = selo_fora
-
+            # Resultado real
             gols_casa_real = casa_info['gols']
             gols_fora_real = fora_info['gols']
             resultado_real = 'V' if gols_casa_real > gols_fora_real else ('D' if gols_casa_real < gols_fora_real else 'E')
@@ -366,12 +334,9 @@ elif opcao == "Backtest Visual":
             esc_fora_real = fora_info.get('escanteios', 0)
             esc_real = (esc_casa_real + esc_fora_real) > 9.5
 
-            acertou = False
-            if recomendacao:
-                if (recomendacao == f"Vitória {time_casa}" and resultado_real == 'V') or \
-                   (recomendacao == "Empate" and resultado_real == 'E') or \
-                   (recomendacao == f"Vitória {time_fora}" and resultado_real == 'D'):
-                    acertou = True
+            acertou = (rec == 'Vitória Casa' and resultado_real == 'V') or \
+                      (rec == 'Empate' and resultado_real == 'E') or \
+                      (rec == 'Vitória Fora' and resultado_real == 'D')
 
             def media_hist(time, tipo):
                 jogos_time = [j for j in hist_filtrado if j['time'] == time]
@@ -397,6 +362,11 @@ elif opcao == "Backtest Visual":
             prob_ht_over05 = prob_over(media_total * 0.4, 0.5)
             prob_ht_over15 = prob_over(media_total * 0.4, 1.5)
 
+            # Probabilidades implícitas (Bet365) – apenas para exibição
+            imp_casa = 1 / float(casa_info.get('B365H', 2.0)) if float(casa_info.get('B365H', 2.0)) > 0 else 0
+            imp_empate = 1 / float(casa_info.get('B365D', 3.0)) if float(casa_info.get('B365D', 3.0)) > 0 else 0
+            imp_fora = 1 / float(casa_info.get('B365A', 3.0)) if float(casa_info.get('B365A', 3.0)) > 0 else 0
+
             resultados.append({
                 'data': data_jogo,
                 'time_casa': time_casa,
@@ -410,10 +380,7 @@ elif opcao == "Backtest Visual":
                 'prob_casa': prob_casa, 'imp_casa': imp_casa,
                 'prob_empate': prob_empate, 'imp_empate': imp_empate,
                 'prob_fora': prob_fora, 'imp_fora': imp_fora,
-                'edge_casa': edge_casa, 'edge_empate': edge_empate, 'edge_fora': edge_fora,
-                'selo_casa': selo_casa, 'selo_empate': selo_empate, 'selo_fora': selo_fora,
-                'recomendacao': recomendacao, 'rec_prob': rec_prob,
-                'rec_odd': rec_odd, 'rec_selo': rec_selo,
+                'recomendacao': rec, 'rec_prob': rec_prob, 'selo': selo_rec,
                 'resultado_real': resultado_real, 'acertou': acertou,
                 'over15_prob': prob_over15, 'over15_real': over15_real,
                 'over25_prob': prob_over25, 'over25_real': over25_real,
@@ -429,18 +396,16 @@ elif opcao == "Backtest Visual":
 
         st.session_state.resultados_backtest = resultados
 
-    # Exibição paginada (10 por vez)
+    # Exibição paginada
     if st.session_state.resultados_backtest:
         resultados = st.session_state.resultados_backtest
         total_jogos = len(resultados)
         pag_size = 10
         total_pags = (total_jogos // pag_size) + (1 if total_jogos % pag_size else 0)
-
         pag = st.selectbox(f"Página (1 a {total_pags})", range(1, total_pags + 1))
         inicio = (pag - 1) * pag_size
         fim = inicio + pag_size
         pagina_atual = resultados[inicio:fim]
-
         st.markdown(f"Mostrando {inicio+1}–{min(fim, total_jogos)} de {total_jogos} partidas")
 
         for res in pagina_atual:
@@ -458,14 +423,11 @@ elif opcao == "Backtest Visual":
                     st.metric("OVR Fora", f"{res['ovr_fora']:.1f}")
                 with col4:
                     st.write(f"Resultado: {res['resultado_real']}")
-                    if res['recomendacao']:
-                        st.write(f"Recomendação: {res['recomendacao']}")
-                        st.write(f"Prob: {res['rec_prob']:.1%} | Selo: {res['rec_selo']}")
-                        st.write(f"Acertou: {'✅' if res['acertou'] else '❌'}")
-                    else:
-                        st.write("Sem recomendação")
+                    st.write(f"Recomendação: **{res['recomendacao']}**")
+                    st.write(f"Prob MyPredict: {res['rec_prob']:.1%}")
+                    st.write(f"Selo: {res['selo']}")
+                    st.write(f"Acertou: {'✅' if res['acertou'] else '❌'}")
 
-                # Probabilidades
                 st.write("**Probabilidades 1X2**")
                 col_p1, col_p2, col_p3 = st.columns(3)
                 with col_p1:
@@ -475,17 +437,6 @@ elif opcao == "Backtest Visual":
                 with col_p3:
                     st.metric("Fora (MyPredict)", f"{res['prob_fora']:.1%}", delta=f"Bet365: {res['imp_fora']:.1%}")
 
-                # Edge e Selos
-                st.write("**Edge e Selos**")
-                col_e1, col_e2, col_e3 = st.columns(3)
-                with col_e1:
-                    st.write(f"Edge Casa: {res['edge_casa']:+.1%} ({res['selo_casa']})")
-                with col_e2:
-                    st.write(f"Edge Empate: {res['edge_empate']:+.1%} ({res['selo_empate']})")
-                with col_e3:
-                    st.write(f"Edge Fora: {res['edge_fora']:+.1%} ({res['selo_fora']})")
-
-                # Outros mercados
                 st.write("**Outros Mercados (MyPredict)**")
                 col_m1, col_m2, col_m3, col_m4 = st.columns(4)
                 with col_m1:
@@ -503,23 +454,22 @@ elif opcao == "Backtest Visual":
                     st.metric("HT Over 1.5", f"{res['ht_over15_prob']:.1%}")
                 st.markdown("---")
 
-        # Resumo geral
+        # Resumo
         st.markdown("---")
         st.subheader("📊 Desempenho do MyPredict")
-        apostas = [r for r in resultados if r['recomendacao']]
-        total_apostas = len(apostas)
-        if total_apostas > 0:
-            acertos = sum(1 for r in apostas if r['acertou'])
-            taxa = (acertos / total_apostas) * 100
-            lucro = sum([r['rec_odd'] - 1 if r['acertou'] else -1 for r in apostas])
-            roi = (lucro / total_apostas) * 100
-            col1, col2, col3, col4 = st.columns(4)
-            with col1: st.metric("Apostas", total_apostas)
-            with col2: st.metric("Acertos", acertos)
-            with col3: st.metric("Taxa de Acerto", f"{taxa:.1f}%")
-            with col4: st.metric("Lucro/Prejuízo", f"{lucro:+.2f} unidades")
-            st.metric("ROI", f"{roi:.2f}%")
-        else:
-            st.warning("Nenhuma aposta foi recomendada.")
+        total_jogos = len(resultados)
+        acertos = sum(1 for r in resultados if r['acertou'])
+        taxa = (acertos / total_jogos) * 100
+        st.metric("Total de Jogos", total_jogos)
+        st.metric("Acertos", acertos)
+        st.metric("Taxa de Acerto", f"{taxa:.1f}%")
+
+        # Desempenho por selo
+        for selo_nome in ["🥇 Ouro", "🟢 Verde", "⚪ Marginal", "🔴 Sem selo"]:
+            jogos_selo = [r for r in resultados if r['selo'] == selo_nome]
+            if jogos_selo:
+                acertos_selo = sum(1 for r in jogos_selo if r['acertou'])
+                taxa_selo = (acertos_selo / len(jogos_selo)) * 100
+                st.write(f"{selo_nome}: {len(jogos_selo)} jogos, {acertos_selo} acertos ({taxa_selo:.1f}%)")
     else:
         st.info("Clique em 'Iniciar Backtest Completo' para processar os jogos.")
