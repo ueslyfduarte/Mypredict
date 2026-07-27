@@ -1,25 +1,15 @@
-# data_loader.py (alterações principais)
+import json
 
-from data_source_fbref import obter_classificacao, obter_partidas_time
+CONFIG_LIGAS_PATH = 'config_ligas.json'
 
-# ... outras funções permanecem
+def _carregar_config_ligas():
+    with open(CONFIG_LIGAS_PATH, 'r', encoding='utf-8') as f:
+        return json.load(f)
 
-def classificacao_anterior(liga: str, temporada: int) -> dict:
-    """Retorna classificação da temporada fornecida usando FBref."""
-    return obter_classificacao(liga, temporada)
+def _obter_promovidos_ordenados(liga: str, temporada: int) -> List[str]:
+    config = _carregar_config_ligas()
+    return config.get(liga, {}).get(str(temporada), {}).get('promovidos', [])
 
-def _obter_promovidos_ordenados(liga: str, temporada_atual: int) -> list:
-    """Retorna lista de promovidos (ainda não implementado via scraping)."""
-    # TODO: implementar scraping específico para acesso/descenso
-    # Por enquanto, podemos retornar uma lista vazia ou ler de arquivo de configuração
-    return []
-
-def _obter_rebaixados(liga: str, temporada: int) -> list:
-    """Retorna lista de rebaixados (placeholder)."""
-    return []
-
-def carregar_jogos_temporada(time: str, liga: str, temporada: int) -> list:
-    """Usa scraping para obter jogos reais."""
-    return obter_partidas_time(liga, temporada, time)
-
-# As demais funções permanecem inalteradas.
+def _obter_rebaixados(liga: str, temporada: int) -> List[str]:
+    config = _carregar_config_ligas()
+    return config.get(liga, {}).get(str(temporada), {}).get('rebaixados', [])
