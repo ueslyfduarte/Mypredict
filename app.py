@@ -1,5 +1,5 @@
 """
-MyPredict 2.0 - Aplicativo Completo com Backtest Corrigido
+MyPredict 2.0 - Aplicativo Completo (Leitura Robusta de CSV)
 """
 import streamlit as st
 import pandas as pd
@@ -38,12 +38,18 @@ def prob_btts(ata_casa, def_fora, ata_fora, def_casa):
     return prob_c * prob_f
 
 # ============================================================
-# CARREGAR DADOS (ROBUSTO)
+# CARREGAR DADOS (COM DETECÇÃO DE DELIMITADOR)
 # ============================================================
 @st.cache_data
 def carregar_dados():
     try:
-        df = pd.read_csv("data/meus_jogos.csv")
+        # Detecta automaticamente o separador (vírgula, tabulação, etc.)
+        df = pd.read_csv("data/meus_jogos.csv", sep=None, engine='python')
+        st.write("Colunas encontradas:", list(df.columns))
+        st.write("Primeiras 3 linhas:")
+        st.write(df.head(3))
+        
+        # Localiza coluna de data
         col_data = None
         for col in df.columns:
             if 'data' in col.lower() or 'date' in col.lower():
@@ -370,7 +376,6 @@ elif opcao == "Backtest":
         jogos_ord = sorted(jogos, key=lambda x: x['data'])
         partidas = {}
         for j in jogos_ord:
-            # Cria chave simétrica: ordena os times alfabeticamente
             t1 = j['time']
             t2 = j['adv']
             if t1 < t2:
