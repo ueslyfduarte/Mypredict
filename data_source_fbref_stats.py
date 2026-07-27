@@ -1,3 +1,4 @@
+# data_source_fbref_stats.py — MyPredict 2.0 (versão com cloudscraper)
 import time
 import random
 import requests
@@ -69,9 +70,10 @@ def _criar_sessao():
     return s
 
 def _get(url):
-    sessao = _criar_sessao()
+    import cloudscraper
+    scraper = cloudscraper.create_scraper()
     time.sleep(random.uniform(6, 9))
-    resp = sessao.get(url, timeout=30)
+    resp = scraper.get(url, timeout=30)
     resp.raise_for_status()
     return resp.text
 
