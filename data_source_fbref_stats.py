@@ -1,11 +1,10 @@
-# data_source_fbref_stats.py — MyPredict 2.0
 import time
 import requests
 import pandas as pd
 from io import StringIO
 from pathlib import Path
 import json
-from lxml import html
+from bs4 import BeautifulSoup
 
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 REQUEST_DELAY = 4
@@ -31,10 +30,6 @@ def _get(url):
     return resp.text
 
 def obter_codigo_fbref(nome_liga):
-    """
-    Busca o código da competição no FBref (ex.: '24' para Brasileirão)
-    a partir do nome da liga. Retorna None se não encontrar.
-    """
     cache_file = CACHE_DIR / 'fbref_codes.json'
     codes = {}
     if cache_file.exists():
@@ -43,15 +38,15 @@ def obter_codigo_fbref(nome_liga):
     else:
         url = 'https://fbref.com/en/comps/'
         html_str = _get(url)
-        tree = html.fromstring(html_str)
-        for table in tree.xpath("//table[contains(@id, 'comps')]"):
-            for row in table.xpath(".//tr"):
-                cells = row.xpath("./td")
+        soup = BeautifulSoup(html_str, 'html.parser')
+        for table in soup.find_all('table'):
+            for row in table.find_all('tr'):
+                cells = row.find_all('td')
                 if len(cells) >= 2:
-                    link = cells[0].xpath("./a")
+                    link = cells[0].find('a')
                     if link:
-                        nome = link[0].text.strip()
-                        href = link[0].get('href', '')
+                        nome = link.get_text(strip=True)
+                        href = link.get('href', '')
                         codigo = href.split('/')[-1]
                         codes[nome.lower()] = codigo
         with open(cache_file, 'w', encoding='utf-8') as f:
@@ -74,28 +69,26 @@ def obter_stats_time(liga, temporada, time):
     codigo = obter_codigo_fbref(liga)
     if not codigo:
         raise ValueError(f"Liga '{liga}' não encontrada no FBref.")
-    
     url = f'https://fbref.com/en/comps/{codigo}/{temporada}/stats/{temporada}-{codigo}-Stats'
     html_str = _get(url)
-    tree = html.fromstring(html_str)
-
-    # Procura tabela dentro de comentários (padrão FBref)
+    soup = BeautifulSoup(html_str, 'html.parser')
+    # Tenta encontrar a tabela dentro de comentários (padrão FBref)
     stats_table = None
-    for comment in tree.xpath("//comment()"):
-        if 'div_stats_standard' in comment.text:
-            inner_tree = html.fromstring(comment.text)
-            stats_table = inner_tree.xpath("//table[contains(@id, 'stats_standard')]")
-            if stats_table:
-                stats_table = stats_table[0]
-                break
-    if stats_table is None:
-        stats_table = tree.xpath("//table[contains(@id, 'stats_standard')]")
-        if stats_table:
-            stats_table = stats_table[0]
-    if stats_table is None:
+    for comment in soup.find_all(string=lambda text: isinstance(text, str) and 'div_stats_standard' in text):
+        comment_soup = BeautifulSoup(comment, 'html.parser')
+        table = comment_soup.find('table', id=lambda x: x and 'stats_standard' in x)
+        if table:
+            stats_table = table
+            break
+    if not stats_table:
+        # Tenta encontrar diretamente
+        table = soup.find('table', id=lambda x: x and 'stats_standard' in x)
+        if table:
+            stats_table = table
+    if not stats_table:
         raise ValueError(f"Tabela de estatísticas não encontrada para {liga} {temporada}")
 
-    df = pd.read_html(StringIO(html.tostring(stats_table, encoding='unicode')), flavor='lxml')[0]
+    df = pd.read_html(StringIO(str(stats_table)), flavor='html.parser')[0]
     df.columns = ['_'.join(col).strip() if 'Unnamed' not in col[0] else col[1] for col in df.columns]
     df = df.rename(columns={'Squad': 'team'})
     df = df[~df['team'].str.contains('Squad')]
