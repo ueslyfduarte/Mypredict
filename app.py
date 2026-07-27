@@ -303,7 +303,7 @@ elif opcao == "Análise de Jogo":
         col4.metric("Over 9.5 esc.", f"{prob_over(total_esc, 8.5):.1%}")
 
 # ============================================================
-# BACKTEST VISUAL (COMPLETO E CORRIGIDO)
+# BACKTEST VISUAL (CORRIGIDO – SEM EDGE NA RECOMENDAÇÃO, MPV DESTACADO)
 # ============================================================
 elif opcao == "Backtest Visual":
     st.markdown("<h1 style='text-align:center;'>📈 Backtest MyPredict 2.0</h1>", unsafe_allow_html=True)
@@ -311,22 +311,17 @@ elif opcao == "Backtest Visual":
         st.error("Nenhuma partida carregada.")
         st.stop()
 
-    # --- 1. Definir prateleiras fixas (classificação da temporada anterior) ---
-    # Se houver jogos com data anterior ao primeiro jogo da temporada atual?
-    # Vamos ordenar as partidas e pegar a primeira data como início da temporada atual.
+    # --- 1. Prateleiras fixas (classificação da temporada anterior) ---
     todas_datas = sorted([p['data'] for p in partidas])
     data_inicio_temporada = todas_datas[0]
-    # Consideramos "temporada anterior" os jogos com data < data_inicio_temporada.
     jogos_anteriores = [j for j in jogos if j['data'] < data_inicio_temporada]
     if len(jogos_anteriores) > 0:
         prateleiras_fixas = classification_to_shelves(jogos_anteriores)
         st.info("Prateleiras definidas a partir da temporada anterior.")
     else:
-        # Se não há temporada anterior, usamos a classificação geral como fallback.
         prateleiras_fixas = classification_to_shelves(jogos)
         st.warning("Sem temporada anterior. Prateleiras definidas pela classificação geral.")
 
-    # Mostrar prateleiras
     st.write("Prateleiras fixas:")
     st.write({t: f"Prateleira {p}" for t, p in prateleiras_fixas.items()})
 
@@ -345,7 +340,7 @@ elif opcao == "Backtest Visual":
             time_casa = casa_info['time']
             time_fora = fora_info['time']
 
-            # Atribuir prateleiras fixas
+            # Prateleiras fixas
             casa_info['prat_time'] = prateleiras_fixas.get(time_casa, 3)
             casa_info['prat_adv'] = prateleiras_fixas.get(time_fora, 3)
             fora_info['prat_time'] = prateleiras_fixas.get(time_fora, 3)
@@ -353,12 +348,12 @@ elif opcao == "Backtest Visual":
 
             hist_filtrado = [j for j in historico if j['data'] < data_jogo]
 
-            # IMA (com desvio real)
+            # IMA
             ima_casa, desvio_casa = calcular_IMA(hist_filtrado, time_casa, data_jogo, mando_proximo='casa')
             ima_fora, desvio_fora = calcular_IMA(hist_filtrado, time_fora, data_jogo, mando_proximo='fora')
             desvio_medio = (desvio_casa + desvio_fora) / 2
 
-            # OVRall dinâmico (inicial da prateleira se não houver histórico)
+            # OVRall
             if not any(j['time'] == time_casa for j in hist_filtrado):
                 prat = prateleiras_fixas.get(time_casa, 3)
                 ovrall_casa = {1: 80, 2: 65, 3: 50, 4: 35, 5: 20}.get(prat, 50)
@@ -380,7 +375,7 @@ elif opcao == "Backtest Visual":
                                                calcular_CONS(hist_filtrado, time_fora, data_jogo),
                                                calcular_RES(hist_filtrado, time_fora, data_jogo)])
 
-            # MPV com evolução
+            # MPV
             mpv_casa_raw = inicializar_MPV(ovrall_casa)
             mpv_fora_raw = inicializar_MPV(ovrall_fora)
             for jg in hist_filtrado:
@@ -405,7 +400,6 @@ elif opcao == "Backtest Visual":
             odd_empate = casa_info.get('B365D', 3.0)
             odd_fora = casa_info.get('B365A', 3.0)
 
-            # Probabilidades implícitas (mercado)
             imp_casa = 1 / odd_casa if odd_casa > 0 else 0
             imp_empate = 1 / odd_empate if odd_empate > 0 else 0
             imp_fora = 1 / odd_fora if odd_fora > 0 else 0
@@ -419,22 +413,22 @@ elif opcao == "Backtest Visual":
             selo_empate = determinar_selo(edge_empate, dif_mpv, desvio_medio)
             selo_fora = determinar_selo(edge_fora, dif_mpv, desvio_medio)
 
-            # Recomendação 1X2
+            # Recomendação APENAS pelo selo (sem Edge > 0)
             recomendacao = None
             rec_prob = 0
             rec_selo = ""
             rec_odd = 0
-            if ('Dourado' in selo_casa or 'Verde' in selo_casa) and edge_casa > 0:
+            if 'Dourado' in selo_casa or 'Verde' in selo_casa:
                 recomendacao = f"Vitória {time_casa}"
                 rec_prob = prob_casa
                 rec_odd = odd_casa
                 rec_selo = selo_casa
-            elif ('Dourado' in selo_empate or 'Verde' in selo_empate) and edge_empate > 0:
+            elif 'Dourado' in selo_empate or 'Verde' in selo_empate:
                 recomendacao = "Empate"
                 rec_prob = prob_empate
                 rec_odd = odd_empate
                 rec_selo = selo_empate
-            elif ('Dourado' in selo_fora or 'Verde' in selo_fora) and edge_fora > 0:
+            elif 'Dourado' in selo_fora or 'Verde' in selo_fora:
                 recomendacao = f"Vitória {time_fora}"
                 rec_prob = prob_fora
                 rec_odd = odd_fora
@@ -452,7 +446,6 @@ elif opcao == "Backtest Visual":
             esc_fora_real = fora_info.get('escanteios', 0)
             esc_real = (esc_casa_real + esc_fora_real) > 9.5
 
-            # Acerto da recomendação
             acertou = False
             if recomendacao:
                 if (recomendacao == f"Vitória {time_casa}" and resultado_real == 'V') or \
@@ -460,7 +453,7 @@ elif opcao == "Backtest Visual":
                    (recomendacao == f"Vitória {time_fora}" and resultado_real == 'D'):
                     acertou = True
 
-            # Mercados adicionais (Over 1.5, 2.5, BTTS, Esc, Gol HT)
+            # Mercados adicionais
             def media_hist(time, tipo):
                 jogos_time = [j for j in hist_filtrado if j['time'] == time]
                 if not jogos_time:
@@ -480,12 +473,11 @@ elif opcao == "Backtest Visual":
 
             prob_over15 = prob_over(media_total, 1.5)
             prob_over25 = prob_over(media_total, 2.5)
-            prob_bt = prob_btts(ovrall_casa, ovrall_fora, ovrall_fora, ovrall_casa)  # simplificado
+            prob_bt = prob_btts(ovrall_casa, ovrall_fora, ovrall_fora, ovrall_casa)
             prob_esc = prob_over(media_esc_total, 9.5)
             prob_ht_over05 = prob_over(media_total * 0.4, 0.5)
             prob_ht_over15 = prob_over(media_total * 0.4, 1.5)
 
-            # Guarda resultado
             resultados.append({
                 'data': data_jogo,
                 'time_casa': time_casa,
@@ -520,6 +512,26 @@ elif opcao == "Backtest Visual":
         st.markdown("---")
         st.subheader("📋 Resultados das Partidas")
         for res in resultados:
+            # Barra de MPV comparativa
+            total_mpv = res['mpv_casa'] + res['mpv_fora']
+            if total_mpv == 0:
+                perc_casa = 50
+                perc_fora = 50
+            else:
+                perc_casa = (res['mpv_casa'] / total_mpv) * 100
+                perc_fora = 100 - perc_casa
+
+            mpv_bar_html = f"""
+            <div style="display:flex; align-items:center; margin:10px 0;">
+                <span style="width:100px; color:#DAA520; font-weight:bold;">{res['time_casa']} ({res['mpv_casa']:.1f})</span>
+                <div style="flex:1; background:#333; height:20px; border-radius:10px; overflow:hidden; display:flex;">
+                    <div style="width:{perc_casa}%; background:#DAA520; height:100%;"></div>
+                    <div style="width:{perc_fora}%; background:#888; height:100%;"></div>
+                </div>
+                <span style="width:100px; text-align:right; color:#DAA520; font-weight:bold;">({res['mpv_fora']:.1f}) {res['time_fora']}</span>
+            </div>
+            """
+
             with st.container():
                 st.markdown(f"""
                 <div class="card">
@@ -531,23 +543,32 @@ elif opcao == "Backtest Visual":
                         <div class="score">{res['resultado_real']}</div>
                         <div class="acerto">{'✅' if res['recomendacao'] and res['acertou'] else ('❌' if res['recomendacao'] else '')}</div>
                     </div>
+                    <!-- Comparação MPV em destaque -->
+                    {mpv_bar_html}
                     <!-- Métricas principais -->
                     <div class="metric-row">
-                        <div class="metric-item"><div class="metric-label">MPV Casa</div><div class="metric-value">{res['mpv_casa']:.1f}</div></div>
-                        <div class="metric-item"><div class="metric-label">MPV Fora</div><div class="metric-value">{res['mpv_fora']:.1f}</div></div>
                         <div class="metric-item"><div class="metric-label">IMA Casa</div><div class="metric-value">{res['ima_casa']:.1f}</div></div>
                         <div class="metric-item"><div class="metric-label">IMA Fora</div><div class="metric-value">{res['ima_fora']:.1f}</div></div>
-                    </div>
-                    <!-- OVRall -->
-                    <div class="metric-row">
                         <div class="metric-item"><div class="metric-label">OVR Casa</div><div class="metric-value">{res['ovr_casa']:.1f}</div></div>
                         <div class="metric-item"><div class="metric-label">OVR Fora</div><div class="metric-value">{res['ovr_fora']:.1f}</div></div>
                     </div>
-                    <!-- Probabilidades 1X2 -->
+                    <!-- Probabilidades 1X2 (MyPredict vs Bet365) -->
                     <div class="metric-row">
-                        <div class="metric-item"><div class="metric-label">Prob Casa</div><div class="metric-value">{res['prob_casa']:.1%}</div><small>Implícita: {res['imp_casa']:.1%}</small></div>
-                        <div class="metric-item"><div class="metric-label">Prob Empate</div><div class="metric-value">{res['prob_empate']:.1%}</div><small>Implícita: {res['imp_empate']:.1%}</small></div>
-                        <div class="metric-item"><div class="metric-label">Prob Fora</div><div class="metric-value">{res['prob_fora']:.1%}</div><small>Implícita: {res['imp_fora']:.1%}</small></div>
+                        <div class="metric-item">
+                            <div class="metric-label">Casa (MyPredict)</div>
+                            <div class="metric-value">{res['prob_casa']:.1%}</div>
+                            <small>Bet365: {res['imp_casa']:.1%}</small>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Empate (MyPredict)</div>
+                            <div class="metric-value">{res['prob_empate']:.1%}</div>
+                            <small>Bet365: {res['imp_empate']:.1%}</small>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Fora (MyPredict)</div>
+                            <div class="metric-value">{res['prob_fora']:.1%}</div>
+                            <small>Bet365: {res['imp_fora']:.1%}</small>
+                        </div>
                     </div>
                     <!-- Edge e Selos -->
                     <div class="metric-row">
@@ -557,19 +578,19 @@ elif opcao == "Backtest Visual":
                     </div>
                     <!-- Recomendação -->
                     <div style="margin-top:10px;">
-                        <strong>Recomendação MyPredict:</strong>
+                        <strong>MyPredict Recomenda:</strong>
                         {f"{res['recomendacao']} (Prob: {res['rec_prob']:.1%}, Selo: {res['rec_selo']})" if res['recomendacao'] else "Nenhuma"}
                     </div>
                     <!-- Outros mercados -->
                     <div class="metric-row" style="margin-top:10px;">
-                        <div class="metric-item"><div class="metric-label">Over 1.5</div><div class="metric-value">{res['over15_prob']:.1%}</div><small>{'✅' if res['over15_real'] else '❌'}</small></div>
-                        <div class="metric-item"><div class="metric-label">Over 2.5</div><div class="metric-value">{res['over25_prob']:.1%}</div><small>{'✅' if res['over25_real'] else '❌'}</small></div>
-                        <div class="metric-item"><div class="metric-label">BTTS</div><div class="metric-value">{res['btts_prob']:.1%}</div><small>{'✅' if res['btts_real'] else '❌'}</small></div>
-                        <div class="metric-item"><div class="metric-label">Esc. >9.5</div><div class="metric-value">{res['esc_prob']:.1%}</div><small>{'✅' if res['esc_real'] else '❌'}</small></div>
+                        <div class="metric-item"><div class="metric-label">Over 1.5 (MYP)</div><div class="metric-value">{res['over15_prob']:.1%}</div><small>{'✅' if res['over15_real'] else '❌'}</small></div>
+                        <div class="metric-item"><div class="metric-label">Over 2.5 (MYP)</div><div class="metric-value">{res['over25_prob']:.1%}</div><small>{'✅' if res['over25_real'] else '❌'}</small></div>
+                        <div class="metric-item"><div class="metric-label">BTTS (MYP)</div><div class="metric-value">{res['btts_prob']:.1%}</div><small>{'✅' if res['btts_real'] else '❌'}</small></div>
+                        <div class="metric-item"><div class="metric-label">Esc. >9.5 (MYP)</div><div class="metric-value">{res['esc_prob']:.1%}</div><small>{'✅' if res['esc_real'] else '❌'}</small></div>
                     </div>
                     <div class="metric-row">
-                        <div class="metric-item"><div class="metric-label">HT Over 0.5</div><div class="metric-value">{res['ht_over05_prob']:.1%}</div></div>
-                        <div class="metric-item"><div class="metric-label">HT Over 1.5</div><div class="metric-value">{res['ht_over15_prob']:.1%}</div></div>
+                        <div class="metric-item"><div class="metric-label">HT Over 0.5 (MYP)</div><div class="metric-value">{res['ht_over05_prob']:.1%}</div></div>
+                        <div class="metric-item"><div class="metric-label">HT Over 1.5 (MYP)</div><div class="metric-value">{res['ht_over15_prob']:.1%}</div></div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
