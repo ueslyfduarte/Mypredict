@@ -1,4 +1,4 @@
-# data_source_football_api.py — MyPredict 2.0 (cache semanal)
+# data_source_api_football.py — MyPredict 2.0 (API-Football v3)
 import time
 import requests
 from pathlib import Path
@@ -7,20 +7,20 @@ import os
 from datetime import datetime, timedelta
 from collections import deque
 
-API_KEY = os.environ.get("FOOTBALL_API_KEY")
+API_KEY = os.environ.get("API_FOOTBALL_KEY")
 if API_KEY is None:
     try:
         import streamlit as st
-        API_KEY = st.secrets["FOOTBALL_API_KEY"]
+        API_KEY = st.secrets["API_FOOTBALL_KEY"]
     except:
-        raise RuntimeError("Chave da API não encontrada. Configure FOOTBALL_API_KEY nos secrets do Streamlit.")
+        raise RuntimeError("Chave da API não encontrada. Configure API_FOOTBALL_KEY nos secrets do Streamlit.")
 
-BASE_URL = "https://api.football-data.org/v4"
-HEADERS = {"X-Auth-Token": API_KEY}
-CACHE_DIR = Path("cache/football_api")
+BASE_URL = "https://v3.football.api-sports.io"
+HEADERS = {"x-apisports-key": API_KEY}
+CACHE_DIR = Path("cache/api_football")
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-# Controle de requisições (último minuto)
+# Controle de requisições
 _request_times = deque()
 
 def _register_request():
@@ -33,9 +33,8 @@ def get_api_usage():
     agora = datetime.now()
     while _request_times and (agora - _request_times[0]).total_seconds() > 60:
         _request_times.popleft()
-    return len(_request_times), 10
+    return len(_request_times), 100  # plano gratuito: 100 req/dia
 
-# Cache válido por 7 dias
 def _cache_valido(arq):
     if not arq.exists():
         return False
@@ -60,98 +59,122 @@ def _get(url):
     resp.raise_for_status()
     return resp.json()
 
+# ------------------------------------------------------------
+# IDs das principais ligas (fallback estático)
+# ------------------------------------------------------------
+FALLBACK_LEAGUES = {
+    "Brasileirão": 71,
+    "Premier League": 39,
+    "La Liga": 140,
+    "Bundesliga": 78,
+    "Serie A": 135,
+    "Ligue 1": 61,
+    "Eredivisie": 88,
+    "Primeira Liga": 94,
+    "MLS": 253,
+    "Championship": 40,
+    "Série B": 72,
+}
+
 def listar_ligas():
-    cache_key = "available_leagues"
+    """Retorna {nome: id} das ligas disponíveis (com cache e fallback)."""
+    cache_key = "leagues_list"
     cached = _cache_ler(cache_key)
     if cached:
         return cached
 
-    data = _get(f"{BASE_URL}/competitions")
-    ligas = {}
-    for comp in data.get("competitions", []):
-        if comp.get("type") == "LEAGUE" and comp.get("plan") == "TIER_ONE":
-            nome = comp["name"]
-            codigo = comp["code"]
-            ligas[nome] = codigo
-    _cache_escrever(cache_key, ligas)
-    return ligas
+    try:
+        data = _get(f"{BASE_URL}/leagues")
+        ligas = {}
+        for item in data.get("response", []):
+            liga = item["league"]
+            nome = liga["name"]
+            liga_id = liga["id"]
+            ligas[nome] = liga_id
+        if ligas:
+            _cache_escrever(cache_key, ligas)
+            return ligas
+    except:
+        pass
 
-def listar_temporadas(codigo_liga):
-    cache_key = f"seasons_{codigo_liga}"
+    _cache_escrever(cache_key, FALLBACK_LEAGUES)
+    return FALLBACK_LEAGUES
+
+def listar_temporadas(liga_id):
+    """Retorna lista de anos disponíveis para a liga."""
+    cache_key = f"seasons_{liga_id}"
     cached = _cache_ler(cache_key)
     if cached:
         return cached
 
-    anos = []
-    for ano in range(datetime.now().year, datetime.now().year - 10, -1):
-        try:
-            _get(f"{BASE_URL}/competitions/{codigo_liga}/matches?season={ano}&dateFrom={ano}-01-01&dateTo={ano}-12-31")
-            anos.append(ano)
-        except requests.exceptions.HTTPError:
-            continue
-    if not anos:
+    try:
+        data = _get(f"{BASE_URL}/leagues?id={liga_id}")
+        seasons = data["response"][0]["seasons"]
+        anos = sorted([s["year"] for s in seasons], reverse=True)
+        _cache_escrever(cache_key, anos)
+        return anos
+    except:
         anos = list(range(datetime.now().year, datetime.now().year - 5, -1))
-    _cache_escrever(cache_key, anos)
-    return anos
+        _cache_escrever(cache_key, anos)
+        return anos
 
 def obter_classificacao(liga_nome, temporada):
     ligas = listar_ligas()
-    codigo = ligas.get(liga_nome)
-    if not codigo:
-        raise ValueError(f"Liga '{liga_nome}' não encontrada na API.")
-    chave = f"class_{codigo}_{temporada}"
+    liga_id = ligas.get(liga_nome)
+    if not liga_id:
+        raise ValueError(f"Liga '{liga_nome}' não encontrada.")
+    chave = f"standings_{liga_id}_{temporada}"
     cached = _cache_ler(chave)
     if cached:
         return {int(k): v for k, v in cached.items()}
 
-    url = f"{BASE_URL}/competitions/{codigo}/standings?season={temporada}"
-    data = _get(url)
-    standings = data['standings'][0]['table']
+    data = _get(f"{BASE_URL}/standings?league={liga_id}&season={temporada}")
+    standings = data["response"][0]["league"]["standings"][0]
     classif = {}
     for entry in standings:
-        pos = entry['position']
-        nome = entry['team']['name']
+        pos = entry["rank"]
+        nome = entry["team"]["name"]
         classif[pos] = nome
     _cache_escrever(chave, classif)
     return classif
 
 def obter_partidas_time(liga_nome, temporada, time):
     ligas = listar_ligas()
-    codigo = ligas.get(liga_nome)
-    if not codigo:
-        raise ValueError(f"Liga '{liga_nome}' não encontrada na API.")
-    chave = f"partidas_{codigo}_{temporada}_{time}"
+    liga_id = ligas.get(liga_nome)
+    if not liga_id:
+        raise ValueError(f"Liga '{liga_nome}' não encontrada.")
+    chave = f"fixtures_{liga_id}_{temporada}_{time}"
     cached = _cache_ler(chave)
     if cached:
         return cached
 
-    url = f"{BASE_URL}/competitions/{codigo}/matches?season={temporada}"
-    data = _get(url)
+    data = _get(f"{BASE_URL}/fixtures?league={liga_id}&season={temporada}")
     jogos = []
-    for match in data['matches']:
-        if match['status'] != 'FINISHED':
+    for match in data["response"]:
+        fixture = match["fixture"]
+        if fixture["status"]["short"] != "FT":
             continue
-        home = match['homeTeam']['name']
-        away = match['awayTeam']['name']
+        home = match["teams"]["home"]["name"]
+        away = match["teams"]["away"]["name"]
         if time.lower() not in (home.lower(), away.lower()):
             continue
 
         mandante_flag = time.lower() == home.lower()
-        gols_casa = match['score']['fullTime']['home'] or 0
-        gols_fora = match['score']['fullTime']['away'] or 0
+        gols_casa = match["goals"]["home"] or 0
+        gols_fora = match["goals"]["away"] or 0
         gols_pro = gols_casa if mandante_flag else gols_fora
         gols_contra = gols_fora if mandante_flag else gols_casa
         adversario = away if mandante_flag else home
 
-        ht = match['score']['halfTime']
-        ht_casa = ht['home'] if ht['home'] is not None else 0
-        ht_fora = ht['away'] if ht['away'] is not None else 0
+        ht = match["score"]["halftime"]
+        ht_casa = ht["home"] if ht["home"] is not None else 0
+        ht_fora = ht["away"] if ht["away"] is not None else 0
         ht_placar = [ht_casa, ht_fora] if mandante_flag else [ht_fora, ht_casa]
 
         resultado = 'V' if gols_pro > gols_contra else ('E' if gols_pro == gols_contra else 'D')
 
         jogos.append({
-            'data': match['utcDate'][:10],
+            'data': fixture["date"][:10],
             'resultado': resultado,
             'adversario': adversario,
             'mandante': mandante_flag,
