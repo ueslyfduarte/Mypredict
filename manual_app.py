@@ -1,4 +1,4 @@
-# manual_app.py — MyPredict 2.0 (entrada manual completa, com ativação por métrica)
+# manual_app.py — MyPredict 2.0 (entrada manual completa, estatísticas lado a lado)
 import streamlit as st
 from ratings import calcular_ima, calcular_ovrall, calcular_ic, calcular_mpv, obter_prateleira
 from markets import (
@@ -7,11 +7,15 @@ from markets import (
 )
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
 
-# Função auxiliar para criar um par checkbox + número
-def metrica(label, key, valor_padrao=0.0, step=0.1, format="%.2f"):
-    ativo = st.checkbox(f"Ativar {label}", value=True, key=f"{key}_ativo")
-    val = st.number_input(label, value=valor_padrao, step=step, format=format, key=f"{key}_valor")
-    return val if ativo else None
+def metrica_dupla(label, key_casa, key_fora, valor_padrao=0.0, step=0.1, format="%.2f"):
+    """Exibe dois checkboxes + dois campos numéricos lado a lado."""
+    col1, col2 = st.columns(2)
+    ativo_casa = col1.checkbox(f"Casa", value=True, key=f"{key_casa}_ativo")
+    val_casa = col1.number_input(label, value=valor_padrao, step=step, format=format, key=f"{key_casa}_valor")
+
+    ativo_fora = col2.checkbox(f"Fora", value=True, key=f"{key_fora}_ativo")
+    val_fora = col2.number_input(label, value=valor_padrao, step=step, format=format, key=f"{key_fora}_valor")
+    return (val_casa if ativo_casa else None), (val_fora if ativo_fora else None)
 
 def show():
     st.title("MyPredict 2.0 – Modo Manual")
@@ -26,8 +30,9 @@ def show():
 
     st.divider()
     st.subheader("🏷 Projeção de Prateleiras")
-    pos_casa = st.number_input("Posição do time da casa", 1, 20, 1)
-    pos_fora = st.number_input("Posição do time da fora", 1, 20, 2)
+    c1, c2 = st.columns(2)
+    pos_casa = c1.number_input("Posição do time da casa", 1, 20, 1)
+    pos_fora = c2.number_input("Posição do time da fora", 1, 20, 2)
     prat_casa = obter_prateleira(pos_casa)
     prat_fora = obter_prateleira(pos_fora)
     st.write(f"Casa: **{prat_casa}** – Fora: **{prat_fora}**")
@@ -58,52 +63,64 @@ def show():
     st.subheader("📈 OVRall – Estatísticas da Temporada")
     st.markdown("Marque/desmarque os checkboxes para incluir ou ignorar cada métrica.")
 
-    def input_ovrall(prefixo):
-        d = {}
-        d['gols_media'] = metrica("Gols marcados (média)", f"{prefixo}_gols", 1.5)
-        d['gols_sofridos_media'] = metrica("Gols sofridos (média)", f"{prefixo}_gols_sof", 1.0)
-        d['xg_media'] = metrica("xG (média)", f"{prefixo}_xg", 0.0)
-        d['xga_media'] = metrica("xGA (média)", f"{prefixo}_xga", 0.0)
-        d['finalizacoes_alvo_media'] = metrica("Finalizações no alvo (média)", f"{prefixo}_faz", 4.0)
-        d['finalizacoes_alvo_sofridas_media'] = metrica("Finalizações no alvo sofridas (média)", f"{prefixo}_faz_sof", 3.0)
-        d['chutes_media'] = metrica("Chutes totais (média)", f"{prefixo}_chutes", 12.0)
-        d['desarmes_intercep_media'] = metrica("Desarmes + Interceptações (média)", f"{prefixo}_desarmes", 15.0)
-        d['posse_media'] = metrica("Posse de bola (%)", f"{prefixo}_posse", 50.0, step=1.0, format="%.0f")
-        d['passes_certos_pct'] = metrica("Passes certos (%)", f"{prefixo}_passes", 80.0, step=1.0, format="%.0f")
-        d['passes_chave_media'] = metrica("Passes-chave (média)", f"{prefixo}_pchave", 2.0)
-        d['assistencias_media'] = metrica("Assistências (média)", f"{prefixo}_assist", 1.0)
-        d['conversao'] = metrica("Conversão de finalizações (%)", f"{prefixo}_conv", 10.0, step=1.0, format="%.0f")
-        d['clean_sheets_pct'] = metrica("Jogos sem sofrer gols (%)", f"{prefixo}_cs", 30.0, step=1.0, format="%.0f")
-        d['desvio_pontos'] = metrica("Desvio padrão dos pontos", f"{prefixo}_dp", 1.0)
-        d['desvio_gols_pro'] = metrica("Desvio padrão gols marcados", f"{prefixo}_dgp", 1.2)
-        d['desvio_gols_sofridos'] = metrica("Desvio padrão gols sofridos", f"{prefixo}_dgs", 1.1)
-        d['pontos_pos_desvantagem_media'] = metrica("Pontos após sair atrás (média)", f"{prefixo}_ppd", 0.5)
-        d['gols_ultimos_15min_media'] = metrica("Gols nos últimos 15 min (média)", f"{prefixo}_g15", 0.3)
-        d['pontos_apos_derrota_media'] = metrica("Pontos após derrota (média)", f"{prefixo}_pad", 1.0)
-        d['diff_aprov_casa_fora'] = metrica("Diferença aprovação casa-fora (%)", f"{prefixo}_diff", 10.0, step=1.0, format="%.0f")
-        d['aprov_viradas_favor'] = metrica("Aproveitamento viradas a favor (%)", f"{prefixo}_vf", 20.0, step=1.0, format="%.0f")
-        d['aprov_viradas_contra'] = metrica("Aproveitamento viradas contra (%)", f"{prefixo}_vc", 15.0, step=1.0, format="%.0f")
-        return d
+    ovrall_casa = {}
+    ovrall_fora = {}
 
-    st.text("Time da Casa")
-    ovrall_casa = input_ovrall("casa_ovr")
-    st.divider()
-    st.text("Time da Fora")
-    ovrall_fora = input_ovrall("fora_ovr")
+    # Lista de métricas com seus defaults
+    metricas_ovrall = [
+        ("Gols marcados (média)", "gols_media", 1.5),
+        ("Gols sofridos (média)", "gols_sofridos_media", 1.0),
+        ("xG (média)", "xg_media", 0.0),
+        ("xGA (média)", "xga_media", 0.0),
+        ("Finalizações no alvo (média)", "finalizacoes_alvo_media", 4.0),
+        ("Finalizações no alvo sofridas (média)", "finalizacoes_alvo_sofridas_media", 3.0),
+        ("Chutes totais (média)", "chutes_media", 12.0),
+        ("Desarmes + Interceptações (média)", "desarmes_intercep_media", 15.0),
+        ("Posse de bola (%)", "posse_media", 50.0, 1.0, "%.0f"),
+        ("Passes certos (%)", "passes_certos_pct", 80.0, 1.0, "%.0f"),
+        ("Passes-chave (média)", "passes_chave_media", 2.0),
+        ("Assistências (média)", "assistencias_media", 1.0),
+        ("Conversão de finalizações (%)", "conversao", 10.0, 1.0, "%.0f"),
+        ("Jogos sem sofrer gols (%)", "clean_sheets_pct", 30.0, 1.0, "%.0f"),
+        ("Desvio padrão dos pontos", "desvio_pontos", 1.0),
+        ("Desvio padrão gols marcados", "desvio_gols_pro", 1.2),
+        ("Desvio padrão gols sofridos", "desvio_gols_sofridos", 1.1),
+        ("Pontos após sair atrás (média)", "pontos_pos_desvantagem_media", 0.5),
+        ("Gols nos últimos 15 min (média)", "gols_ultimos_15min_media", 0.3),
+        ("Pontos após derrota (média)", "pontos_apos_derrota_media", 1.0),
+        ("Diferença aprovação casa-fora (%)", "diff_aprov_casa_fora", 10.0, 1.0, "%.0f"),
+        ("Aproveitamento viradas a favor (%)", "aprov_viradas_favor", 20.0, 1.0, "%.0f"),
+        ("Aproveitamento viradas contra (%)", "aprov_viradas_contra", 15.0, 1.0, "%.0f"),
+    ]
+
+    for label, key, *rest in metricas_ovrall:
+        default = rest[0] if rest else 0.0
+        step = rest[1] if len(rest) > 1 else 0.1
+        fmt = rest[2] if len(rest) > 2 else "%.2f"
+        vc, vf = metrica_dupla(label, f"casa_{key}", f"fora_{key}", default, step, fmt)
+        ovrall_casa[key] = vc
+        ovrall_fora[key] = vf
 
     st.divider()
     st.subheader("🧠 IC – Fatores Contextuais")
-    def input_ic(prefixo):
-        d = {}
-        d['confronto_direto'] = metrica("Confronto direto (%)", f"{prefixo}_cd", 50.0, step=1.0, format="%.0f")
-        d['mesmo_escalao'] = metrica("Mesmo escalão (%)", f"{prefixo}_me", 50.0, step=1.0, format="%.0f")
-        d['contra_escalao_adversario'] = metrica("Contra escalão adversário (%)", f"{prefixo}_ce", 50.0, step=1.0, format="%.0f")
-        d['fator_casa'] = metrica("Fator casa (%)", f"{prefixo}_fc", 50.0, step=1.0, format="%.0f")
-        d['odds'] = metrica("Odd (opcional)", f"{prefixo}_odds", 0.0)
-        return d
+    ic_casa = {}
+    ic_fora = {}
 
-    ic_casa = input_ic("casa_ic")
-    ic_fora = input_ic("fora_ic")
+    metricas_ic = [
+        ("Confronto direto (%)", "confronto_direto", 50.0, 1.0, "%.0f"),
+        ("Mesmo escalão (%)", "mesmo_escalao", 50.0, 1.0, "%.0f"),
+        ("Contra escalão adversário (%)", "contra_escalao_adversario", 50.0, 1.0, "%.0f"),
+        ("Fator casa (%)", "fator_casa", 50.0, 1.0, "%.0f"),
+        ("Odd (opcional)", "odds", 0.0),
+    ]
+
+    for label, key, *rest in metricas_ic:
+        default = rest[0] if rest else 0.0
+        step = rest[1] if len(rest) > 1 else 0.1
+        fmt = rest[2] if len(rest) > 2 else "%.2f"
+        vc, vf = metrica_dupla(label, f"casa_{key}", f"fora_{key}", default, step, fmt)
+        ic_casa[key] = vc
+        ic_fora[key] = vf
 
     st.divider()
     if st.button("Calcular MyPredict Manual"):
