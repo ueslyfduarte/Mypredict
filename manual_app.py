@@ -1,4 +1,4 @@
-# manual_app.py — MyPredict 2.0 (entrada manual completa)
+# manual_app.py — MyPredict 2.0 (entrada manual completa, com ativação por métrica)
 import streamlit as st
 from ratings import calcular_ima, calcular_ovrall, calcular_ic, calcular_mpv, obter_prateleira
 from markets import (
@@ -7,9 +7,15 @@ from markets import (
 )
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
 
+# Função auxiliar para criar um par checkbox + número
+def metrica(label, key, valor_padrao=0.0, step=0.1, format="%.2f"):
+    ativo = st.checkbox(f"Ativar {label}", value=True, key=f"{key}_ativo")
+    val = st.number_input(label, value=valor_padrao, step=step, format=format, key=f"{key}_valor")
+    return val if ativo else None
+
 def show():
     st.title("MyPredict 2.0 – Modo Manual")
-    st.markdown("Preencha todos os campos abaixo para calcular as métricas e mercados.")
+    st.markdown("Preencha os campos abaixo. **Desmarque o checkbox de uma métrica para ignorá‑la** – o peso será redistribuído automaticamente.")
 
     # Times
     col1, col2 = st.columns(2)
@@ -18,19 +24,18 @@ def show():
     with col2:
         time_fora = st.text_input("Time da Fora", "Palmeiras")
 
-    # Prateleiras
+    st.divider()
     st.subheader("🏷 Projeção de Prateleiras")
     pos_casa = st.number_input("Posição do time da casa", 1, 20, 1)
     pos_fora = st.number_input("Posição do time da fora", 1, 20, 2)
     prat_casa = obter_prateleira(pos_casa)
     prat_fora = obter_prateleira(pos_fora)
     st.write(f"Casa: **{prat_casa}** – Fora: **{prat_fora}**")
-
     prateleiras = {time_casa: prat_casa, time_fora: prat_fora}
 
-    # IMA – Jogos recentes
+    st.divider()
     st.subheader("📊 IMA – Últimos jogos")
-    st.markdown("Informe os **10 últimos jogos** de cada time. Os 5 primeiros serão usados como 'últimos 5 gerais', os 3 primeiros como 'últimos 3 gerais', e os mandantes/visitantes para os recortes de casa/fora.")
+    st.markdown("Informe os **10 últimos jogos** de cada time. Os recortes são automáticos.")
 
     def input_jogos(prefixo):
         jogos = []
@@ -49,58 +54,59 @@ def show():
     st.markdown("**Jogos do time da fora**")
     jogos_fora = input_jogos("fora")
 
-    # OVRall – Estatísticas da temporada
+    st.divider()
     st.subheader("📈 OVRall – Estatísticas da Temporada")
-    st.markdown("Preencha as médias (por jogo) para cada time. Campos vazios serão ignorados (o OVRall redistribui os pesos).")
+    st.markdown("Marque/desmarque os checkboxes para incluir ou ignorar cada métrica.")
 
     def input_ovrall(prefixo):
-        return {
-            'gols_media': st.number_input("Gols marcados (média)", value=1.5, key=f"{prefixo}_gols"),
-            'gols_sofridos_media': st.number_input("Gols sofridos (média)", value=1.0, key=f"{prefixo}_gols_sof"),
-            'xg_media': st.number_input("xG (média)", value=0.0, key=f"{prefixo}_xg"),
-            'xga_media': st.number_input("xGA (média)", value=0.0, key=f"{prefixo}_xga"),
-            'finalizacoes_alvo_media': st.number_input("Finalizações no alvo (média)", value=4.0, key=f"{prefixo}_faz"),
-            'finalizacoes_alvo_sofridas_media': st.number_input("Finalizações no alvo sofridas (média)", value=3.0, key=f"{prefixo}_faz_sof"),
-            'chutes_media': st.number_input("Chutes totais (média)", value=12.0, key=f"{prefixo}_chutes"),
-            'desarmes_intercep_media': st.number_input("Desarmes + Interceptações (média)", value=15.0, key=f"{prefixo}_desarmes"),
-            'posse_media': st.slider("Posse de bola (%)", 0, 100, 50, key=f"{prefixo}_posse"),
-            'passes_certos_pct': st.slider("Passes certos (%)", 0, 100, 80, key=f"{prefixo}_passes"),
-            'passes_chave_media': st.number_input("Passes-chave (média)", value=2.0, key=f"{prefixo}_pchave"),
-            'assistencias_media': st.number_input("Assistências (média)", value=1.0, key=f"{prefixo}_assist"),
-            'conversao': st.number_input("Conversão de finalizações (%)", value=10.0, key=f"{prefixo}_conv"),
-            'clean_sheets_pct': st.slider("Jogos sem sofrer gols (%)", 0, 100, 30, key=f"{prefixo}_cs"),
-            'desvio_pontos': st.number_input("Desvio padrão dos pontos", value=1.0, key=f"{prefixo}_dp"),
-            'desvio_gols_pro': st.number_input("Desvio padrão gols marcados", value=1.2, key=f"{prefixo}_dgp"),
-            'desvio_gols_sofridos': st.number_input("Desvio padrão gols sofridos", value=1.1, key=f"{prefixo}_dgs"),
-            'pontos_pos_desvantagem_media': st.number_input("Pontos após sair atrás (média)", value=0.5, key=f"{prefixo}_ppd"),
-            'gols_ultimos_15min_media': st.number_input("Gols nos últimos 15 min (média)", value=0.3, key=f"{prefixo}_g15"),
-            'pontos_apos_derrota_media': st.number_input("Pontos após derrota (média)", value=1.0, key=f"{prefixo}_pad"),
-            'diff_aprov_casa_fora': st.number_input("Diferença aprovação casa-fora (%)", value=10.0, key=f"{prefixo}_diff"),
-            'aprov_viradas_favor': st.number_input("Aproveitamento viradas a favor (%)", value=20.0, key=f"{prefixo}_vf"),
-            'aprov_viradas_contra': st.number_input("Aproveitamento viradas contra (%)", value=15.0, key=f"{prefixo}_vc"),
-        }
+        d = {}
+        d['gols_media'] = metrica("Gols marcados (média)", f"{prefixo}_gols", 1.5)
+        d['gols_sofridos_media'] = metrica("Gols sofridos (média)", f"{prefixo}_gols_sof", 1.0)
+        d['xg_media'] = metrica("xG (média)", f"{prefixo}_xg", 0.0)
+        d['xga_media'] = metrica("xGA (média)", f"{prefixo}_xga", 0.0)
+        d['finalizacoes_alvo_media'] = metrica("Finalizações no alvo (média)", f"{prefixo}_faz", 4.0)
+        d['finalizacoes_alvo_sofridas_media'] = metrica("Finalizações no alvo sofridas (média)", f"{prefixo}_faz_sof", 3.0)
+        d['chutes_media'] = metrica("Chutes totais (média)", f"{prefixo}_chutes", 12.0)
+        d['desarmes_intercep_media'] = metrica("Desarmes + Interceptações (média)", f"{prefixo}_desarmes", 15.0)
+        d['posse_media'] = metrica("Posse de bola (%)", f"{prefixo}_posse", 50.0, step=1.0, format="%.0f")
+        d['passes_certos_pct'] = metrica("Passes certos (%)", f"{prefixo}_passes", 80.0, step=1.0, format="%.0f")
+        d['passes_chave_media'] = metrica("Passes-chave (média)", f"{prefixo}_pchave", 2.0)
+        d['assistencias_media'] = metrica("Assistências (média)", f"{prefixo}_assist", 1.0)
+        d['conversao'] = metrica("Conversão de finalizações (%)", f"{prefixo}_conv", 10.0, step=1.0, format="%.0f")
+        d['clean_sheets_pct'] = metrica("Jogos sem sofrer gols (%)", f"{prefixo}_cs", 30.0, step=1.0, format="%.0f")
+        d['desvio_pontos'] = metrica("Desvio padrão dos pontos", f"{prefixo}_dp", 1.0)
+        d['desvio_gols_pro'] = metrica("Desvio padrão gols marcados", f"{prefixo}_dgp", 1.2)
+        d['desvio_gols_sofridos'] = metrica("Desvio padrão gols sofridos", f"{prefixo}_dgs", 1.1)
+        d['pontos_pos_desvantagem_media'] = metrica("Pontos após sair atrás (média)", f"{prefixo}_ppd", 0.5)
+        d['gols_ultimos_15min_media'] = metrica("Gols nos últimos 15 min (média)", f"{prefixo}_g15", 0.3)
+        d['pontos_apos_derrota_media'] = metrica("Pontos após derrota (média)", f"{prefixo}_pad", 1.0)
+        d['diff_aprov_casa_fora'] = metrica("Diferença aprovação casa-fora (%)", f"{prefixo}_diff", 10.0, step=1.0, format="%.0f")
+        d['aprov_viradas_favor'] = metrica("Aproveitamento viradas a favor (%)", f"{prefixo}_vf", 20.0, step=1.0, format="%.0f")
+        d['aprov_viradas_contra'] = metrica("Aproveitamento viradas contra (%)", f"{prefixo}_vc", 15.0, step=1.0, format="%.0f")
+        return d
 
     st.text("Time da Casa")
     ovrall_casa = input_ovrall("casa_ovr")
+    st.divider()
     st.text("Time da Fora")
     ovrall_fora = input_ovrall("fora_ovr")
 
-    # IC – Fatores contextuais
+    st.divider()
     st.subheader("🧠 IC – Fatores Contextuais")
     def input_ic(prefixo):
-        return {
-            'confronto_direto': st.slider("Confronto direto (%)", 0, 100, 50, key=f"{prefixo}_cd"),
-            'mesmo_escalao': st.slider("Mesmo escalão (%)", 0, 100, 50, key=f"{prefixo}_me"),
-            'contra_escalao_adversario': st.slider("Contra escalão adversário (%)", 0, 100, 50, key=f"{prefixo}_ce"),
-            'fator_casa': st.slider("Fator casa (%)", 0, 100, 50, key=f"{prefixo}_fc"),
-            'odds': st.number_input("Odd (opcional)", value=0.0, key=f"{prefixo}_odds"),
-        }
+        d = {}
+        d['confronto_direto'] = metrica("Confronto direto (%)", f"{prefixo}_cd", 50.0, step=1.0, format="%.0f")
+        d['mesmo_escalao'] = metrica("Mesmo escalão (%)", f"{prefixo}_me", 50.0, step=1.0, format="%.0f")
+        d['contra_escalao_adversario'] = metrica("Contra escalão adversário (%)", f"{prefixo}_ce", 50.0, step=1.0, format="%.0f")
+        d['fator_casa'] = metrica("Fator casa (%)", f"{prefixo}_fc", 50.0, step=1.0, format="%.0f")
+        d['odds'] = metrica("Odd (opcional)", f"{prefixo}_odds", 0.0)
+        return d
 
     ic_casa = input_ic("casa_ic")
     ic_fora = input_ic("fora_ic")
 
+    st.divider()
     if st.button("Calcular MyPredict Manual"):
-        # Montar recortes IMA
         rec_casa = {
             '10G': jogos_casa[:10], '5G': jogos_casa[:5], '3G': jogos_casa[:3],
             '5CF': [j for j in jogos_casa if j['mandante']][:5],
@@ -117,8 +123,8 @@ def show():
         ima_fora = calcular_ima(time_fora, rec_fora['10G'], rec_fora['5G'], rec_fora['3G'],
                                 rec_fora['5CF'], rec_fora['3CF'], prateleiras)
 
-        # OVRall (precisa de referência da liga; usamos os dois times como referência)
-        dados_liga = {k: [ovrall_casa.get(k, 0), ovrall_fora.get(k, 0)] for k in set(ovrall_casa) | set(ovrall_fora)}
+        # OVRall: usa os dois times como referência da liga
+        dados_liga = {k: [ovrall_casa.get(k, 0) or 0, ovrall_fora.get(k, 0) or 0] for k in set(ovrall_casa) | set(ovrall_fora)}
         ovrall_val_casa = calcular_ovrall(ovrall_casa, dados_liga)
         ovrall_val_fora = calcular_ovrall(ovrall_fora, dados_liga)
 
@@ -128,34 +134,34 @@ def show():
         mpv_casa = calcular_mpv(ima_casa, ovrall_val_casa, ic_val_casa)
         mpv_fora = calcular_mpv(ima_fora, ovrall_val_fora, ic_val_fora)
 
-        bonus_casa = calcular_bonus_casa(ovrall_casa.get('diff_aprov_casa_fora', 0))
+        bonus_casa = calcular_bonus_casa(ovrall_casa.get('diff_aprov_casa_fora') or 0)
         p1, pX, p2 = prob_1x2(mpv_casa, mpv_fora, bonus_casa)
 
         over25 = prob_over_2_5(
-            ovrall_casa.get('gols_media'), ovrall_fora.get('gols_media'),
-            ovrall_casa.get('gols_sofridos_media'), ovrall_fora.get('gols_sofridos_media')
+            ovrall_casa.get('gols_media') or 1.5, ovrall_fora.get('gols_media') or 1.5,
+            ovrall_casa.get('gols_sofridos_media') or 1.0, ovrall_fora.get('gols_sofridos_media') or 1.0
         )
 
-        gols_esp_casa = _gols_esperados(ovrall_casa.get('gols_media'),
-                                        ovrall_fora.get('gols_sofridos_media'),
+        gols_esp_casa = _gols_esperados(ovrall_casa.get('gols_media') or 1.5,
+                                        ovrall_fora.get('gols_sofridos_media') or 1.0,
                                         MEDIA_GOLS_CASA_LIGA)
-        gols_esp_fora = _gols_esperados(ovrall_fora.get('gols_media'),
-                                        ovrall_casa.get('gols_sofridos_media'),
+        gols_esp_fora = _gols_esperados(ovrall_fora.get('gols_media') or 1.5,
+                                        ovrall_casa.get('gols_sofridos_media') or 1.0,
                                         MEDIA_GOLS_FORA_LIGA)
         btts = prob_ambas_marcam(gols_esp_casa, gols_esp_fora)
 
         gol_ht = prob_gol_ht(
-            ovrall_casa.get('gols_ht_media', 0.5),
-            ovrall_fora.get('gols_ht_media', 0.5),
-            ovrall_casa.get('gols_ht_sofridos_media', 0.5),
-            ovrall_fora.get('gols_ht_sofridos_media', 0.5)
+            ovrall_casa.get('gols_ht_media', 0.5) or 0.5,
+            ovrall_fora.get('gols_ht_media', 0.5) or 0.5,
+            ovrall_casa.get('gols_ht_sofridos_media', 0.5) or 0.5,
+            ovrall_fora.get('gols_ht_sofridos_media', 0.5) or 0.5
         )
 
         esc = prob_over_escanteios(
-            ovrall_casa.get('escanteios_media', 5.0),
-            ovrall_fora.get('escanteios_media', 5.0),
-            ovrall_casa.get('escanteios_sofridos_media', 5.0),
-            ovrall_fora.get('escanteios_sofridos_media', 5.0)
+            ovrall_casa.get('escanteios_media', 5.0) or 5.0,
+            ovrall_fora.get('escanteios_media', 5.0) or 5.0,
+            ovrall_casa.get('escanteios_sofridos_media', 5.0) or 5.0,
+            ovrall_fora.get('escanteios_sofridos_media', 5.0) or 5.0
         )
 
         st.subheader("📊 Resultados")
