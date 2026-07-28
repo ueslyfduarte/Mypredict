@@ -1,6 +1,7 @@
+# data_loader.py — MyPredict 2.0 (compatível com API-Football v3)
 from statistics import stdev, mean
 from config import JOGOS_BASE_OVRALL, POS_REF_PROMOVIDO, POS_REF_REBAIXADO, PONTOS_BASE
-from data_source_football_api import (
+from data_source_api_football import (
     obter_classificacao,
     obter_partidas_time,
     obter_stats_time
