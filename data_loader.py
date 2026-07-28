@@ -1,7 +1,7 @@
 # data_loader.py — MyPredict 2.0
 from statistics import stdev, mean
 from config import JOGOS_BASE_OVRALL, POS_REF_PROMOVIDO, POS_REF_REBAIXADO, PONTOS_BASE
-from data_source_fbref_pro import (
+from data_source_fbref_selenium import (
     obter_classificacao,
     obter_partidas_time,
     obter_stats_time
