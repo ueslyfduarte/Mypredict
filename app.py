@@ -1,4 +1,4 @@
-# app.py — MyPredict 2.0 (botão "Buscar Times" manual, sem chamadas automáticas)
+# app.py — MyPredict 2.0 (com modo manual na sidebar)
 import streamlit as st
 from data_loader import (
     gerar_prateleiras, obter_ultimos_jogos_com_heranca, extrair_recortes_ima,
@@ -12,123 +12,47 @@ from markets import (
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
 from data_source_api_football import listar_ligas, listar_temporadas, get_api_usage
 
-# ------------------------------------------------------------
-# Configuração da página
-# ------------------------------------------------------------
+# ---------- Sidebar: seletor de modo ----------
+with st.sidebar:
+    st.markdown("# MyPredict 2.0")
+    modo = st.radio("Modo", ["Automático (API)", "Manual"])
+
+# ---------- MODO MANUAL ----------
+if modo == "Manual":
+    from manual_app import show
+    show()
+    st.stop()
+
+# ---------- MODO AUTOMÁTICO (código original INALTERADO) ----------
 st.set_page_config(page_title="MyPredict 2.0", layout="wide")
 
-# ------------------------------------------------------------
-# CSS premium (preto, prata, dourado)
-# ------------------------------------------------------------
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     .stApp { background: radial-gradient(ellipse at top, #1a1a2e 0%, #0e1117 70%); }
     h1, h2, h3, h4 { color: #ffd700 !important; letter-spacing: 0.5px; }
-    .main-title {
-        font-size: 3rem;
-        font-weight: 700;
-        background: linear-gradient(135deg, #ffd700, #ffaa00);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-align: center;
-        margin-bottom: 0;
-    }
-    .quote {
-        color: #c0c0c0;
-        font-style: italic;
-        text-align: center;
-        font-size: 1.2rem;
-        margin-top: -10px;
-        margin-bottom: 20px;
-    }
-    div[data-testid="metric-container"] {
-        background: rgba(30, 30, 30, 0.8);
-        border: 1px solid #333;
-        border-radius: 16px;
-        padding: 24px 16px;
-        backdrop-filter: blur(10px);
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-    }
-    div[data-testid="metric-container"]:hover {
-        border-color: #ffd700;
-        box-shadow: 0 8px 24px rgba(255,215,0,0.2);
-    }
+    .main-title { font-size: 3rem; font-weight: 700; background: linear-gradient(135deg, #ffd700, #ffaa00); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; margin-bottom: 0; }
+    .quote { color: #c0c0c0; font-style: italic; text-align: center; font-size: 1.2rem; margin-top: -10px; margin-bottom: 20px; }
+    div[data-testid="metric-container"] { background: rgba(30, 30, 30, 0.8); border: 1px solid #333; border-radius: 16px; padding: 24px 16px; backdrop-filter: blur(10px); transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+    div[data-testid="metric-container"]:hover { border-color: #ffd700; box-shadow: 0 8px 24px rgba(255,215,0,0.2); }
     div[data-testid="metric-container"] label { color: #c0c0c0 !important; font-size: 0.9rem; text-transform: uppercase; }
-    div.stButton > button {
-        background: linear-gradient(135deg, #ffd700, #ffaa00);
-        color: #0e1117;
-        border: none;
-        font-weight: 700;
-        font-size: 1.2rem;
-        border-radius: 12px;
-        padding: 14px;
-        transition: all 0.3s ease;
-        letter-spacing: 1px;
-        box-shadow: 0 4px 15px rgba(255,215,0,0.3);
-    }
-    div.stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 25px rgba(255,215,0,0.5);
-    }
-    .selo-ouro {
-        background: linear-gradient(145deg, #ffd700, #b8860b);
-        color: #0e1117;
-        font-weight: 900;
-        text-align: center;
-        border-radius: 50%;
-        width: 120px;
-        height: 120px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin: 20px auto 0;
-        font-size: 14px;
-        box-shadow: 0 0 35px #ffd700;
-        animation: pulse 2s infinite;
-    }
-    @keyframes pulse {
-        0% { box-shadow: 0 0 15px #ffd700; }
-        50% { box-shadow: 0 0 40px #ffd700, 0 0 80px #ffaa00; }
-        100% { box-shadow: 0 0 15px #ffd700; }
-    }
-    .stSelectbox [data-baseweb="select"] {
-        background: rgba(30,30,30,0.9);
-        border: 1px solid #444;
-        border-radius: 10px;
-        color: #ffd700;
-    }
-    .usage-badge {
-        background: rgba(30,30,30,0.8);
-        border: 1px solid #ffd700;
-        border-radius: 20px;
-        padding: 4px 16px;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 0.85rem;
-        color: #ffd700;
-        margin-bottom: 20px;
-    }
-    .usage-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        display: inline-block;
-    }
+    div.stButton > button { background: linear-gradient(135deg, #ffd700, #ffaa00); color: #0e1117; border: none; font-weight: 700; font-size: 1.2rem; border-radius: 12px; padding: 14px; transition: all 0.3s ease; letter-spacing: 1px; box-shadow: 0 4px 15px rgba(255,215,0,0.3); }
+    div.stButton > button:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(255,215,0,0.5); }
+    .selo-ouro { background: linear-gradient(145deg, #ffd700, #b8860b); color: #0e1117; font-weight: 900; text-align: center; border-radius: 50%; width: 120px; height: 120px; display: flex; align-items: center; justify-content: center; margin: 20px auto 0; font-size: 14px; box-shadow: 0 0 35px #ffd700; animation: pulse 2s infinite; }
+    @keyframes pulse { 0% { box-shadow: 0 0 15px #ffd700; } 50% { box-shadow: 0 0 40px #ffd700, 0 0 80px #ffaa00; } 100% { box-shadow: 0 0 15px #ffd700; } }
+    .stSelectbox [data-baseweb="select"] { background: rgba(30,30,30,0.9); border: 1px solid #444; border-radius: 10px; color: #ffd700; }
+    .usage-badge { background: rgba(30,30,30,0.8); border: 1px solid #ffd700; border-radius: 20px; padding: 4px 16px; display: inline-flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #ffd700; margin-bottom: 20px; }
+    .usage-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 </style>
 """, unsafe_allow_html=True)
 
-# ------------------------------------------------------------
 # Estado inicial das ligas (carregado uma única vez, cache 7 dias)
-# ------------------------------------------------------------
 if 'ligas_carregadas' not in st.session_state:
     st.session_state.ligas_carregadas = False
     st.session_state.lista_ligas = []
     st.session_state.temporadas = {}
-    st.session_state.times_carregados = {}  # chave = f"{liga_nome}_{temporada}" -> lista de times
+    st.session_state.times_carregados = {}
 
 if not st.session_state.ligas_carregadas:
     with st.spinner("Conectando à API-Football..."):
@@ -141,18 +65,12 @@ if not st.session_state.ligas_carregadas:
             st.error(f"Erro ao carregar ligas: {e}")
             st.stop()
 
-# ------------------------------------------------------------
 # Indicador de uso da API
-# ------------------------------------------------------------
 uso, limite = get_api_usage()
 porcentagem = uso / limite
-if porcentagem < 0.5:
-    cor = "#00ff7f"
-elif porcentagem < 0.8:
-    cor = "#ffaa00"
-else:
-    cor = "#ff4d4d"
-
+if porcentagem < 0.5: cor = "#00ff7f"
+elif porcentagem < 0.8: cor = "#ffaa00"
+else: cor = "#ff4d4d"
 st.markdown(f"""
 <div style="display: flex; justify-content: center;">
     <div class="usage-badge">
@@ -162,15 +80,9 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ------------------------------------------------------------
-# Título e frase
-# ------------------------------------------------------------
 st.markdown("<div class='main-title'>⚽ MyPredict 2.0</div>", unsafe_allow_html=True)
 st.markdown("<div class='quote'>“O futebol é a única coisa que me emociona mais do que a ciência.”<br>— Albert Einstein (adaptado)</div>", unsafe_allow_html=True)
 
-# ------------------------------------------------------------
-# Seletores de liga e temporada (sem chamada automática)
-# ------------------------------------------------------------
 col_liga, col_temp = st.columns([2, 1])
 with col_liga:
     liga_nome = st.selectbox("Selecione a liga", st.session_state.lista_ligas, key="sel_liga")
@@ -179,10 +91,8 @@ with col_temp:
         liga_id = st.session_state.ligas_dict[liga_nome]
         if liga_id not in st.session_state.temporadas:
             with st.spinner("Buscando temporadas..."):
-                try:
-                    st.session_state.temporadas[liga_id] = listar_temporadas(liga_id)
-                except:
-                    st.session_state.temporadas[liga_id] = []
+                try: st.session_state.temporadas[liga_id] = listar_temporadas(liga_id)
+                except: st.session_state.temporadas[liga_id] = []
         temporadas = st.session_state.temporadas.get(liga_id, [])
         if not temporadas:
             st.warning("Nenhuma temporada disponível")
@@ -192,9 +102,6 @@ with col_temp:
     else:
         temporada = st.number_input("Temporada", value=2024)
 
-# ------------------------------------------------------------
-# Botão "Buscar Times" – manual
-# ------------------------------------------------------------
 chave_times = f"{liga_nome}_{temporada}"
 if chave_times not in st.session_state.times_carregados:
     buscar = st.button("🔍 Buscar Times", use_container_width=True)
@@ -202,50 +109,32 @@ if chave_times not in st.session_state.times_carregados:
         with st.spinner("Obtendo classificação..."):
             try:
                 class_ant = classificação_anterior(liga_nome, temporada)
-                if class_ant:
-                    st.session_state.times_carregados[chave_times] = sorted(class_ant.values())
-                else:
-                    st.session_state.times_carregados[chave_times] = []
+                if class_ant: st.session_state.times_carregados[chave_times] = sorted(class_ant.values())
+                else: st.session_state.times_carregados[chave_times] = []
             except Exception as e:
                 st.error(f"Erro ao carregar times: {e}")
                 st.session_state.times_carregados[chave_times] = []
 else:
     st.info("Times carregados do cache. Para atualizar, troque de temporada ou liga.")
 
-# ------------------------------------------------------------
-# Seleção dos times (dropdown se disponível, senão texto)
-# ------------------------------------------------------------
 lista_times = st.session_state.times_carregados.get(chave_times, [])
 col1, col2 = st.columns(2)
 with col1:
-    if lista_times:
-        time_casa = st.selectbox("Time da casa", lista_times)
-    else:
-        time_casa = st.text_input("Time da casa", value="Arsenal")
+    if lista_times: time_casa = st.selectbox("Time da casa", lista_times)
+    else: time_casa = st.text_input("Time da casa", value="Arsenal")
 with col2:
-    if lista_times:
-        time_fora = st.selectbox("Time de fora", lista_times, index=min(1, len(lista_times)-1))
-    else:
-        time_fora = st.text_input("Time de fora", value="Manchester United")
+    if lista_times: time_fora = st.selectbox("Time de fora", lista_times, index=min(1, len(lista_times)-1))
+    else: time_fora = st.text_input("Time de fora", value="Manchester United")
 
-# ------------------------------------------------------------
-# Botão de ação – sempre visível
-# ------------------------------------------------------------
 gerar = st.button("⚡ Gerar MyPredict", use_container_width=True)
 
-# ------------------------------------------------------------
-# Execução da análise (apenas ao clicar)
-# ------------------------------------------------------------
 if gerar:
     with st.spinner("Calculando..."):
         try:
-            # Garantir que a classificação está carregada (usa cache se já foi buscada)
             if chave_times not in st.session_state.times_carregados:
-                # Se o usuário não clicou em "Buscar Times", fazemos agora
                 class_ant = classificação_anterior(liga_nome, temporada)
             else:
-                # Se já temos a lista de times, a classificação já foi obtida e está em cache (disco)
-                class_ant = classificação_anterior(liga_nome, temporada)  # virá do cache de 24h
+                class_ant = classificação_anterior(liga_nome, temporada)
 
             if not class_ant:
                 st.error(f"Classificação não disponível para {liga_nome} {temporada}.")
@@ -299,41 +188,33 @@ if gerar:
                 dados_casa.get('escanteios_sofridos_media'), dados_fora.get('escanteios_sofridos_media')
             )
 
-            def recomendado(prob):
-                return prob is not None and prob >= 0.60
+            def recomendado(prob): return prob is not None and prob >= 0.60
 
             st.markdown(f"<h2 style='text-align: center; color: #ffd700;'>{time_casa} x {time_fora}</h2>", unsafe_allow_html=True)
 
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric("Vitória Casa", f"{p1:.1%}")
-                if recomendado(p1):
-                    st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>', unsafe_allow_html=True)
+                if recomendado(p1): st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>', unsafe_allow_html=True)
             with col2:
                 st.metric("Empate", f"{pX:.1%}")
-                if recomendado(pX):
-                    st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>', unsafe_allow_html=True)
+                if recomendado(pX): st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>', unsafe_allow_html=True)
             with col3:
                 st.metric("Vitória Fora", f"{p2:.1%}")
-                if recomendado(p2):
-                    st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>', unsafe_allow_html=True)
+                if recomendado(p2): st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>', unsafe_allow_html=True)
 
             st.markdown("---")
             col4, col5 = st.columns(2)
             with col4:
                 st.metric("Over 2.5 gols", f"{over25:.1%}" if over25 else "N/D")
-                if recomendado(over25):
-                    st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>', unsafe_allow_html=True)
+                if recomendado(over25): st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>', unsafe_allow_html=True)
                 st.metric("Gol no 1º tempo", f"{gol_ht:.1%}" if gol_ht else "N/D")
-                if recomendado(gol_ht):
-                    st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>', unsafe_allow_html=True)
+                if recomendado(gol_ht): st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>', unsafe_allow_html=True)
             with col5:
                 st.metric("Ambas Marcam", f"{btts:.1%}" if btts else "N/D")
-                if recomendado(btts):
-                    st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>', unsafe_allow_html=True)
+                if recomendado(btts): st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>', unsafe_allow_html=True)
                 st.metric("Over Escanteios", f"{esc:.1%}" if esc else "N/D")
-                if recomendado(esc):
-                    st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>', unsafe_allow_html=True)
+                if recomendado(esc): st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>', unsafe_allow_html=True)
 
             with st.expander("📊 Métricas detalhadas"):
                 c1, c2 = st.columns(2)
