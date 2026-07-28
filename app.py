@@ -1,4 +1,4 @@
-# app.py — MyPredict 2.0 (sem busca automática, contador de uso, layout premium)
+# app.py — MyPredict 2.0 (API-Football v3, sem busca automática, contador de uso, layout premium)
 import streamlit as st
 from data_loader import (
     gerar_prateleiras, obter_ultimos_jogos_com_heranca, extrair_recortes_ima,
@@ -10,7 +10,7 @@ from markets import (
     prob_over_escanteios, calcular_bonus_casa, _gols_esperados
 )
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
-from data_source_football_api import listar_ligas, listar_temporadas, get_api_usage
+from data_source_api_football import listar_ligas, listar_temporadas, get_api_usage
 
 # ------------------------------------------------------------
 # Configuração da página
@@ -136,7 +136,7 @@ if 'ligas_carregadas' not in st.session_state:
     st.session_state.temporadas = {}
 
 if not st.session_state.ligas_carregadas:
-    with st.spinner("Conectando à API football-data.org..."):
+    with st.spinner("Conectando à API-Football..."):
         try:
             ligas_dict = listar_ligas()
             st.session_state.lista_ligas = sorted(ligas_dict.keys())
@@ -152,7 +152,6 @@ if not st.session_state.ligas_carregadas:
 uso, limite = get_api_usage()
 porcentagem = uso / limite
 
-# Cor do indicador: verde (>50% restante), amarelo (20-50%), vermelho (<20%)
 if porcentagem < 0.5:
     cor = "#00ff7f"
 elif porcentagem < 0.8:
@@ -182,16 +181,15 @@ col_liga, col_temp = st.columns([2, 1])
 with col_liga:
     liga_nome = st.selectbox("Selecione a liga", st.session_state.lista_ligas, key="sel_liga")
 with col_temp:
-    # Temporadas carregadas sob demanda para a liga escolhida
     if liga_nome:
-        codigo = st.session_state.ligas_dict[liga_nome]
-        if codigo not in st.session_state.temporadas:
+        liga_id = st.session_state.ligas_dict[liga_nome]
+        if liga_id not in st.session_state.temporadas:
             with st.spinner("Buscando temporadas..."):
                 try:
-                    st.session_state.temporadas[codigo] = listar_temporadas(codigo)
+                    st.session_state.temporadas[liga_id] = listar_temporadas(liga_id)
                 except:
-                    st.session_state.temporadas[codigo] = []
-        temporadas = st.session_state.temporadas.get(codigo, [])
+                    st.session_state.temporadas[liga_id] = []
+        temporadas = st.session_state.temporadas.get(liga_id, [])
         if not temporadas:
             st.warning("Nenhuma temporada disponível")
             temporada = st.number_input("Temporada", value=2024)
@@ -218,7 +216,6 @@ gerar = st.button("⚡ Gerar MyPredict", use_container_width=True)
 if gerar:
     with st.spinner("Calculando..."):
         try:
-            # Agora sim, buscamos a classificação e os dados
             class_ant = classificação_anterior(liga_nome, temporada)
             if not class_ant:
                 st.error(f"Classificação não disponível para {liga_nome} {temporada}.")
