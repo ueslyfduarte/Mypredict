@@ -1,8 +1,9 @@
 # app.py — MyPredict 2.0
 import streamlit as st
+import json
 from interfaces import tela_automatico, tela_manual
 from automatico import inicializar_estado, carregar_ligas, buscar_temporadas, buscar_times, executar_automatico
-from manual import executar_manual
+from manual import executar_manual, processar_texto_ia
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
 from data_source_api_football import get_api_usage
 
@@ -36,6 +37,7 @@ if modo == "Automático (API)":
             st.rerun()
 
 else:
+    # Inicializa estado do modo manual
     defaults = {
         'time_casa': "Flamengo", 'time_fora': "Palmeiras",
         'pos_casa': 1, 'pos_fora': 2,
@@ -52,6 +54,35 @@ else:
             st.session_state[k] = v
 
     entrada, calcular = tela_manual(st.session_state)
+
+    # Processa a colagem da IA (texto ou JSON)
+    if entrada == "Colar resposta da IA" and st.session_state.get('ia_text'):
+        # O botão "Processar dados" foi pressionado na interface
+        if st.session_state.get('processar_click'):
+            texto = st.session_state.ia_text
+            # Tenta JSON primeiro
+            try:
+                dados = json.loads(texto)
+                for chave, valor in dados.items():
+                    st.session_state[chave] = valor
+                # Converte mandante para bool nos jogos, se necessário
+                for j in st.session_state.get('jogos_casa', []):
+                    j['mandante'] = bool(j.get('mandante', False))
+                for j in st.session_state.get('jogos_fora', []):
+                    j['mandante'] = bool(j.get('mandante', False))
+                st.success("JSON carregado com sucesso!")
+                st.session_state.processar_click = False
+                st.rerun()
+            except json.JSONDecodeError:
+                # Tenta processar como texto
+                dados = processar_texto_ia(texto)
+                for chave, valor in dados.items():
+                    st.session_state[chave] = valor
+                st.success("Texto processado com sucesso!")
+                st.session_state.processar_click = False
+                st.rerun()
+
+    # Executa o cálculo manual
     if calcular:
         res, err = executar_manual(st.session_state)
         if err:
@@ -60,18 +91,24 @@ else:
             st.session_state.resultados_manual = res
             st.rerun()
 
+    # Exibe resultados do manual, se existirem
     if st.session_state.get('resultados_manual'):
         res = st.session_state.resultados_manual
         st.subheader("📊 Resultados")
         col1, col2, col3 = st.columns(3)
-        with col1: st.metric("Vitória Casa", f"{res['p1']:.1%}")
-        with col2: st.metric("Empate", f"{res['pX']:.1%}")
-        with col3: st.metric("Vitória Fora", f"{res['p2']:.1%}")
+        with col1:
+            st.metric("Vitória Casa", f"{res['p1']:.1%}")
+        with col2:
+            st.metric("Empate", f"{res['pX']:.1%}")
+        with col3:
+            st.metric("Vitória Fora", f"{res['p2']:.1%}")
 
         st.markdown("---")
         col4, col5 = st.columns(2)
-        with col4: st.metric("Over 2.5 gols", f"{res['over25']:.1%}" if res['over25'] else "N/D")
-        with col5: st.metric("Ambas Marcam", f"{res['btts']:.1%}" if res['btts'] else "N/D")
+        with col4:
+            st.metric("Over 2.5 gols", f"{res['over25']:.1%}" if res['over25'] else "N/D")
+        with col5:
+            st.metric("Ambas Marcam", f"{res['btts']:.1%}" if res['btts'] else "N/D")
 
         st.metric("Gol no 1º tempo", f"{res['gol_ht']:.1%}" if res['gol_ht'] else "N/D")
         st.metric("Over Escanteios", f"{res['esc']:.1%}" if res['esc'] else "N/D")
