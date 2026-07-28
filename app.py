@@ -1,4 +1,4 @@
-# app.py — MyPredict 2.0 (dropdown automático de times, API-Football v3)
+# app.py — MyPredict 2.0 (botão "Buscar Times" manual, sem chamadas automáticas)
 import streamlit as st
 from data_loader import (
     gerar_prateleiras, obter_ultimos_jogos_com_heranca, extrair_recortes_ima,
@@ -122,13 +122,13 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ------------------------------------------------------------
-# Estado inicial das ligas
+# Estado inicial das ligas (carregado uma única vez, cache 7 dias)
 # ------------------------------------------------------------
 if 'ligas_carregadas' not in st.session_state:
     st.session_state.ligas_carregadas = False
     st.session_state.lista_ligas = []
     st.session_state.temporadas = {}
-    st.session_state.classificacao_cache = {}  # para times
+    st.session_state.times_carregados = {}  # chave = f"{liga_nome}_{temporada}" -> lista de times
 
 if not st.session_state.ligas_carregadas:
     with st.spinner("Conectando à API-Football..."):
@@ -169,7 +169,7 @@ st.markdown("<div class='main-title'>⚽ MyPredict 2.0</div>", unsafe_allow_html
 st.markdown("<div class='quote'>“O futebol é a única coisa que me emociona mais do que a ciência.”<br>— Albert Einstein (adaptado)</div>", unsafe_allow_html=True)
 
 # ------------------------------------------------------------
-# Seletores de liga e temporada
+# Seletores de liga e temporada (sem chamada automática)
 # ------------------------------------------------------------
 col_liga, col_temp = st.columns([2, 1])
 with col_liga:
@@ -193,36 +193,38 @@ with col_temp:
         temporada = st.number_input("Temporada", value=2024)
 
 # ------------------------------------------------------------
-# Carregar times da classificação (automático)
+# Botão "Buscar Times" – manual
 # ------------------------------------------------------------
-times_disponiveis = []
-if liga_nome and temporada:
-    chave_class = f"{liga_nome}_{temporada}"
-    if chave_class not in st.session_state.classificacao_cache:
-        with st.spinner("Carregando times..."):
+chave_times = f"{liga_nome}_{temporada}"
+if chave_times not in st.session_state.times_carregados:
+    buscar = st.button("🔍 Buscar Times", use_container_width=True)
+    if buscar:
+        with st.spinner("Obtendo classificação..."):
             try:
                 class_ant = classificação_anterior(liga_nome, temporada)
                 if class_ant:
-                    st.session_state.classificacao_cache[chave_class] = sorted(class_ant.values())
+                    st.session_state.times_carregados[chave_times] = sorted(class_ant.values())
                 else:
-                    st.session_state.classificacao_cache[chave_class] = []
+                    st.session_state.times_carregados[chave_times] = []
             except Exception as e:
-                st.warning(f"Não foi possível carregar os times: {e}")
-                st.session_state.classificacao_cache[chave_class] = []
-    times_disponiveis = st.session_state.classificacao_cache.get(chave_class, [])
+                st.error(f"Erro ao carregar times: {e}")
+                st.session_state.times_carregados[chave_times] = []
+else:
+    st.info("Times carregados do cache. Para atualizar, troque de temporada ou liga.")
 
 # ------------------------------------------------------------
-# Seleção dos times (dropdown)
+# Seleção dos times (dropdown se disponível, senão texto)
 # ------------------------------------------------------------
+lista_times = st.session_state.times_carregados.get(chave_times, [])
 col1, col2 = st.columns(2)
 with col1:
-    if times_disponiveis:
-        time_casa = st.selectbox("Time da casa", times_disponiveis)
+    if lista_times:
+        time_casa = st.selectbox("Time da casa", lista_times)
     else:
         time_casa = st.text_input("Time da casa", value="Arsenal")
 with col2:
-    if times_disponiveis:
-        time_fora = st.selectbox("Time de fora", times_disponiveis, index=min(1, len(times_disponiveis)-1))
+    if lista_times:
+        time_fora = st.selectbox("Time de fora", lista_times, index=min(1, len(lista_times)-1))
     else:
         time_fora = st.text_input("Time de fora", value="Manchester United")
 
@@ -237,11 +239,13 @@ gerar = st.button("⚡ Gerar MyPredict", use_container_width=True)
 if gerar:
     with st.spinner("Calculando..."):
         try:
-            # Garantir que a classificação está carregada
-            if not times_disponiveis:
+            # Garantir que a classificação está carregada (usa cache se já foi buscada)
+            if chave_times not in st.session_state.times_carregados:
+                # Se o usuário não clicou em "Buscar Times", fazemos agora
                 class_ant = classificação_anterior(liga_nome, temporada)
             else:
-                class_ant = classificação_anterior(liga_nome, temporada)  # já está em cache
+                # Se já temos a lista de times, a classificação já foi obtida e está em cache (disco)
+                class_ant = classificação_anterior(liga_nome, temporada)  # virá do cache de 24h
 
             if not class_ant:
                 st.error(f"Classificação não disponível para {liga_nome} {temporada}.")
