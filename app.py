@@ -66,12 +66,9 @@ temporada = st.number_input("Temporada", min_value=2015, max_value=2026, value=2
 # Carregar classificação para preencher times
 try:
     class_ant = classificação_anterior(liga_nome, temporada)
-    if class_ant:
-        lista_times = sorted(class_ant.values())
-    else:
-        lista_times = []
-        st.warning("Não foi possível carregar a classificação desta liga/temporada.")
+    lista_times = sorted(class_ant.values()) if class_ant else []
 except Exception as e:
+    class_ant = None
     lista_times = []
     st.error(f"Erro ao carregar dados da liga: {e}")
 
