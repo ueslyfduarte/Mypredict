@@ -1,4 +1,4 @@
-# ui_manual.py — MyPredict 2.0 (versão final, corrigida)
+# ui_manual.py — MyPredict 2.0 (organizado e funcional)
 import streamlit as st
 from ratings import calcular_ima, calcular_ovrall, calcular_ic, calcular_mpv, obter_prateleira
 from markets import (
@@ -20,6 +20,10 @@ st.markdown("""
     .selo-dourado { background: linear-gradient(145deg, #ffd700, #b8860b); color: #0e1117; font-weight: 900; text-align: center; border-radius: 50%; width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; margin: 10px auto; font-size: 12px; box-shadow: 0 0 20px #ffd700; }
     .selo-verde { background: #00ff7f; color: #0e1117; font-weight: 700; text-align: center; border-radius: 20px; padding: 4px 12px; margin: 5px; }
     .selo-amarelo { background: #ffaa00; color: #0e1117; font-weight: 700; text-align: center; border-radius: 20px; padding: 4px 12px; margin: 5px; }
+    .time-box { background: #1a1a1a; border-radius: 12px; padding: 16px; margin: 10px 0; }
+    .time-casa { border: 2px solid #ffd700; }
+    .time-fora { border: 2px solid #c0c0c0; }
+    .metrica-linha { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #333; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -31,41 +35,27 @@ def indicador(prob):
     else: return "⬇️", ""
 
 def extrair_jogos(texto):
-    """
-    Extrai lista de jogos do texto.
-    1. Tenta linhas individuais com 3 partes.
-    2. Se não achar, procura por uma linha longa com múltiplos jogos (separados por vírgulas)
-       e agrupa em trios (resultado, adversário, mandante).
-    """
     jogos = []
-    # Método 1: linha a linha
     for linha in texto.split('\n'):
         linha = linha.strip()
         if not linha: continue
         partes = [p.strip() for p in linha.split(',')]
         if len(partes) == 3 and partes[0] in ('V','E','D') and partes[2].upper() in ('S','N'):
             jogos.append({"resultado": partes[0], "adversario": partes[1], "mandante": partes[2].upper() == 'S'})
-    if len(jogos) >= 10:
-        return jogos
-
-    # Método 2: linha única com todos os jogos (formato: "V, Time, S, D, Time, N, ...")
+    if len(jogos) >= 10: return jogos
     for linha in texto.split('\n'):
         linha = linha.strip()
         if not linha: continue
         partes = [p.strip() for p in linha.split(',')]
-        if len(partes) >= 30:  # 10 jogos * 3 = 30 partes
+        if len(partes) >= 30:
             for i in range(0, len(partes)-2, 3):
-                res = partes[i]
-                adv = partes[i+1]
-                mand = partes[i+2]
+                res = partes[i]; adv = partes[i+1]; mand = partes[i+2]
                 if res in ('V','E','D') and mand.upper() in ('S','N'):
                     jogos.append({"resultado": res, "adversario": adv, "mandante": mand.upper() == 'S'})
-            break  # usamos apenas a primeira linha longa encontrada
-
+            break
     return jogos
 
 def show():
-    # Inicializa estado
     defaults = {
         'time_casa': "Flamengo", 'time_fora': "Palmeiras",
         'pos_casa': 1, 'pos_fora': 2,
@@ -91,33 +81,25 @@ def show():
             if not texto.strip():
                 st.error("Por favor, cole a resposta da IA.")
             else:
-                jogos_casa = []
-                jogos_fora = []
-                ovrall_casa = {}
-                ovrall_fora = {}
-                ic_casa = {}
-                ic_fora = {}
+                jogos_casa = []; jogos_fora = []
+                ovrall_casa = {}; ovrall_fora = {}
+                ic_casa = {}; ic_fora = {}
                 medias = {
                     'media_gols_casa': MEDIA_GOLS_CASA_LIGA, 'media_gols_fora': MEDIA_GOLS_FORA_LIGA,
                     'media_ht_casa': 0.75, 'media_ht_fora': 0.65,
                     'media_esc_casa': 5.0, 'media_esc_fora': 4.5
                 }
                 prateleiras = {}
-                time_casa = "Flamengo"
-                time_fora = "Palmeiras"
-                pos_casa = 1
-                pos_fora = 2
+                time_casa = "Flamengo"; time_fora = "Palmeiras"
+                pos_casa = 1; pos_fora = 2
 
-                # Divide em blocos (linha em branco)
                 blocos = texto.strip().split('\n\n')
                 for bloco in blocos:
                     linhas = bloco.strip().split('\n')
                     if not linhas: continue
                     primeira = linhas[0].strip()
-                    if primeira.startswith('Time da casa:'):
-                        time_casa = primeira.split(':',1)[1].strip()
-                    elif primeira.startswith('Time da fora:'):
-                        time_fora = primeira.split(':',1)[1].strip()
+                    if primeira.startswith('Time da casa:'): time_casa = primeira.split(':',1)[1].strip()
+                    elif primeira.startswith('Time da fora:'): time_fora = primeira.split(':',1)[1].strip()
                     elif 'Posições:' in primeira:
                         for l in linhas[1:]:
                             if l.startswith('Casa:'):
@@ -140,8 +122,7 @@ def show():
                                   "gols_ultimos_15min_media","pontos_apos_derrota_media",
                                   "diff_aprov_casa_fora","aprov_viradas_favor","aprov_viradas_contra"]
                         vals = [para_float(x) for x in linhas[-1].split(',')]
-                        if len(vals) == 23:
-                            ovrall_casa = {chaves[i]: vals[i] for i in range(23)}
+                        if len(vals) == 23: ovrall_casa = {chaves[i]: vals[i] for i in range(23)}
                     elif 'Métricas OVRall do time da fora' in primeira:
                         chaves = ["gols_media","gols_sofridos_media","xg_media","xga_media",
                                   "finalizacoes_alvo_media","finalizacoes_alvo_sofridas_media",
@@ -152,18 +133,15 @@ def show():
                                   "gols_ultimos_15min_media","pontos_apos_derrota_media",
                                   "diff_aprov_casa_fora","aprov_viradas_favor","aprov_viradas_contra"]
                         vals = [para_float(x) for x in linhas[-1].split(',')]
-                        if len(vals) == 23:
-                            ovrall_fora = {chaves[i]: vals[i] for i in range(23)}
+                        if len(vals) == 23: ovrall_fora = {chaves[i]: vals[i] for i in range(23)}
                     elif 'Métricas IC do time da casa' in primeira:
                         chaves = ["confronto_direto","mesmo_escalao","contra_escalao_adversario","fator_casa","odds"]
                         vals = [para_float(x) for x in linhas[-1].split(',')]
-                        if len(vals) == 5:
-                            ic_casa = {chaves[i]: vals[i] for i in range(5)}
+                        if len(vals) == 5: ic_casa = {chaves[i]: vals[i] for i in range(5)}
                     elif 'Métricas IC do time da fora' in primeira:
                         chaves = ["confronto_direto","mesmo_escalao","contra_escalao_adversario","fator_casa","odds"]
                         vals = [para_float(x) for x in linhas[-1].split(',')]
-                        if len(vals) == 5:
-                            ic_fora = {chaves[i]: vals[i] for i in range(5)}
+                        if len(vals) == 5: ic_fora = {chaves[i]: vals[i] for i in range(5)}
                     elif 'Médias da Liga' in primeira:
                         for l in linhas[1:]:
                             if 'casa:' in l: medias['media_gols_casa'] = para_float(l.split(':')[1])
@@ -178,14 +156,12 @@ def show():
                                 adv, prat = l.split(':',1)
                                 prateleiras[adv.strip()] = prat.strip()
 
-                # Fallback: se não encontrou nada, tenta extrair jogos de todo o texto
                 if len(jogos_casa) < 10 or len(jogos_fora) < 10:
                     todos_jogos = extrair_jogos(texto)
                     if len(todos_jogos) >= 20:
                         jogos_casa = todos_jogos[:10]
                         jogos_fora = todos_jogos[10:20]
 
-                # Salva no estado
                 st.session_state.time_casa = time_casa
                 st.session_state.time_fora = time_fora
                 st.session_state.pos_casa = pos_casa
@@ -200,16 +176,63 @@ def show():
                     st.session_state[k] = v
                 st.session_state.prateleiras_extra = prateleiras
 
-                if len(jogos_casa) >= 10 and len(jogos_fora) >= 10 and ovrall_casa and ovrall_fora:
-                    st.success("Dados processados com sucesso! Clique em 'Calcular MyPredict Manual'.")
-                else:
-                    st.warning(f"Extração parcial: {len(jogos_casa)} jogos casa, {len(jogos_fora)} jogos fora, "
-                               f"OVRall casa: {'OK' if ovrall_casa else 'Faltando'}, OVRall fora: {'OK' if ovrall_fora else 'Faltando'}.")
+                st.success("Dados processados! Verifique o resumo abaixo e clique em Calcular.")
                 st.rerun()
 
-        st.write(f"**Times:** {st.session_state.time_casa} x {st.session_state.time_fora}")
-        st.write(f"**Jogos casa:** {len(st.session_state.jogos_casa)} | **Jogos fora:** {len(st.session_state.jogos_fora)}")
-        st.write(f"**OVRall casa:** {'OK' if st.session_state.ovrall_casa else 'Faltando'} | **OVRall fora:** {'OK' if st.session_state.ovrall_fora else 'Faltando'}")
+        # Exibição organizada dos dados processados
+        if st.session_state.jogos_casa or st.session_state.jogos_fora:
+            st.markdown("---")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f'<div class="time-box time-casa"><h3 style="color:#ffd700;">🏠 {st.session_state.time_casa}</h3>', unsafe_allow_html=True)
+                st.write(f"**Posição:** {st.session_state.pos_casa}")
+                if st.session_state.jogos_casa:
+                    st.write("**Últimos 10 jogos:**")
+                    for j in st.session_state.jogos_casa:
+                        st.write(f"{j['resultado']} x {j['adversario']} {'(C)' if j['mandante'] else '(F)'}")
+                st.markdown('</div>', unsafe_allow_html=True)
+            with col2:
+                st.markdown(f'<div class="time-box time-fora"><h3 style="color:#c0c0c0;">🏟️ {st.session_state.time_fora}</h3>', unsafe_allow_html=True)
+                st.write(f"**Posição:** {st.session_state.pos_fora}")
+                if st.session_state.jogos_fora:
+                    st.write("**Últimos 10 jogos:**")
+                    for j in st.session_state.jogos_fora:
+                        st.write(f"{j['resultado']} x {j['adversario']} {'(C)' if j['mandante'] else '(F)'}")
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            with st.expander("📈 Ver todas as métricas (OVRall, IC, Médias da Liga)"):
+                tab1, tab2, tab3 = st.tabs(["OVRall", "IC", "Liga"])
+                with tab1:
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.markdown("**Time da Casa**")
+                        if st.session_state.ovrall_casa:
+                            for k, v in st.session_state.ovrall_casa.items():
+                                st.write(f"{k}: {v}")
+                    with c2:
+                        st.markdown("**Time da Fora**")
+                        if st.session_state.ovrall_fora:
+                            for k, v in st.session_state.ovrall_fora.items():
+                                st.write(f"{k}: {v}")
+                with tab2:
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.markdown("**Casa**")
+                        if st.session_state.ic_casa:
+                            for k, v in st.session_state.ic_casa.items():
+                                st.write(f"{k}: {v}")
+                    with c2:
+                        st.markdown("**Fora**")
+                        if st.session_state.ic_fora:
+                            for k, v in st.session_state.ic_fora.items():
+                                st.write(f"{k}: {v}")
+                with tab3:
+                    st.write(f"Média gols casa: {st.session_state.media_gols_casa}")
+                    st.write(f"Média gols fora: {st.session_state.media_gols_fora}")
+                    st.write(f"Média gols HT casa: {st.session_state.media_ht_casa}")
+                    st.write(f"Média gols HT fora: {st.session_state.media_ht_fora}")
+                    st.write(f"Média escanteios casa: {st.session_state.media_esc_casa}")
+                    st.write(f"Média escanteios fora: {st.session_state.media_esc_fora}")
     else:
         # ---------- MODO MANUAL ----------
         c1, c2 = st.columns(2)
@@ -385,7 +408,6 @@ def show():
             media_casa=st.session_state.media_esc_casa, media_fora=st.session_state.media_esc_fora
         )
 
-        # Resultados
         st.subheader("📊 Resultados")
         col1, col2, col3 = st.columns(3)
         with col1:
