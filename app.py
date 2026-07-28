@@ -1,4 +1,4 @@
-# app.py — MyPredict 2.0 (com modo manual na sidebar)
+# app.py — MyPredict 2.0
 import streamlit as st
 from data_loader import (
     gerar_prateleiras, obter_ultimos_jogos_com_heranca, extrair_recortes_ima,
@@ -11,6 +11,7 @@ from markets import (
 )
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
 from data_source_api_football import listar_ligas, listar_temporadas, get_api_usage
+from ui_manual import show  # interface manual separada
 
 # ---------- Sidebar: seletor de modo ----------
 with st.sidebar:
@@ -19,11 +20,10 @@ with st.sidebar:
 
 # ---------- MODO MANUAL ----------
 if modo == "Manual":
-    from manual_app import show
     show()
     st.stop()
 
-# ---------- MODO AUTOMÁTICO (código original INALTERADO) ----------
+# ---------- MODO AUTOMÁTICO (código original) ----------
 st.set_page_config(page_title="MyPredict 2.0", layout="wide")
 
 st.markdown("""
@@ -47,7 +47,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Estado inicial das ligas (carregado uma única vez, cache 7 dias)
+# Estado inicial das ligas (carregado uma única vez)
 if 'ligas_carregadas' not in st.session_state:
     st.session_state.ligas_carregadas = False
     st.session_state.lista_ligas = []
