@@ -1,10 +1,11 @@
-# data_source_football_api.py — MyPredict 2.0 (dinâmico e sem conflitos)
+# data_source_football_api.py — MyPredict 2.0 (cache semanal)
 import time
 import requests
 from pathlib import Path
 import json
 import os
 from datetime import datetime, timedelta
+from collections import deque
 
 API_KEY = os.environ.get("FOOTBALL_API_KEY")
 if API_KEY is None:
@@ -19,12 +20,27 @@ HEADERS = {"X-Auth-Token": API_KEY}
 CACHE_DIR = Path("cache/football_api")
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-# Cache com validade (24 horas)
+# Controle de requisições (último minuto)
+_request_times = deque()
+
+def _register_request():
+    agora = datetime.now()
+    _request_times.append(agora)
+    while _request_times and (agora - _request_times[0]).total_seconds() > 60:
+        _request_times.popleft()
+
+def get_api_usage():
+    agora = datetime.now()
+    while _request_times and (agora - _request_times[0]).total_seconds() > 60:
+        _request_times.popleft()
+    return len(_request_times), 10
+
+# Cache válido por 7 dias
 def _cache_valido(arq):
     if not arq.exists():
         return False
     idade = datetime.now() - datetime.fromtimestamp(arq.stat().st_mtime)
-    return idade < timedelta(hours=24)
+    return idade < timedelta(days=7)
 
 def _cache_ler(chave):
     arq = CACHE_DIR / f"{chave}.json"
@@ -38,16 +54,13 @@ def _cache_escrever(chave, dados):
         json.dump(dados, f, ensure_ascii=False, indent=2, default=str)
 
 def _get(url):
+    _register_request()
     time.sleep(6)
     resp = requests.get(url, headers=HEADERS)
     resp.raise_for_status()
     return resp.json()
 
-# ------------------------------------------------------------
-# Funções dinâmicas de ligas e temporadas
-# ------------------------------------------------------------
 def listar_ligas():
-    """Retorna {nome_exibicao: codigo_api} de todas as competições disponíveis."""
     cache_key = "available_leagues"
     cached = _cache_ler(cache_key)
     if cached:
@@ -56,47 +69,31 @@ def listar_ligas():
     data = _get(f"{BASE_URL}/competitions")
     ligas = {}
     for comp in data.get("competitions", []):
-        nome = comp["name"]
-        codigo = comp["code"]
-        # Filtra apenas ligas de futebol adulto (não copas ou feminino)
         if comp.get("type") == "LEAGUE" and comp.get("plan") == "TIER_ONE":
+            nome = comp["name"]
+            codigo = comp["code"]
             ligas[nome] = codigo
     _cache_escrever(cache_key, ligas)
     return ligas
 
 def listar_temporadas(codigo_liga):
-    """Retorna lista de anos (ex.: [2024, 2023, 2022]) disponíveis para a liga."""
     cache_key = f"seasons_{codigo_liga}"
     cached = _cache_ler(cache_key)
     if cached:
         return cached
 
-    try:
-        data = _get(f"{BASE_URL}/competitions/{codigo_liga}/teams")  # endpoint leve
-        # Na resposta, há um filtro de season; vamos extrair da URL permitida
-        # Como a API não tem um endpoint direto de temporadas, faremos uma tentativa
-        # de listar anos comuns. A melhor abordagem é usar o endpoint de partidas
-        # e deduzir os anos disponíveis. Para simplificar, vamos gerar uma lista
-        # de anos prováveis e testar um por um (com cache agressivo).
-        anos = []
-        for ano in range(datetime.now().year, datetime.now().year - 10, -1):
-            try:
-                _get(f"{BASE_URL}/competitions/{codigo_liga}/matches?season={ano}&dateFrom={ano}-01-01&dateTo={ano}-12-31")
-                anos.append(ano)
-            except requests.exceptions.HTTPError:
-                continue
-        if not anos:
-            # fallback: últimos 5 anos
-            anos = list(range(datetime.now().year, datetime.now().year - 5, -1))
-        _cache_escrever(cache_key, anos)
-        return anos
-    except:
-        # fallback estático caso a API falhe
-        return list(range(datetime.now().year, datetime.now().year - 5, -1))
+    anos = []
+    for ano in range(datetime.now().year, datetime.now().year - 10, -1):
+        try:
+            _get(f"{BASE_URL}/competitions/{codigo_liga}/matches?season={ano}&dateFrom={ano}-01-01&dateTo={ano}-12-31")
+            anos.append(ano)
+        except requests.exceptions.HTTPError:
+            continue
+    if not anos:
+        anos = list(range(datetime.now().year, datetime.now().year - 5, -1))
+    _cache_escrever(cache_key, anos)
+    return anos
 
-# ------------------------------------------------------------
-# Funções de dados (classificação e partidas) — INALTERADAS
-# ------------------------------------------------------------
 def obter_classificacao(liga_nome, temporada):
     ligas = listar_ligas()
     codigo = ligas.get(liga_nome)
