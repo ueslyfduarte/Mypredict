@@ -46,7 +46,7 @@ else:
         'media_ht_casa': 0.75, 'media_ht_fora': 0.65,
         'media_esc_casa': 5.0, 'media_esc_fora': 4.5,
         'prateleiras_extra': {},
-        'ia_text': "",
+        'texto_colado': "",
         'processar_click': False
     }
     for k, v in defaults.items():
@@ -55,8 +55,8 @@ else:
 
     entrada, calcular = tela_manual(st.session_state)
 
-    if entrada == "Colar resposta da IA" and st.session_state.get('ia_text') and st.session_state.get('processar_click'):
-        texto = st.session_state.ia_text
+    if entrada == "Colar resposta da IA" and st.session_state.get('texto_colado') and st.session_state.get('processar_click'):
+        texto = st.session_state.texto_colado
         dados = processar_texto_ia(texto)
         for chave, valor in dados.items():
             st.session_state[chave] = valor
