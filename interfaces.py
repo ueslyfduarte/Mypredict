@@ -1,6 +1,7 @@
-# interfaces.py — MyPredict 2.0 (rostos, sem JSON)
+# interfaces.py — MyPredict 2.0 (processamento direto na interface)
 import streamlit as st
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
+from manual import processar_texto_ia   # <-- importa a função de parsing
 
 def para_float(valor_str):
     if valor_str is None or valor_str.strip() == "":
@@ -159,9 +160,11 @@ def tela_manual(dados_state):
         processar = st.button("Processar dados")
         if processar:
             if texto.strip():
-                st.session_state.texto_colado = texto
-                st.session_state.processar_click = True
-                st.rerun()
+                dados = processar_texto_ia(texto)
+                for chave, valor in dados.items():
+                    st.session_state[chave] = valor
+                st.success("Dados processados! Agora clique em 'Calcular MyPredict Manual'.")
+                # Não precisa de rerun, o Streamlit redesnha automaticamente
             else:
                 st.error("Por favor, cole a resposta da IA.")
 
@@ -263,4 +266,4 @@ def tela_manual(dados_state):
             st.number_input("Média escanteios fora", value=dados_state.get('media_esc_fora', 4.5), key="media_esc_fora")
 
     calcular = st.button("Calcular MyPredict Manual")
-    return entrada, calcular
+    return entrada, calculartrada, calcular
