@@ -36,8 +36,8 @@ def _init_driver():
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
     options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-    service = Service(ChromeDriverManager().install())
-    return webdriver.Chrome(service=service, options=options)
+    # Usa o ChromeDriver instalado no PATH (não precisa do webdriver-manager)
+    return webdriver.Chrome(options=options)
 
 def _baixar_com_selenium(url):
     driver = _init_driver()
