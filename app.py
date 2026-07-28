@@ -1,4 +1,3 @@
-# app.py — MyPredict 2.0 (Render + Selenium)
 import streamlit as st
 from data_loader import (
     gerar_prateleiras, obter_ultimos_jogos_com_heranca, extrair_recortes_ima,
@@ -10,16 +9,10 @@ from markets import (
     prob_over_escanteios, calcular_bonus_casa, _gols_esperados
 )
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
-from data_source_fbref_selenium import LEAGUES
+from data_source_football_api import LEAGUES
 
-# ------------------------------------------------------------
-# Configuração da página
-# ------------------------------------------------------------
 st.set_page_config(page_title="MyPredict 2.0", layout="centered")
 
-# ------------------------------------------------------------
-# CSS personalizado (preto, prata, dourado)
-# ------------------------------------------------------------
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #c0c0c0; }
@@ -50,33 +43,21 @@ st.markdown("""
         50% { box-shadow: 0 0 30px #ffd700; }
         100% { box-shadow: 0 0 10px #ffd700; }
     }
-    .stSelectbox [data-baseweb="select"] {
-        background-color: #1e1e1e;
-        color: #ffd700;
-    }
 </style>
 """, unsafe_allow_html=True)
 
-# ------------------------------------------------------------
-# Título e frase
-# ------------------------------------------------------------
 st.markdown("<h1 style='text-align: center;'>⚽ MyPredict 2.0</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #c0c0c0;'>"
             "“O futebol é a única coisa que me emociona mais do que a ciência.”<br>"
             "— Albert Einstein (adaptado)</p>", unsafe_allow_html=True)
 
-# ------------------------------------------------------------
-# Seletores
-# ------------------------------------------------------------
 lista_ligas = sorted(LEAGUES.keys())
 liga_nome = st.selectbox("Selecione a liga", lista_ligas, index=0)
 temporada = st.number_input("Temporada", min_value=2015, max_value=2026, value=2024)
 
-# Inicializa variáveis
 class_ant = None
 lista_times = []
 
-# Tenta carregar a classificação (sem travar a interface)
 with st.spinner("Carregando classificação..."):
     try:
         class_ant = classificação_anterior(liga_nome, temporada)
@@ -85,9 +66,8 @@ with st.spinner("Carregando classificação..."):
     except Exception as e:
         st.warning(f"Não foi possível carregar a classificação: {e}")
 
-# Se não conseguiu classificação, mostra campos de texto
 if not lista_times:
-    st.info("Digite os nomes dos times manualmente (ex.: 'Flamengo', 'Palmeiras').")
+    st.info("Digite os nomes dos times manualmente.")
     col1, col2 = st.columns(2)
     with col1:
         time_casa = st.text_input("Time da casa", value="Flamengo")
@@ -100,31 +80,23 @@ else:
     with col2:
         time_fora = st.selectbox("Time de fora", lista_times, index=min(1, len(lista_times)-1))
 
-# ------------------------------------------------------------
-# Botão de ação – sempre visível
-# ------------------------------------------------------------
 st.markdown("<br>", unsafe_allow_html=True)
 gerar = st.button("⚡ Gerar MyPredict", use_container_width=True)
 
-# ------------------------------------------------------------
-# Execução da análise
-# ------------------------------------------------------------
 if gerar:
     with st.spinner("Calculando..."):
         try:
             if not class_ant:
-                st.error("Classificação indisponível. Verifique a liga e temporada.")
+                st.error("Classificação indisponível.")
                 st.stop()
-
             prateleiras = gerar_prateleiras(liga_nome, temporada)
 
             dados_casa = obter_dados_ovrall_time(time_casa, liga_nome, temporada, class_ant)
             dados_fora = obter_dados_ovrall_time(time_fora, liga_nome, temporada, class_ant)
             if not dados_casa or not dados_fora:
-                st.error("Partidas não encontradas para um dos times.")
+                st.error("Partidas não encontradas.")
                 st.stop()
 
-            # IMA
             jogos_casa = obter_ultimos_jogos_com_heranca(time_casa, liga_nome, temporada, class_ant, n=20)
             rec_casa = extrair_recortes_ima(jogos_casa, True)
             jogos_fora = obter_ultimos_jogos_com_heranca(time_fora, liga_nome, temporada, class_ant, n=20)
@@ -176,39 +148,32 @@ if gerar:
             with col1:
                 st.metric("Vitória Casa", f"{p1:.1%}")
                 if recomendado(p1):
-                    st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>',
-                                unsafe_allow_html=True)
+                    st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>', unsafe_allow_html=True)
             with col2:
                 st.metric("Empate", f"{pX:.1%}")
                 if recomendado(pX):
-                    st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>',
-                                unsafe_allow_html=True)
+                    st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>', unsafe_allow_html=True)
             with col3:
                 st.metric("Vitória Fora", f"{p2:.1%}")
                 if recomendado(p2):
-                    st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>',
-                                unsafe_allow_html=True)
+                    st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>', unsafe_allow_html=True)
 
             st.markdown("---")
             col4, col5 = st.columns(2)
             with col4:
                 st.metric("Over 2.5 gols", f"{over25:.1%}" if over25 else "N/D")
                 if recomendado(over25):
-                    st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>',
-                                unsafe_allow_html=True)
+                    st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>', unsafe_allow_html=True)
                 st.metric("Gol no 1º tempo", f"{gol_ht:.1%}" if gol_ht else "N/D")
                 if recomendado(gol_ht):
-                    st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>',
-                                unsafe_allow_html=True)
+                    st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>', unsafe_allow_html=True)
             with col5:
                 st.metric("Ambas Marcam", f"{btts:.1%}" if btts else "N/D")
                 if recomendado(btts):
-                    st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>',
-                                unsafe_allow_html=True)
+                    st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>', unsafe_allow_html=True)
                 st.metric("Over Escanteios", f"{esc:.1%}" if esc else "N/D")
                 if recomendado(esc):
-                    st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>',
-                                unsafe_allow_html=True)
+                    st.markdown('<div class="selo-ouro">MYPREDICT<br>VALUE</div>', unsafe_allow_html=True)
 
             with st.expander("📊 Métricas detalhadas"):
                 c1, c2 = st.columns(2)
@@ -220,16 +185,6 @@ if gerar:
                     st.markdown(f"**{time_fora}**")
                     st.write(f"IMA: {ima_fora:.1f}")
                     st.write(f"MPV: {mpv_fora:.1f}")
-
-            avancados = any(
-                dados_casa.get(k) for k in ['xg_media', 'posse_media']
-            ) or any(
-                dados_fora.get(k) for k in ['xg_media', 'posse_media']
-            )
-            st.caption(
-                "📡 Dados avançados (FBref): " +
-                ("✅ carregados" if avancados else "⚠️ apenas dados básicos (gols/HT)")
-            )
 
         except Exception as e:
             st.error(f"Erro: {str(e)}")
