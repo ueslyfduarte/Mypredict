@@ -1,4 +1,4 @@
-# manual_app.py — MyPredict 2.0 (com autopreenchimento, prateleiras ajustáveis e vírgula)
+# manual_app.py — MyPredict 2.0 (com preenchimento em lote, prateleiras ajustáveis e vírgula)
 import streamlit as st
 from ratings import calcular_ima, calcular_ovrall, calcular_ic, calcular_mpv, obter_prateleira
 from markets import (
@@ -11,13 +11,31 @@ from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
 # Função auxiliar para converter string com vírgula em float
 # ------------------------------------------------------------
 def para_float(valor_str):
-    """Converte string com vírgula para float."""
     if valor_str is None or valor_str.strip() == "":
         return None
     try:
         return float(valor_str.replace(',', '.'))
     except ValueError:
         return None
+
+# ------------------------------------------------------------
+# Lista ordenada de métricas (usada para preenchimento em lote)
+# ------------------------------------------------------------
+METRICAS_OVRALL = [
+    "gols_media", "gols_sofridos_media", "xg_media", "xga_media",
+    "finalizacoes_alvo_media", "finalizacoes_alvo_sofridas_media",
+    "chutes_media", "desarmes_intercep_media", "posse_media",
+    "passes_certos_pct", "passes_chave_media", "assistencias_media",
+    "conversao", "clean_sheets_pct", "desvio_pontos", "desvio_gols_pro",
+    "desvio_gols_sofridos", "pontos_pos_desvantagem_media",
+    "gols_ultimos_15min_media", "pontos_apos_derrota_media",
+    "diff_aprov_casa_fora", "aprov_viradas_favor", "aprov_viradas_contra"
+]
+
+METRICAS_IC = [
+    "confronto_direto", "mesmo_escalao", "contra_escalao_adversario",
+    "fator_casa", "odds"
+]
 
 # ------------------------------------------------------------
 # CSS para colorir as colunas dos times
@@ -159,59 +177,114 @@ def show():
 
     st.divider()
     st.subheader("📈 OVRall – Estatísticas da Temporada")
-    st.markdown("Marque/desmarque os checkboxes para incluir ou ignorar cada métrica. Use **vírgula** como separador decimal (ex.: 1,42).")
-
+    modo_ovrall = st.radio("Modo de preenchimento", ["Manual", "Preencher em lote"], key="modo_ovrall")
+    
     ovrall_casa = {}
     ovrall_fora = {}
-
-    metricas_ovrall = [
-        ("Gols marcados (média)", "gols_media", "1.5"),
-        ("Gols sofridos (média)", "gols_sofridos_media", "1.0"),
-        ("xG (média)", "xg_media", "0.0"),
-        ("xGA (média)", "xga_media", "0.0"),
-        ("Finalizações no alvo (média)", "finalizacoes_alvo_media", "4.0"),
-        ("Finalizações no alvo sofridas (média)", "finalizacoes_alvo_sofridas_media", "3.0"),
-        ("Chutes totais (média)", "chutes_media", "12.0"),
-        ("Desarmes + Interceptações (média)", "desarmes_intercep_media", "15.0"),
-        ("Posse de bola (%)", "posse_media", "50.0"),
-        ("Passes certos (%)", "passes_certos_pct", "80.0"),
-        ("Passes-chave (média)", "passes_chave_media", "2.0"),
-        ("Assistências (média)", "assistencias_media", "1.0"),
-        ("Conversão de finalizações (%)", "conversao", "10.0"),
-        ("Jogos sem sofrer gols (%)", "clean_sheets_pct", "30.0"),
-        ("Desvio padrão dos pontos", "desvio_pontos", "1.0"),
-        ("Desvio padrão gols marcados", "desvio_gols_pro", "1.2"),
-        ("Desvio padrão gols sofridos", "desvio_gols_sofridos", "1.1"),
-        ("Pontos após sair atrás (média)", "pontos_pos_desvantagem_media", "0.5"),
-        ("Gols nos últimos 15 min (média)", "gols_ultimos_15min_media", "0.3"),
-        ("Pontos após derrota (média)", "pontos_apos_derrota_media", "1.0"),
-        ("Diferença aprovação casa-fora (%)", "diff_aprov_casa_fora", "10.0"),
-        ("Aproveitamento viradas a favor (%)", "aprov_viradas_favor", "20.0"),
-        ("Aproveitamento viradas contra (%)", "aprov_viradas_contra", "15.0"),
-    ]
-
-    for label, key, default in metricas_ovrall:
-        vc, vf = metrica_lado_a_lado(label, f"casa_{key}", f"fora_{key}", default)
-        ovrall_casa[key] = vc
-        ovrall_fora[key] = vf
+    
+    if modo_ovrall == "Manual":
+        st.markdown("Marque/desmarque os checkboxes para incluir ou ignorar cada métrica. Use **vírgula** como separador decimal (ex.: 1,42).")
+        metricas_ovrall_labels = [
+            ("Gols marcados (média)", "gols_media", "1.5"),
+            ("Gols sofridos (média)", "gols_sofridos_media", "1.0"),
+            ("xG (média)", "xg_media", "0.0"),
+            ("xGA (média)", "xga_media", "0.0"),
+            ("Finalizações no alvo (média)", "finalizacoes_alvo_media", "4.0"),
+            ("Finalizações no alvo sofridas (média)", "finalizacoes_alvo_sofridas_media", "3.0"),
+            ("Chutes totais (média)", "chutes_media", "12.0"),
+            ("Desarmes + Interceptações (média)", "desarmes_intercep_media", "15.0"),
+            ("Posse de bola (%)", "posse_media", "50.0"),
+            ("Passes certos (%)", "passes_certos_pct", "80.0"),
+            ("Passes-chave (média)", "passes_chave_media", "2.0"),
+            ("Assistências (média)", "assistencias_media", "1.0"),
+            ("Conversão de finalizações (%)", "conversao", "10.0"),
+            ("Jogos sem sofrer gols (%)", "clean_sheets_pct", "30.0"),
+            ("Desvio padrão dos pontos", "desvio_pontos", "1.0"),
+            ("Desvio padrão gols marcados", "desvio_gols_pro", "1.2"),
+            ("Desvio padrão gols sofridos", "desvio_gols_sofridos", "1.1"),
+            ("Pontos após sair atrás (média)", "pontos_pos_desvantagem_media", "0.5"),
+            ("Gols nos últimos 15 min (média)", "gols_ultimos_15min_media", "0.3"),
+            ("Pontos após derrota (média)", "pontos_apos_derrota_media", "1.0"),
+            ("Diferença aprovação casa-fora (%)", "diff_aprov_casa_fora", "10.0"),
+            ("Aproveitamento viradas a favor (%)", "aprov_viradas_favor", "20.0"),
+            ("Aproveitamento viradas contra (%)", "aprov_viradas_contra", "15.0"),
+        ]
+        for label, key, default in metricas_ovrall_labels:
+            vc, vf = metrica_lado_a_lado(label, f"casa_{key}", f"fora_{key}", default)
+            ovrall_casa[key] = vc
+            ovrall_fora[key] = vf
+    else:
+        st.markdown("Cole os valores para **todas as métricas OVRall** separados por vírgula. A ordem é:")
+        st.markdown("`" + ", ".join(METRICAS_OVRALL) + "`")
+        col_lote1, col_lote2 = st.columns(2)
+        with col_lote1:
+            st.markdown("**Time da casa**")
+            texto_lote_casa = st.text_area("Cole os valores do time da casa (23 números)", height=100, key="lote_casa_ovr")
+            if st.button("Preencher métricas da casa"):
+                partes = [x.strip() for x in texto_lote_casa.split(',')]
+                if len(partes) == len(METRICAS_OVRALL):
+                    for i, key in enumerate(METRICAS_OVRALL):
+                        ovrall_casa[key] = para_float(partes[i])
+                    st.success("Métricas da casa preenchidas!")
+                else:
+                    st.error(f"Precisa de {len(METRICAS_OVRALL)} valores, mas foram fornecidos {len(partes)}.")
+        with col_lote2:
+            st.markdown("**Time da fora**")
+            texto_lote_fora = st.text_area("Cole os valores do time da fora (23 números)", height=100, key="lote_fora_ovr")
+            if st.button("Preencher métricas da fora"):
+                partes = [x.strip() for x in texto_lote_fora.split(',')]
+                if len(partes) == len(METRICAS_OVRALL):
+                    for i, key in enumerate(METRICAS_OVRALL):
+                        ovrall_fora[key] = para_float(partes[i])
+                    st.success("Métricas da fora preenchidas!")
+                else:
+                    st.error(f"Precisa de {len(METRICAS_OVRALL)} valores, mas foram fornecidos {len(partes)}.")
 
     st.divider()
     st.subheader("🧠 IC – Fatores Contextuais")
+    modo_ic = st.radio("Modo de preenchimento", ["Manual", "Preencher em lote"], key="modo_ic")
+    
     ic_casa = {}
     ic_fora = {}
-
-    metricas_ic = [
-        ("Confronto direto (%)", "confronto_direto", "50.0"),
-        ("Mesmo escalão (%)", "mesmo_escalao", "50.0"),
-        ("Contra escalão adversário (%)", "contra_escalao_adversario", "50.0"),
-        ("Fator casa (%)", "fator_casa", "50.0"),
-        ("Odd (opcional)", "odds", "0.0"),
-    ]
-
-    for label, key, default in metricas_ic:
-        vc, vf = metrica_lado_a_lado(label, f"casa_{key}", f"fora_{key}", default)
-        ic_casa[key] = vc
-        ic_fora[key] = vf
+    
+    if modo_ic == "Manual":
+        metricas_ic_labels = [
+            ("Confronto direto (%)", "confronto_direto", "50.0"),
+            ("Mesmo escalão (%)", "mesmo_escalao", "50.0"),
+            ("Contra escalão adversário (%)", "contra_escalao_adversario", "50.0"),
+            ("Fator casa (%)", "fator_casa", "50.0"),
+            ("Odd (opcional)", "odds", "0.0"),
+        ]
+        for label, key, default in metricas_ic_labels:
+            vc, vf = metrica_lado_a_lado(label, f"casa_{key}", f"fora_{key}", default)
+            ic_casa[key] = vc
+            ic_fora[key] = vf
+    else:
+        st.markdown("Cole os valores para **todas as métricas IC** separados por vírgula. A ordem é:")
+        st.markdown("`" + ", ".join(METRICAS_IC) + "`")
+        col_lote1, col_lote2 = st.columns(2)
+        with col_lote1:
+            st.markdown("**Time da casa**")
+            texto_lote_casa_ic = st.text_area("Cole os valores do time da casa (5 números)", height=100, key="lote_casa_ic")
+            if st.button("Preencher métricas IC da casa"):
+                partes = [x.strip() for x in texto_lote_casa_ic.split(',')]
+                if len(partes) == len(METRICAS_IC):
+                    for i, key in enumerate(METRICAS_IC):
+                        ic_casa[key] = para_float(partes[i])
+                    st.success("Métricas IC da casa preenchidas!")
+                else:
+                    st.error(f"Precisa de {len(METRICAS_IC)} valores, mas foram fornecidos {len(partes)}.")
+        with col_lote2:
+            st.markdown("**Time da fora**")
+            texto_lote_fora_ic = st.text_area("Cole os valores do time da fora (5 números)", height=100, key="lote_fora_ic")
+            if st.button("Preencher métricas IC da fora"):
+                partes = [x.strip() for x in texto_lote_fora_ic.split(',')]
+                if len(partes) == len(METRICAS_IC):
+                    for i, key in enumerate(METRICAS_IC):
+                        ic_fora[key] = para_float(partes[i])
+                    st.success("Métricas IC da fora preenchidas!")
+                else:
+                    st.error(f"Precisa de {len(METRICAS_IC)} valores, mas foram fornecidos {len(partes)}.")
 
     st.divider()
     if st.button("Calcular MyPredict Manual"):
