@@ -163,7 +163,7 @@ st.markdown(f"""
 <div style="display: flex; justify-content: center;">
     <div class="usage-badge">
         <span class="usage-dot" style="background-color: {cor};"></span>
-        API: {uso}/{limite} requisições neste minuto
+        API: {uso}/{limite} requisições restantes hoje
     </div>
 </div>
 """, unsafe_allow_html=True)
