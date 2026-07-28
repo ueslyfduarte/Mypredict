@@ -1,4 +1,4 @@
-# manual_app.py — MyPredict 2.0 (entrada manual completa, estatísticas lado a lado)
+# manual_app.py — MyPredict 2.0 (métricas lado a lado com cores distintas)
 import streamlit as st
 from ratings import calcular_ima, calcular_ovrall, calcular_ic, calcular_mpv, obter_prateleira
 from markets import (
@@ -7,15 +7,52 @@ from markets import (
 )
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
 
-def metrica_dupla(label, key_casa, key_fora, valor_padrao=0.0, step=0.1, format="%.2f"):
-    """Exibe dois checkboxes + dois campos numéricos lado a lado."""
-    col1, col2 = st.columns(2)
-    ativo_casa = col1.checkbox(f"Casa", value=True, key=f"{key_casa}_ativo")
-    val_casa = col1.number_input(label, value=valor_padrao, step=step, format=format, key=f"{key_casa}_valor")
+# ------------------------------------------------------------
+# CSS para colorir as colunas dos times
+# ------------------------------------------------------------
+st.markdown("""
+<style>
+    .col-casa {
+        background-color: #1a1a1a;
+        border: 2px solid #ffd700;
+        border-radius: 12px;
+        padding: 12px;
+        margin-bottom: 10px;
+    }
+    .col-fora {
+        background-color: #1a1a1a;
+        border: 2px solid #c0c0c0;
+        border-radius: 12px;
+        padding: 12px;
+        margin-bottom: 10px;
+    }
+    .col-header {
+        color: #ffd700;
+        font-weight: 600;
+        text-align: center;
+        margin-bottom: 8px;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-    ativo_fora = col2.checkbox(f"Fora", value=True, key=f"{key_fora}_ativo")
-    val_fora = col2.number_input(label, value=valor_padrao, step=step, format=format, key=f"{key_fora}_valor")
-    return (val_casa if ativo_casa else None), (val_fora if ativo_fora else None)
+# ------------------------------------------------------------
+# Função auxiliar para exibir métrica em duas colunas
+# ------------------------------------------------------------
+def metrica_lado_a_lado(label, key_casa, key_fora, valor_padrao=0.0, step=0.1, format="%.2f"):
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown('<div class="col-casa">', unsafe_allow_html=True)
+        st.markdown(f'<div class="col-header">{label}</div>', unsafe_allow_html=True)
+        ativo = st.checkbox("Ativar", value=True, key=f"{key_casa}_ativo")
+        val = st.number_input("Valor", value=valor_padrao, step=step, format=format, key=f"{key_casa}_valor")
+        st.markdown('</div>', unsafe_allow_html=True)
+    with col2:
+        st.markdown('<div class="col-fora">', unsafe_allow_html=True)
+        st.markdown(f'<div class="col-header">{label}</div>', unsafe_allow_html=True)
+        ativo_f = st.checkbox("Ativar", value=True, key=f"{key_fora}_ativo")
+        val_f = st.number_input("Valor", value=valor_padrao, step=step, format=format, key=f"{key_fora}_valor")
+        st.markdown('</div>', unsafe_allow_html=True)
+    return (val if ativo else None), (val_f if ativo_f else None)
 
 def show():
     st.title("MyPredict 2.0 – Modo Manual")
@@ -66,7 +103,6 @@ def show():
     ovrall_casa = {}
     ovrall_fora = {}
 
-    # Lista de métricas com seus defaults
     metricas_ovrall = [
         ("Gols marcados (média)", "gols_media", 1.5),
         ("Gols sofridos (média)", "gols_sofridos_media", 1.0),
@@ -97,7 +133,7 @@ def show():
         default = rest[0] if rest else 0.0
         step = rest[1] if len(rest) > 1 else 0.1
         fmt = rest[2] if len(rest) > 2 else "%.2f"
-        vc, vf = metrica_dupla(label, f"casa_{key}", f"fora_{key}", default, step, fmt)
+        vc, vf = metrica_lado_a_lado(label, f"casa_{key}", f"fora_{key}", default, step, fmt)
         ovrall_casa[key] = vc
         ovrall_fora[key] = vf
 
@@ -118,7 +154,7 @@ def show():
         default = rest[0] if rest else 0.0
         step = rest[1] if len(rest) > 1 else 0.1
         fmt = rest[2] if len(rest) > 2 else "%.2f"
-        vc, vf = metrica_dupla(label, f"casa_{key}", f"fora_{key}", default, step, fmt)
+        vc, vf = metrica_lado_a_lado(label, f"casa_{key}", f"fora_{key}", default, step, fmt)
         ic_casa[key] = vc
         ic_fora[key] = vf
 
@@ -140,7 +176,6 @@ def show():
         ima_fora = calcular_ima(time_fora, rec_fora['10G'], rec_fora['5G'], rec_fora['3G'],
                                 rec_fora['5CF'], rec_fora['3CF'], prateleiras)
 
-        # OVRall: usa os dois times como referência da liga
         dados_liga = {k: [ovrall_casa.get(k, 0) or 0, ovrall_fora.get(k, 0) or 0] for k in set(ovrall_casa) | set(ovrall_fora)}
         ovrall_val_casa = calcular_ovrall(ovrall_casa, dados_liga)
         ovrall_val_fora = calcular_ovrall(ovrall_fora, dados_liga)
