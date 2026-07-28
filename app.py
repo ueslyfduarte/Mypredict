@@ -1,4 +1,4 @@
-# app.py — MyPredict 2.0 (API-Football v3, sem busca automática, contador de uso, layout premium)
+# app.py — MyPredict 2.0 (dropdown automático de times, API-Football v3)
 import streamlit as st
 from data_loader import (
     gerar_prateleiras, obter_ultimos_jogos_com_heranca, extrair_recortes_ima,
@@ -18,7 +18,7 @@ from data_source_api_football import listar_ligas, listar_temporadas, get_api_us
 st.set_page_config(page_title="MyPredict 2.0", layout="wide")
 
 # ------------------------------------------------------------
-# CSS premium (preto, prata, dourado com cartões e sombras)
+# CSS premium (preto, prata, dourado)
 # ------------------------------------------------------------
 st.markdown("""
 <style>
@@ -100,12 +100,6 @@ st.markdown("""
         border-radius: 10px;
         color: #ffd700;
     }
-    .stTextInput > div > div > input {
-        background: rgba(30,30,30,0.9);
-        border: 1px solid #444;
-        border-radius: 10px;
-        color: #c0c0c0;
-    }
     .usage-badge {
         background: rgba(30,30,30,0.8);
         border: 1px solid #ffd700;
@@ -128,12 +122,13 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ------------------------------------------------------------
-# Controle de estado para ligas (carregar apenas uma vez)
+# Estado inicial das ligas
 # ------------------------------------------------------------
 if 'ligas_carregadas' not in st.session_state:
     st.session_state.ligas_carregadas = False
     st.session_state.lista_ligas = []
     st.session_state.temporadas = {}
+    st.session_state.classificacao_cache = {}  # para times
 
 if not st.session_state.ligas_carregadas:
     with st.spinner("Conectando à API-Football..."):
@@ -151,7 +146,6 @@ if not st.session_state.ligas_carregadas:
 # ------------------------------------------------------------
 uso, limite = get_api_usage()
 porcentagem = uso / limite
-
 if porcentagem < 0.5:
     cor = "#00ff7f"
 elif porcentagem < 0.8:
@@ -175,7 +169,7 @@ st.markdown("<div class='main-title'>⚽ MyPredict 2.0</div>", unsafe_allow_html
 st.markdown("<div class='quote'>“O futebol é a única coisa que me emociona mais do que a ciência.”<br>— Albert Einstein (adaptado)</div>", unsafe_allow_html=True)
 
 # ------------------------------------------------------------
-# Seletores (agora apenas interface, sem chamadas à API)
+# Seletores de liga e temporada
 # ------------------------------------------------------------
 col_liga, col_temp = st.columns([2, 1])
 with col_liga:
@@ -198,12 +192,39 @@ with col_temp:
     else:
         temporada = st.number_input("Temporada", value=2024)
 
-# Times: campos de texto (sem busca automática)
+# ------------------------------------------------------------
+# Carregar times da classificação (automático)
+# ------------------------------------------------------------
+times_disponiveis = []
+if liga_nome and temporada:
+    chave_class = f"{liga_nome}_{temporada}"
+    if chave_class not in st.session_state.classificacao_cache:
+        with st.spinner("Carregando times..."):
+            try:
+                class_ant = classificação_anterior(liga_nome, temporada)
+                if class_ant:
+                    st.session_state.classificacao_cache[chave_class] = sorted(class_ant.values())
+                else:
+                    st.session_state.classificacao_cache[chave_class] = []
+            except Exception as e:
+                st.warning(f"Não foi possível carregar os times: {e}")
+                st.session_state.classificacao_cache[chave_class] = []
+    times_disponiveis = st.session_state.classificacao_cache.get(chave_class, [])
+
+# ------------------------------------------------------------
+# Seleção dos times (dropdown)
+# ------------------------------------------------------------
 col1, col2 = st.columns(2)
 with col1:
-    time_casa = st.text_input("Time da casa", value="Flamengo")
+    if times_disponiveis:
+        time_casa = st.selectbox("Time da casa", times_disponiveis)
+    else:
+        time_casa = st.text_input("Time da casa", value="Arsenal")
 with col2:
-    time_fora = st.text_input("Time de fora", value="Palmeiras")
+    if times_disponiveis:
+        time_fora = st.selectbox("Time de fora", times_disponiveis, index=min(1, len(times_disponiveis)-1))
+    else:
+        time_fora = st.text_input("Time de fora", value="Manchester United")
 
 # ------------------------------------------------------------
 # Botão de ação – sempre visível
@@ -216,7 +237,12 @@ gerar = st.button("⚡ Gerar MyPredict", use_container_width=True)
 if gerar:
     with st.spinner("Calculando..."):
         try:
-            class_ant = classificação_anterior(liga_nome, temporada)
+            # Garantir que a classificação está carregada
+            if not times_disponiveis:
+                class_ant = classificação_anterior(liga_nome, temporada)
+            else:
+                class_ant = classificação_anterior(liga_nome, temporada)  # já está em cache
+
             if not class_ant:
                 st.error(f"Classificação não disponível para {liga_nome} {temporada}.")
                 st.stop()
