@@ -57,6 +57,9 @@ def injetar_css():
     </style>
     """, unsafe_allow_html=True)
 
+# ------------------------------------------------------------
+# ROSTO AUTOMÁTICO
+# ------------------------------------------------------------
 def tela_automatico(lista_ligas, temporadas, times_carregados, uso_api, limite_api, msg_erro, resultados):
     st.set_page_config(page_title="MyPredict 2.0", layout="wide")
     injetar_css()
@@ -147,6 +150,9 @@ def tela_automatico(lista_ligas, temporadas, times_carregados, uso_api, limite_a
 
     return liga_nome, temporada, time_casa, time_fora, buscar, gerar, chave_times
 
+# ------------------------------------------------------------
+# ROSTO MANUAL
+# ------------------------------------------------------------
 def tela_manual(dados_state):
     st.set_page_config(page_title="MyPredict 2.0 – Manual", layout="centered")
     injetar_css()
@@ -190,7 +196,7 @@ def tela_manual(dados_state):
                     st.write(f"{j['resultado']} x {j['adversario']} {'(C)' if j['mandante'] else '(F)'}")
                 st.markdown('</div>', unsafe_allow_html=True)
     else:
-        # Modo manual com campos (omitido por brevidade, idêntico ao anterior)
+        # Modo manual com campos (idêntico ao anterior)
         c1, c2 = st.columns(2)
         with c1: st.text_input("Time da Casa", value=dados_state.get('time_casa', 'Flamengo'), key="time_casa")
         with c2: st.text_input("Time da Fora", value=dados_state.get('time_fora', 'Palmeiras'), key="time_fora")
