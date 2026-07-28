@@ -1,5 +1,5 @@
-# data_source_fbref_pro.py — MyPredict 2.0 (proxy + fallback worldfootball)
-import time, random, requests, pandas as pd
+# data_source_fbref_pro.py — MyPredict 2.0 (cloudscraper unificado)
+import time, random, cloudscraper, pandas as pd
 from io import StringIO
 from pathlib import Path
 import json
@@ -8,17 +8,6 @@ from bs4 import BeautifulSoup
 
 CACHE_DIR = Path('cache/fbref_pro')
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-# Proxies públicos (atualize periodicamente se necessário)
-PROXY_LIST = [
-    "http://50.168.163.176:8080",
-    "http://154.65.39.8:8080",
-    "http://103.149.162.194:8080",
-]
-
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-}
 
 # Mapeamento worldfootball (fallback)
 WF_LEAGUES = {
@@ -35,7 +24,7 @@ WF_LEAGUES = {
     "Série B": "bra-serie-b",
 }
 
-# Mapeamento FBref (códigos) – tentado primeiro com proxy
+# Mapeamento FBref (códigos) – tentado primeiro com cloudscraper
 FBREF_LEAGUES = {
     "Brasileirão":          {"cod": 24, "slug": "Serie-A"},
     "Premier League":       {"cod": 9,  "slug": "Premier-League"},
@@ -60,24 +49,19 @@ def _cache_escrever(chave, dados):
     with open(CACHE_DIR / f"{chave}.json", 'w', encoding='utf-8') as f:
         json.dump(dados, f, ensure_ascii=False, indent=2, default=str)
 
-def _baixar_fbref(url):
-    for proxy in PROXY_LIST:
+def _baixar(url):
+    """Baixa uma URL usando cloudscraper para furar bloqueios."""
+    scraper = cloudscraper.create_scraper()
+    for tentativa in range(3):
         try:
-            time.sleep(random.uniform(2, 4))
-            resp = requests.get(url, headers=HEADERS, proxies={"http": proxy, "https": proxy}, timeout=15)
+            time.sleep(random.uniform(4, 8))
+            resp = scraper.get(url, timeout=30)
             resp.raise_for_status()
             return resp.text
-        except: continue
-    time.sleep(random.uniform(4, 6))
-    resp = requests.get(url, headers=HEADERS, timeout=30)
-    resp.raise_for_status()
-    return resp.text
-
-def _baixar_wf(url):
-    time.sleep(random.uniform(2, 4))
-    resp = requests.get(url, headers=HEADERS, timeout=30)
-    resp.raise_for_status()
-    return resp.text
+        except Exception as e:
+            if tentativa == 2:
+                raise ConnectionError(f"Falha ao acessar {url}") from e
+            time.sleep(2 ** tentativa)
 
 # ------------------------------------------------------------
 # Função comum para extrair jogos do worldfootball
@@ -176,7 +160,7 @@ def _extrair_jogos_fbref(df, time):
 # Funções de classificação
 # ------------------------------------------------------------
 def obter_classificacao(liga_nome, temporada):
-    # 1. Tenta FBref com proxy
+    # 1. Tenta FBref com cloudscraper
     info_fb = FBREF_LEAGUES.get(liga_nome)
     if info_fb:
         cod = info_fb["cod"]
@@ -185,7 +169,7 @@ def obter_classificacao(liga_nome, temporada):
         if cached: return {int(k): v for k, v in cached.items()}
         try:
             url = f"https://fbref.com/en/comps/{cod}/{temporada}/"
-            html_str = _baixar_fbref(url)
+            html_str = _baixar(url)
             soup = BeautifulSoup(html_str, 'html.parser')
             table = None
             for tbl in soup.find_all('table', class_='stats_table'):
@@ -207,14 +191,14 @@ def obter_classificacao(liga_nome, temporada):
                     return classif
         except: pass
 
-    # 2. Fallback worldfootball
+    # 2. Fallback worldfootball com cloudscraper
     slug = WF_LEAGUES.get(liga_nome)
     if not slug: raise ValueError(f"Liga '{liga_nome}' não suportada.")
     chave = f"class_wf_{slug}_{temporada}"
     cached = _cache_ler(chave)
     if cached: return {int(k): v for k, v in cached.items()}
     url = f"https://www.worldfootball.net/table/{slug}-{temporada}/"
-    html_str = _baixar_wf(url)
+    html_str = _baixar(url)
     dfs = pd.read_html(StringIO(html_str), flavor='html.parser')
     classif = {}
     for df in dfs:
@@ -234,7 +218,7 @@ def obter_classificacao(liga_nome, temporada):
 # Funções de partidas
 # ------------------------------------------------------------
 def obter_partidas_time(liga_nome, temporada, time):
-    # 1. Tenta FBref com proxy
+    # 1. Tenta FBref com cloudscraper
     info_fb = FBREF_LEAGUES.get(liga_nome)
     if info_fb:
         cod = info_fb["cod"]
@@ -243,7 +227,7 @@ def obter_partidas_time(liga_nome, temporada, time):
         if cached: return cached
         try:
             url = f"https://fbref.com/en/comps/{cod}/{temporada}/schedule/{temporada}-{cod}-Scores-and-Fixtures"
-            html_str = _baixar_fbref(url)
+            html_str = _baixar(url)
             soup = BeautifulSoup(html_str, 'html.parser')
             table = soup.find('table', class_='stats_table')
             if table:
@@ -256,14 +240,14 @@ def obter_partidas_time(liga_nome, temporada, time):
                     return jogos
         except: pass
 
-    # 2. Fallback worldfootball
+    # 2. Fallback worldfootball com cloudscraper
     slug = WF_LEAGUES.get(liga_nome)
     if not slug: raise ValueError(f"Liga '{liga_nome}' não suportada.")
     chave = f"partidas_wf_{slug}_{temporada}_{time}"
     cached = _cache_ler(chave)
     if cached: return cached
     url = f"https://www.worldfootball.net/schedule/{slug}-{temporada}/"
-    html_str = _baixar_wf(url)
+    html_str = _baixar(url)
     jogos = _extrair_jogos_wf(html_str, time)
     if jogos:
         _cache_escrever(chave, jogos)
