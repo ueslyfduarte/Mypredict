@@ -1,4 +1,4 @@
-# manual_app.py — MyPredict 2.0 (corrigido)
+# manual_app.py — MyPredict 2.0 (inicialização completa de estado)
 import streamlit as st
 from ratings import calcular_ima, calcular_ovrall, calcular_ic, calcular_mpv, obter_prateleira
 from markets import (
@@ -46,28 +46,34 @@ def show():
     st.title("MyPredict 2.0 – Modo Manual")
     st.markdown("Preencha **todos** os campos abaixo. Só clique em **Calcular** quando os dados estiverem completos.")
 
-    if 'dados_processados' not in st.session_state:
-        st.session_state.dados_processados = False
-        st.session_state.jogos_casa = []
-        st.session_state.jogos_fora = []
-        st.session_state.ovrall_casa = {}
-        st.session_state.ovrall_fora = {}
-        st.session_state.ic_casa = {}
-        st.session_state.ic_fora = {}
-        st.session_state.time_casa = "Flamengo"
-        st.session_state.time_fora = "Palmeiras"
-        st.session_state.pos_casa = 1
-        st.session_state.pos_fora = 2
-        st.session_state.prateleiras_extra = {}
-        st.session_state.media_gols_casa = MEDIA_GOLS_CASA_LIGA
-        st.session_state.media_gols_fora = MEDIA_GOLS_FORA_LIGA
-        st.session_state.media_ht_casa = 0.75
-        st.session_state.media_ht_fora = 0.65
-        st.session_state.media_esc_casa = 5.0
-        st.session_state.media_esc_fora = 4.5
+    # Inicialização OBRIGATÓRIA de todas as chaves usadas
+    defaults = {
+        'dados_processados': False,
+        'jogos_casa': [],
+        'jogos_fora': [],
+        'ovrall_casa': {},
+        'ovrall_fora': {},
+        'ic_casa': {},
+        'ic_fora': {},
+        'time_casa': "Flamengo",
+        'time_fora': "Palmeiras",
+        'pos_casa': 1,
+        'pos_fora': 2,
+        'prateleiras_extra': {},
+        'media_gols_casa': MEDIA_GOLS_CASA_LIGA,
+        'media_gols_fora': MEDIA_GOLS_FORA_LIGA,
+        'media_ht_casa': 0.75,
+        'media_ht_fora': 0.65,
+        'media_esc_casa': 5.0,
+        'media_esc_fora': 4.5,
+    }
+    for chave, valor in defaults.items():
+        if chave not in st.session_state:
+            st.session_state[chave] = valor
 
     entrada = st.radio("Modo de entrada", ["Preenchimento Manual", "Colar resposta da IA"])
 
+    # ---------- MODO COLAR RESPOSTA DA IA ----------
     if entrada == "Colar resposta da IA":
         st.subheader("📥 Cole aqui a resposta completa da IA")
         texto = st.text_area("Resposta da IA", height=300)
@@ -82,8 +88,8 @@ def show():
             ic_fora = {}
             pos_casa = 1
             pos_fora = 2
-            time_casa = ""
-            time_fora = ""
+            time_casa = "Flamengo"
+            time_fora = "Palmeiras"
             prateleiras_extra = {}
             media_gols_casa = MEDIA_GOLS_CASA_LIGA
             media_gols_fora = MEDIA_GOLS_FORA_LIGA
