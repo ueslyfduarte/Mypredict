@@ -45,7 +45,9 @@ else:
         'media_gols_casa': MEDIA_GOLS_CASA_LIGA, 'media_gols_fora': MEDIA_GOLS_FORA_LIGA,
         'media_ht_casa': 0.75, 'media_ht_fora': 0.65,
         'media_esc_casa': 5.0, 'media_esc_fora': 4.5,
-        'prateleiras_extra': {}
+        'prateleiras_extra': {},
+        'ia_text': "",
+        'processar_click': False
     }
     for k, v in defaults.items():
         if k not in st.session_state:
