@@ -1,4 +1,4 @@
-# ui_manual.py — MyPredict 2.0 (interface manual separada)
+# ui_manual.py — MyPredict 2.0 (com fallback de extração de jogos)
 import streamlit as st
 from ratings import calcular_ima, calcular_ovrall, calcular_ic, calcular_mpv, obter_prateleira
 from markets import (
@@ -15,24 +15,11 @@ def para_float(valor_str):
     except ValueError:
         return None
 
-# CSS para setas e selos
 st.markdown("""
 <style>
-    .selo-dourado {
-        background: linear-gradient(145deg, #ffd700, #b8860b);
-        color: #0e1117; font-weight: 900; text-align: center;
-        border-radius: 50%; width: 80px; height: 80px;
-        display: flex; align-items: center; justify-content: center;
-        margin: 10px auto; font-size: 12px; box-shadow: 0 0 20px #ffd700;
-    }
-    .selo-verde {
-        background: #00ff7f; color: #0e1117; font-weight: 700;
-        text-align: center; border-radius: 20px; padding: 4px 12px; margin: 5px;
-    }
-    .selo-amarelo {
-        background: #ffaa00; color: #0e1117; font-weight: 700;
-        text-align: center; border-radius: 20px; padding: 4px 12px; margin: 5px;
-    }
+    .selo-dourado { background: linear-gradient(145deg, #ffd700, #b8860b); color: #0e1117; font-weight: 900; text-align: center; border-radius: 50%; width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; margin: 10px auto; font-size: 12px; box-shadow: 0 0 20px #ffd700; }
+    .selo-verde { background: #00ff7f; color: #0e1117; font-weight: 700; text-align: center; border-radius: 20px; padding: 4px 12px; margin: 5px; }
+    .selo-amarelo { background: #ffaa00; color: #0e1117; font-weight: 700; text-align: center; border-radius: 20px; padding: 4px 12px; margin: 5px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -43,25 +30,35 @@ def indicador(prob):
     elif prob >= 0.45: return "➖", "selo-amarelo"
     else: return "⬇️", ""
 
+def extrair_jogos_de_texto(texto):
+    """Varre todo o texto em busca de linhas que contenham 3 partes separadas por vírgula,
+    onde a primeira é V/E/D e a terceira é S ou N."""
+    jogos = []
+    for linha in texto.split('\n'):
+        linha = linha.strip()
+        if not linha: continue
+        partes = [p.strip() for p in linha.split(',')]
+        if len(partes) == 3:
+            if partes[0] in ('V', 'E', 'D') and partes[2].upper() in ('S', 'N'):
+                jogos.append({"resultado": partes[0], "adversario": partes[1], "mandante": partes[2].upper() == 'S'})
+    return jogos
+
 def show():
-    # Inicializa todas as variáveis que serão usadas
-    if 'time_casa' not in st.session_state: st.session_state.time_casa = "Flamengo"
-    if 'time_fora' not in st.session_state: st.session_state.time_fora = "Palmeiras"
-    if 'pos_casa' not in st.session_state: st.session_state.pos_casa = 1
-    if 'pos_fora' not in st.session_state: st.session_state.pos_fora = 2
-    if 'jogos_casa' not in st.session_state: st.session_state.jogos_casa = []
-    if 'jogos_fora' not in st.session_state: st.session_state.jogos_fora = []
-    if 'ovrall_casa' not in st.session_state: st.session_state.ovrall_casa = {}
-    if 'ovrall_fora' not in st.session_state: st.session_state.ovrall_fora = {}
-    if 'ic_casa' not in st.session_state: st.session_state.ic_casa = {}
-    if 'ic_fora' not in st.session_state: st.session_state.ic_fora = {}
-    if 'media_gols_casa' not in st.session_state: st.session_state.media_gols_casa = MEDIA_GOLS_CASA_LIGA
-    if 'media_gols_fora' not in st.session_state: st.session_state.media_gols_fora = MEDIA_GOLS_FORA_LIGA
-    if 'media_ht_casa' not in st.session_state: st.session_state.media_ht_casa = 0.75
-    if 'media_ht_fora' not in st.session_state: st.session_state.media_ht_fora = 0.65
-    if 'media_esc_casa' not in st.session_state: st.session_state.media_esc_casa = 5.0
-    if 'media_esc_fora' not in st.session_state: st.session_state.media_esc_fora = 4.5
-    if 'prateleiras_extra' not in st.session_state: st.session_state.prateleiras_extra = {}
+    # Inicializa todas as variáveis de estado
+    defaults = {
+        'time_casa': "Flamengo", 'time_fora': "Palmeiras",
+        'pos_casa': 1, 'pos_fora': 2,
+        'jogos_casa': [], 'jogos_fora': [],
+        'ovrall_casa': {}, 'ovrall_fora': {},
+        'ic_casa': {}, 'ic_fora': {},
+        'media_gols_casa': MEDIA_GOLS_CASA_LIGA, 'media_gols_fora': MEDIA_GOLS_FORA_LIGA,
+        'media_ht_casa': 0.75, 'media_ht_fora': 0.65,
+        'media_esc_casa': 5.0, 'media_esc_fora': 4.5,
+        'prateleiras_extra': {}
+    }
+    for chave, valor in defaults.items():
+        if chave not in st.session_state:
+            st.session_state[chave] = valor
 
     st.title("MyPredict 2.0 – Modo Manual")
     entrada = st.radio("Método de entrada", ["Preenchimento Manual", "Colar resposta da IA"])
@@ -71,8 +68,10 @@ def show():
         texto = st.text_area("Resposta da IA", height=300, key="ia_text")
         if st.button("Processar dados"):
             if texto.strip():
-                # Divide em blocos por linha em branco
+                # Tenta dividir em blocos por linha em branco
                 blocos = texto.strip().split('\n\n')
+                jogos_casa_encontrados = False
+                jogos_fora_encontrados = False
                 for bloco in blocos:
                     linhas = bloco.strip().split('\n')
                     if not linhas: continue
@@ -93,16 +92,20 @@ def show():
                         jogos = []
                         for l in linhas[1:]:
                             partes = [p.strip() for p in l.split(',')]
-                            if len(partes) == 3:
+                            if len(partes) == 3 and partes[0] in ('V','E','D') and partes[2].upper() in ('S','N'):
                                 jogos.append({"resultado": partes[0], "adversario": partes[1], "mandante": partes[2].upper() == 'S'})
-                        st.session_state.jogos_casa = jogos
+                        if jogos:
+                            st.session_state.jogos_casa = jogos
+                            jogos_casa_encontrados = True
                     elif primeira.startswith('3. Últimos 10 jogos do time da fora:'):
                         jogos = []
                         for l in linhas[1:]:
                             partes = [p.strip() for p in l.split(',')]
-                            if len(partes) == 3:
+                            if len(partes) == 3 and partes[0] in ('V','E','D') and partes[2].upper() in ('S','N'):
                                 jogos.append({"resultado": partes[0], "adversario": partes[1], "mandante": partes[2].upper() == 'S'})
-                        st.session_state.jogos_fora = jogos
+                        if jogos:
+                            st.session_state.jogos_fora = jogos
+                            jogos_fora_encontrados = True
                     elif primeira.startswith('4. Métricas OVRall do time da casa'):
                         chaves = ["gols_media","gols_sofridos_media","xg_media","xga_media",
                                   "finalizacoes_alvo_media","finalizacoes_alvo_sofridas_media",
@@ -148,15 +151,27 @@ def show():
                                 adv, prat_val = l.split(':',1)
                                 prat[adv.strip()] = prat_val.strip()
                         st.session_state.prateleiras_extra = prat
+
+                # FALLBACK: se não encontrou jogos suficientes, tenta extrair de todo o texto
+                if not jogos_casa_encontrados or not jogos_fora_encontrados:
+                    todos_jogos = extrair_jogos_de_texto(texto)
+                    if len(todos_jogos) >= 20:
+                        st.session_state.jogos_casa = todos_jogos[:10]
+                        st.session_state.jogos_fora = todos_jogos[10:20]
+                    elif len(todos_jogos) >= 10:
+                        # Assume que são apenas de um time (incomum, mas evita zero)
+                        if not jogos_casa_encontrados:
+                            st.session_state.jogos_casa = todos_jogos[:10]
+                        if not jogos_fora_encontrados:
+                            st.session_state.jogos_fora = todos_jogos[:10]  # mesmo assim não ideal
+
                 st.success("Dados processados!")
                 st.rerun()
             else:
                 st.error("Por favor, cole a resposta da IA.")
-
-        # Exibe os dados carregados
         st.success("Dados carregados. Clique em Calcular para ver os resultados.")
     else:
-        # MODO MANUAL
+        # MODO MANUAL (mesmo código anterior, mantido)
         c1, c2 = st.columns(2)
         with c1: st.session_state.time_casa = st.text_input("Time da Casa", value=st.session_state.time_casa)
         with c2: st.session_state.time_fora = st.text_input("Time da Fora", value=st.session_state.time_fora)
@@ -250,7 +265,7 @@ def show():
             st.session_state.media_ht_fora = st.number_input("Média gols HT fora", value=st.session_state.media_ht_fora)
             st.session_state.media_esc_fora = st.number_input("Média escanteios fora", value=st.session_state.media_esc_fora)
 
-    # ---------- CÁLCULO (comum a ambos os modos) ----------
+    # ---------- CÁLCULO (comum) ----------
     if st.button("Calcular MyPredict Manual"):
         if len(st.session_state.jogos_casa) < 10 or len(st.session_state.jogos_fora) < 10:
             st.error(f"Foram encontrados {len(st.session_state.jogos_casa)} jogos para o time da casa e {len(st.session_state.jogos_fora)} para o time da fora. São necessários 10 de cada.")
@@ -259,7 +274,6 @@ def show():
             st.error("Métricas OVRall não encontradas.")
             st.stop()
 
-        # Prateleiras
         prat_casa = obter_prateleira(st.session_state.pos_casa)
         prat_fora = obter_prateleira(st.session_state.pos_fora)
         prateleiras = {st.session_state.time_casa: prat_casa, st.session_state.time_fora: prat_fora}
@@ -270,7 +284,6 @@ def show():
             if adv in prateleiras:
                 prateleiras[adv] = prat
 
-        # IMA
         rec_casa = {
             '10G': st.session_state.jogos_casa[:10], '5G': st.session_state.jogos_casa[:5], '3G': st.session_state.jogos_casa[:3],
             '5CF': [j for j in st.session_state.jogos_casa if j['mandante']][:5],
@@ -289,16 +302,13 @@ def show():
                                 rec_fora['10G'], rec_fora['5G'], rec_fora['3G'],
                                 rec_fora['5CF'], rec_fora['3CF'], prateleiras)
 
-        # OVRall
         dados_liga = {k: [st.session_state.ovrall_casa.get(k, 0) or 0, st.session_state.ovrall_fora.get(k, 0) or 0] for k in set(st.session_state.ovrall_casa) | set(st.session_state.ovrall_fora)}
         ovrall_val_casa = calcular_ovrall(st.session_state.ovrall_casa, dados_liga)
         ovrall_val_fora = calcular_ovrall(st.session_state.ovrall_fora, dados_liga)
 
-        # IC
         ic_val_casa = calcular_ic(st.session_state.ic_casa)
         ic_val_fora = calcular_ic(st.session_state.ic_fora)
 
-        # MPV
         mpv_casa = calcular_mpv(ima_casa, ovrall_val_casa, ic_val_casa)
         mpv_fora = calcular_mpv(ima_fora, ovrall_val_fora, ic_val_fora)
 
