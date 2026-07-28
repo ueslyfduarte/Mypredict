@@ -1,7 +1,6 @@
-# data_loader.py — MyPredict 2.0
 from statistics import stdev, mean
 from config import JOGOS_BASE_OVRALL, POS_REF_PROMOVIDO, POS_REF_REBAIXADO, PONTOS_BASE
-from data_source_fbref_selenium import (
+from data_source_football_api import (
     obter_classificacao,
     obter_partidas_time,
     obter_stats_time
@@ -92,54 +91,41 @@ def extrair_recortes_ima(jogos, time_mandante):
 
 def _media(lista):
     return mean(lista) if lista else None
-
 def _desvio(lista):
     return stdev(lista) if len(lista) > 1 else 0.0
-
 def _aproveitamento(jogos):
-    if not jogos:
-        return None
+    if not jogos: return None
     pontos = sum(PONTOS_BASE[j['resultado']] for j in jogos)
     return (pontos / (len(jogos)*3)) * 100
-
 def _gols_ultimos_15min(jogos):
     gols = [j.get('gols_ultimos_15', 0) for j in jogos]
     return _media(gols)
-
 def _pontos_pos_desvantagem(jogos):
     desv = [j for j in jogos if j.get('ht_placar') and j['ht_placar'][0] < j['ht_placar'][1]]
     return _aproveitamento(desv)
-
 def _pontos_apos_derrota(jogos):
     return None
-
 def _diff_casa_fora(jogos):
     casa = [j for j in jogos if j['mandante']]
     fora = [j for j in jogos if not j['mandante']]
     ap_casa = _aproveitamento(casa) if casa else 0
     ap_fora = _aproveitamento(fora) if fora else 0
     return ap_casa - ap_fora
-
 def _aprov_viradas_favor(jogos):
     desv = [j for j in jogos if j.get('ht_placar') and j['ht_placar'][0] < j['ht_placar'][1]]
     return _aproveitamento(desv)
-
 def _aprov_viradas_contra(jogos):
     vant = [j for j in jogos if j.get('ht_placar') and j['ht_placar'][0] > j['ht_placar'][1]]
-    if not vant:
-        return None
+    if not vant: return None
     pontos_obtidos = sum(PONTOS_BASE[j['resultado']] for j in vant)
     max_pontos = len(vant)*3
     return ((max_pontos - pontos_obtidos)/max_pontos)*100
-
 def _gols_ht_media(jogos):
     gols_ht = [j['ht_placar'][0] for j in jogos if j.get('ht_placar')]
     return _media(gols_ht)
-
 def _gols_ht_sofridos_media(jogos):
     gols_ht = [j['ht_placar'][1] for j in jogos if j.get('ht_placar')]
     return _media(gols_ht)
-
 def _escanteios_media(jogos, chave='escanteios'):
     valores = [j.get(chave) for j in jogos if j.get(chave) is not None]
     return _media(valores)
