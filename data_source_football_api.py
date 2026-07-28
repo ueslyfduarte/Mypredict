@@ -1,13 +1,11 @@
-# data_source_football_api.py — MyPredict 2.0 (API + Streamlit Secrets)
+# data_source_football_api.py — MyPredict 2.0 (corrigido)
 import time
 import requests
 from pathlib import Path
 import json
-
-# Lê a chave do ambiente ou dos secrets do Streamlit Cloud
 import os
-API_KEY = os.environ.get("FOOTBALL_API_KEY")
 
+API_KEY = os.environ.get("FOOTBALL_API_KEY")
 if API_KEY is None:
     try:
         import streamlit as st
@@ -20,7 +18,6 @@ HEADERS = {"X-Auth-Token": API_KEY}
 CACHE_DIR = Path("cache/football_api")
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-# Mapeamento de nome amigável → código da API
 LEAGUES = {
     "Brasileirão": "BSA",
     "Premier League": "PL",
@@ -36,8 +33,7 @@ LEAGUES = {
 def _cache_ler(chave):
     arq = CACHE_DIR / f"{chave}.json"
     if arq.exists():
-        with open(arq, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        with open(arq, 'r', encoding='utf-8') as f: return json.load(f)
     return None
 
 def _cache_escrever(chave, dados):
@@ -62,15 +58,24 @@ def obter_classificacao(liga_nome, temporada):
     if cached:
         return {int(k): v for k, v in cached.items()}
     
-    data = _get(f"{BASE_URL}/competitions/{codigo}/standings?season={temporada}")
-    standings = data['standings'][0]['table']
-    classif = {}
-    for entry in standings:
-        pos = entry['position']
-        nome = entry['team']['name']
-        classif[pos] = nome
-    _cache_escrever(chave, classif)
-    return classif
+    # A API espera o ano de início da temporada (ex.: 2023 para 2023/2024)
+    for ano_tentativa in [temporada, temporada - 1]:
+        url = f"{BASE_URL}/competitions/{codigo}/standings?season={ano_tentativa}"
+        try:
+            data = _get(url)
+            standings = data['standings'][0]['table']
+            classif = {}
+            for entry in standings:
+                pos = entry['position']
+                nome = entry['team']['name']
+                classif[pos] = nome
+            _cache_escrever(chave, classif)
+            return classif
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 400:
+                continue
+            raise
+    raise ValueError(f"Não foi possível obter classificação para {liga_nome} {temporada}")
 
 def obter_partidas_time(liga_nome, temporada, time):
     codigo = LEAGUES.get(liga_nome)
@@ -81,7 +86,18 @@ def obter_partidas_time(liga_nome, temporada, time):
     if cached:
         return cached
     
-    data = _get(f"{BASE_URL}/competitions/{codigo}/matches?season={temporada}")
+    for ano_tentativa in [temporada, temporada - 1]:
+        url = f"{BASE_URL}/competitions/{codigo}/matches?season={ano_tentativa}"
+        try:
+            data = _get(url)
+            break
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 400:
+                continue
+            raise
+    else:
+        raise ValueError(f"Não foi possível obter partidas para {liga_nome} {temporada}")
+    
     jogos = []
     for match in data['matches']:
         if match['status'] != 'FINISHED':
