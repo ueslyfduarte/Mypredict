@@ -155,11 +155,11 @@ def tela_manual(dados_state):
 
     if entrada == "Colar resposta da IA":
         st.subheader("📥 Cole aqui a resposta completa da IA")
-        texto = st.text_area("Resposta da IA", height=300, key="ia_text")
+        texto = st.text_area("Resposta da IA", height=300, key="widget_ia")
         processar = st.button("Processar dados")
         if processar:
             if texto.strip():
-                st.session_state.ia_text = texto
+                st.session_state.texto_colado = texto
                 st.session_state.processar_click = True
                 st.rerun()
             else:
