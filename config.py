@@ -1,3 +1,6 @@
+# config.py — Constantes globais do MyPredict 2.0
+
+# Prateleiras por posição
 PRATELEIRAS = {
     'Elite':   (1, 3),
     'Alta':    (4, 7),
@@ -6,8 +9,10 @@ PRATELEIRAS = {
     'Critica': (17, 99)
 }
 
+# Pontuação base
 PONTOS_BASE = {'V': 3, 'E': 1, 'D': 0}
 
+# Bônus assimétricos
 BONUS_SIMETRICOS = {
     ('Elite', 'Elite'):       (+0.25, -0.25),
     ('Alta', 'Alta'):         (+0.15, -0.15),
@@ -32,6 +37,7 @@ BONUS_EMPATE = {
     ('Critica', 'Critica'): +0.5,
 }
 
+# Pesos dos recortes do IMA
 PESOS_RECORTES = {
     '10G': 0.10,
     '5G':  0.15,
@@ -43,6 +49,7 @@ PESOS_RECORTES = {
 PISO_IMA = -2.0
 TETO_IMA = 5.0
 
+# OVRall
 JOGOS_BASE_OVRALL = 38
 PESOS_OVRALL = {
     'Ataque':       0.25,
@@ -52,12 +59,14 @@ PESOS_OVRALL = {
     'Resiliencia':  0.15,
 }
 
+# MP Value (MPV)
 PESOS_MPV = {
     'IMA':    1/3,
     'OVRall': 1/3,
     'IC':     1/3,
 }
 
+# Índice de Contexto (IC)
 PESOS_IC = {
     'confronto_direto':              0.25,
     'mesmo_escalao':                 0.20,
@@ -68,9 +77,11 @@ PESOS_IC = {
 
 JOGOS_CONFRONTO_DIRETO = 6
 
+# Posições de referência para promovidos/rebaixados
 POS_REF_PROMOVIDO = 16
 POS_REF_REBAIXADO = 5
 
+# Mercados
 MAX_BONUS_CASA_MPV = 10.0
 FATOR_BONUS_CASA = 0.1
 SIGMOID_K = 0.12
