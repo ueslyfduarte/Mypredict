@@ -7,7 +7,12 @@ from core.markets import (
     prob_1x2, prob_over_2_5, prob_ambas_marcam, prob_gol_ht,
     prob_over_escanteios, calcular_bonus_casa, _gols_esperados
 )
+from core.market_engine import (
+    prob_1x2_v2, prob_over25, prob_btts, prob_gol_ht_v2, prob_over_escanteios_v2
+)
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
+from core.elo import calcular_elo, normalizar_elo
+from config import ELO_WEIGHT, ELO_K
 
 def executar_automatico(liga_nome, temporada, time_casa, time_fora, classificacao_ant, prateleiras,
                         dados_casa, dados_fora, jogos_casa, jogos_fora):
@@ -68,70 +73,85 @@ def executar_automatico(liga_nome, temporada, time_casa, time_fora, classificaca
         'mpv_casa': mpv_casa, 'mpv_fora': mpv_fora,
     }, None
 
-def executar_manual(dados):
-    """Cálculo completo no modo manual, com detalhamento."""
-    if len(dados['jogos_casa']) < 5 or len(dados['jogos_fora']) < 5:
-        return None, f"Poucos jogos: Casa={len(dados['jogos_casa'])}, Fora={len(dados['jogos_fora'])}"
-    if not dados['ovrall_casa'] or not dados['ovrall_fora']:
-        return None, "Métricas OVRall não encontradas."
 
-    # Prateleiras
-    prat_casa = obter_prateleira(dados['pos_casa'])
-    prat_fora = obter_prateleira(dados['pos_fora'])
-    prateleiras = {dados['time_casa']: prat_casa, dados['time_fora']: prat_fora}
-    for j in dados['jogos_casa'] + dados['jogos_fora']:
-        if j['adversario'] not in prateleiras:
-            prateleiras[j['adversario']] = "Media"
+def executar_manual(dados):
+    """Cálculo completo no modo manual, com detalhamento e sem travas por falta de dados."""
+    # --- Prateleiras ---
+    prateleiras = {
+        dados['time_casa']: dados.get('prat_casa', 'Media'),
+        dados['time_fora']: dados.get('prat_fora', 'Media')
+    }
+    # Adversários nos jogos
+    for j in dados.get('jogos_casa', []) + dados.get('jogos_fora', []):
+        prat_adv = j.get('prateleira_adv', 'Media')
+        nome_adv = j.get('adversario', '')
+        if nome_adv and nome_adv not in prateleiras:
+            prateleiras[nome_adv] = prat_adv
     for adv, prat in dados.get('prateleiras_extra', {}).items():
-        if adv in prateleiras:
+        if adv not in prateleiras:
             prateleiras[adv] = prat
 
-    # Recortes
-    rec_casa = {
-        '10G': dados['jogos_casa'][:10], '5G': dados['jogos_casa'][:5], '3G': dados['jogos_casa'][:3],
-        '5CF': [j for j in dados['jogos_casa'] if j['mandante']][:5],
-        '3CF': [j for j in dados['jogos_casa'] if j['mandante']][:3],
-    }
-    rec_fora = {
-        '10G': dados['jogos_fora'][:10], '5G': dados['jogos_fora'][:5], '3G': dados['jogos_fora'][:3],
-        '5CF': [j for j in dados['jogos_fora'] if not j['mandante']][:5],
-        '3CF': [j for j in dados['jogos_fora'] if not j['mandante']][:3],
-    }
+    # --- IMA ---
+    if len(dados.get('jogos_casa', [])) >= 5 and len(dados.get('jogos_fora', [])) >= 5:
+        rec_casa = {
+            '10G': dados['jogos_casa'][:10], '5G': dados['jogos_casa'][:5], '3G': dados['jogos_casa'][:3],
+            '5CF': [j for j in dados['jogos_casa'] if j['mandante']][:5],
+            '3CF': [j for j in dados['jogos_casa'] if j['mandante']][:3],
+        }
+        rec_fora = {
+            '10G': dados['jogos_fora'][:10], '5G': dados['jogos_fora'][:5], '3G': dados['jogos_fora'][:3],
+            '5CF': [j for j in dados['jogos_fora'] if not j['mandante']][:5],
+            '3CF': [j for j in dados['jogos_fora'] if not j['mandante']][:3],
+        }
+        ima_casa = calcular_ima(dados['time_casa'], rec_casa['10G'], rec_casa['5G'], rec_casa['3G'],
+                                rec_casa['5CF'], rec_casa['3CF'], prateleiras)
+        ima_fora = calcular_ima(dados['time_fora'], rec_fora['10G'], rec_fora['5G'], rec_fora['3G'],
+                                rec_fora['5CF'], rec_fora['3CF'], prateleiras)
 
-    ima_casa = calcular_ima(dados['time_casa'], rec_casa['10G'], rec_casa['5G'], rec_casa['3G'],
-                            rec_casa['5CF'], rec_casa['3CF'], prateleiras)
-    ima_fora = calcular_ima(dados['time_fora'], rec_fora['10G'], rec_fora['5G'], rec_fora['3G'],
-                            rec_fora['5CF'], rec_fora['3CF'], prateleiras)
+        def detalhar_ima(time, recs):
+            detalhes = {}
+            for nome, jogos in recs.items():
+                if not jogos:
+                    detalhes[nome] = []
+                    continue
+                pts = []
+                for j in jogos:
+                    prat_time = prateleiras[time]
+                    prat_adv = j.get('prateleira_adv', prateleiras.get(j['adversario'], 'Media'))
+                    pontos = calcular_pontuacao_jogo(j['resultado'], prat_time, prat_adv)
+                    pts.append({
+                        'jogo': f"{j['resultado']} vs {j.get('adversario', '?')}",
+                        'pontos': pontos,
+                        'prateleira_time': prat_time,
+                        'prateleira_adv': prat_adv
+                    })
+                detalhes[nome] = pts
+            return detalhes
 
-    # Detalhamento IMA
-    def detalhar_ima(time, recs):
-        detalhes = {}
-        for nome, jogos in recs.items():
-            if not jogos:
-                detalhes[nome] = []
-                continue
-            pts = []
-            for j in jogos:
-                prat_time = prateleiras[time]
-                prat_adv = prateleiras.get(j['adversario'], "Media")
-                pontos = calcular_pontuacao_jogo(j['resultado'], prat_time, prat_adv)
-                pts.append({
-                    'jogo': f"{j['resultado']} vs {j['adversario']}",
-                    'pontos': pontos,
-                    'prateleira_time': prat_time,
-                    'prateleira_adv': prat_adv
-                })
-            detalhes[nome] = pts
-        return detalhes
+        ima_det_casa = detalhar_ima(dados['time_casa'], rec_casa)
+        ima_det_fora = detalhar_ima(dados['time_fora'], rec_fora)
+    else:
+        # Valores neutros se não houver jogos suficientes
+        ima_casa = 50.0
+        ima_fora = 50.0
+        ima_det_casa = {}
+        ima_det_fora = {}
 
-    ima_det_casa = detalhar_ima(dados['time_casa'], rec_casa)
-    ima_det_fora = detalhar_ima(dados['time_fora'], rec_fora)
-
-    # OVRall
-    dados_liga = {k: [dados['ovrall_casa'].get(k, 0) or 0, dados['ovrall_fora'].get(k, 0) or 0]
-                  for k in set(dados['ovrall_casa']) | set(dados['ovrall_fora'])}
-    ovrall_val_casa = calcular_ovrall(dados['ovrall_casa'], dados_liga)
-    ovrall_val_fora = calcular_ovrall(dados['ovrall_fora'], dados_liga)
+    # --- OVRall ---
+    dados_liga = {}
+    todas_chaves = set(dados.get('ovrall_casa', {}).keys()) | set(dados.get('ovrall_fora', {}).keys())
+    for k in todas_chaves:
+        vc = dados.get('ovrall_casa', {}).get(k)
+        vf = dados.get('ovrall_fora', {}).get(k)
+        valores = []
+        if vc is not None:
+            valores.append(vc)
+        if vf is not None:
+            valores.append(vf)
+        if valores:
+            dados_liga[k] = valores
+    ovrall_val_casa = calcular_ovrall(dados.get('ovrall_casa', {}), dados_liga)
+    ovrall_val_fora = calcular_ovrall(dados.get('ovrall_fora', {}), dados_liga)
 
     # Detalhamento OVRall
     dims = {
@@ -148,10 +168,10 @@ def executar_manual(dados):
         det_casa = []
         det_fora = []
         for ind, menor in indicadores:
-            vc = dados['ovrall_casa'].get(ind)
-            vf = dados['ovrall_fora'].get(ind)
-            if vc is not None and vf is not None:
-                lista = [vc, vf]
+            vc = dados.get('ovrall_casa', {}).get(ind)
+            vf = dados.get('ovrall_fora', {}).get(ind)
+            if vc is not None and vf is not None and dados_liga.get(ind):
+                lista = dados_liga[ind]
                 perc_c = _percentil(vc, lista, menor)
                 perc_f = _percentil(vf, lista, menor)
                 det_casa.append((ind, vc, perc_c))
@@ -161,21 +181,20 @@ def executar_manual(dados):
             notas_fora[nome] = sum(x[2] for x in det_fora) / len(det_fora)
             detalhes_ovr[nome] = {'casa': det_casa, 'fora': det_fora}
 
-    # IC
-    ic_val_casa = calcular_ic(dados['ic_casa'])
-    ic_val_fora = calcular_ic(dados['ic_fora'])
+    # --- IC ---
+    ic_val_casa = calcular_ic(dados.get('ic_casa', {}))
+    ic_val_fora = calcular_ic(dados.get('ic_fora', {}))
 
-    # MPV
+    # --- MPV ---
     mpv_casa = calcular_mpv(ima_casa, ovrall_val_casa, ic_val_casa)
     mpv_fora = calcular_mpv(ima_fora, ovrall_val_fora, ic_val_fora)
 
-    # Integração ELO (opcional, mas recomendada)
+    # Integração ELO
     from core.elo import calcular_elo, normalizar_elo
     from config import ELO_WEIGHT, ELO_K
 
-    # Supondo que temos as prateleiras definidas (prateleiras já foram calculadas)
-    elo_casa = calcular_elo(dados['time_casa'], dados['jogos_casa'], prateleiras, k=ELO_K)
-    elo_fora = calcular_elo(dados['time_fora'], dados['jogos_fora'], prateleiras, k=ELO_K)
+    elo_casa = calcular_elo(dados['time_casa'], dados.get('jogos_casa', []), prateleiras, k=ELO_K)
+    elo_fora = calcular_elo(dados['time_fora'], dados.get('jogos_fora', []), prateleiras, k=ELO_K)
     elos_liga = [elo_casa, elo_fora]
     elo_norm_casa = normalizar_elo(elo_casa, elos_liga)
     elo_norm_fora = normalizar_elo(elo_fora, elos_liga)
@@ -183,35 +202,31 @@ def executar_manual(dados):
     # Combinar MPV com ELO
     mpv_casa = ELO_WEIGHT * elo_norm_casa + (1 - ELO_WEIGHT) * mpv_casa
     mpv_fora = ELO_WEIGHT * elo_norm_fora + (1 - ELO_WEIGHT) * mpv_fora
-    
-    # Mercados (versão enriquecida com IMA e IC)
-    from core.market_engine import (
-        prob_1x2_v2, prob_over25, prob_btts, prob_gol_ht_v2, prob_over_escanteios_v2
-    )
 
-    bonus_casa = calcular_bonus_casa(dados['ovrall_casa'].get('diff_aprov_casa_fora') or 0)
+    # --- Mercados (versão enriquecida) ---
+    bonus_casa = calcular_bonus_casa(dados.get('ovrall_casa', {}).get('diff_aprov_casa_fora') or 0)
     p1, pX, p2 = prob_1x2_v2(mpv_casa, mpv_fora, bonus_casa)
 
     over25 = prob_over25(
-        dados['ovrall_casa'], dados['ovrall_fora'],
+        dados.get('ovrall_casa', {}), dados.get('ovrall_fora', {}),
         ima_casa, ima_fora, ic_val_casa, ic_val_fora,
         media_casa=dados.get('media_gols_casa', MEDIA_GOLS_CASA_LIGA),
         media_fora=dados.get('media_gols_fora', MEDIA_GOLS_FORA_LIGA)
     )
     btts = prob_btts(
-        dados['ovrall_casa'], dados['ovrall_fora'],
+        dados.get('ovrall_casa', {}), dados.get('ovrall_fora', {}),
         ima_casa, ima_fora, ic_val_casa, ic_val_fora,
         media_casa=dados.get('media_gols_casa', MEDIA_GOLS_CASA_LIGA),
         media_fora=dados.get('media_gols_fora', MEDIA_GOLS_FORA_LIGA)
     )
     gol_ht = prob_gol_ht_v2(
-        dados['ovrall_casa'], dados['ovrall_fora'],
+        dados.get('ovrall_casa', {}), dados.get('ovrall_fora', {}),
         ima_casa, ima_fora, ic_val_casa, ic_val_fora,
         media_ht_casa=dados.get('media_ht_casa', 0.75),
         media_ht_fora=dados.get('media_ht_fora', 0.65)
     )
     esc = prob_over_escanteios_v2(
-        dados['ovrall_casa'], dados['ovrall_fora'],
+        dados.get('ovrall_casa', {}), dados.get('ovrall_fora', {}),
         ima_casa, ima_fora, ic_val_casa, ic_val_fora,
         media_casa=dados.get('media_esc_casa', 5.0),
         media_fora=dados.get('media_esc_fora', 4.5)
