@@ -29,6 +29,9 @@ def show_results_manual(res):
     </div>
     """, unsafe_allow_html=True)
 
+    # Indicadores de superação
+    st.caption(f"🔺 {res['time_casa']}: {res.get('prat_proj_casa','?')} → {res.get('prat_real_casa','?')} ({res.get('superacao_casa', 0):+.1f} pts) | 🔺 {res['time_fora']}: {res.get('prat_proj_fora','?')} → {res.get('prat_real_fora','?')} ({res.get('superacao_fora', 0):+.1f} pts)")
+
     # MPV Hero
     st.markdown('<div class="mpv-hero">', unsafe_allow_html=True)
     st.markdown('<div class="mpv-crown">👑</div>', unsafe_allow_html=True)
@@ -117,7 +120,7 @@ def show_results_manual(res):
                 </div>
                 """, unsafe_allow_html=True)
 
-    # Detalhamento por etapa (expanders individuais)
+    # Detalhamento por etapa
     with st.expander("⚡ Como o IMA foi calculado?"):
         if 'detalhes_ima' in res:
             st.write("**Casa:**")
