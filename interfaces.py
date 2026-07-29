@@ -1,8 +1,8 @@
-# interfaces.py — MyPredict 2.0 (sem import circular)
+# interfaces.py — MyPredict 2.0 (corrigido para cálculo)
 import streamlit as st
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
 from manual import processar_texto_ia
-from utils import para_float, extrair_jogos   # importa do utils
+from utils import para_float
 
 def injetar_css():
     st.markdown("""
@@ -129,16 +129,17 @@ def tela_manual(dados_state):
     if entrada == "Colar resposta da IA":
         st.subheader("📥 Cole aqui a resposta completa da IA")
         texto = st.text_area("Resposta da IA", height=300, key="widget_ia")
-        processar = st.button("Processar dados")
-        if processar:
+        if st.button("Processar dados"):
             if texto.strip():
                 dados = processar_texto_ia(texto)
                 for chave, valor in dados.items():
                     st.session_state[chave] = valor
-                st.success("Dados processados! Agora clique em 'Calcular MyPredict Manual'.")
+                st.success("Dados processados!")
+                st.rerun()
             else:
                 st.error("Por favor, cole a resposta da IA.")
 
+        # Exibe os dados carregados, se existirem
         if dados_state.get('jogos_casa') and dados_state.get('jogos_fora'):
             col1, col2 = st.columns(2)
             with col1:
@@ -154,22 +155,34 @@ def tela_manual(dados_state):
                     st.write(f"{j['resultado']} x {j['adversario']} {'(C)' if j['mandante'] else '(F)'}")
                 st.markdown('</div>', unsafe_allow_html=True)
     else:
+        # --- MODO PREENCHIMENTO MANUAL ---
         c1, c2 = st.columns(2)
-        with c1: st.text_input("Time da Casa", value=dados_state.get('time_casa', 'Flamengo'), key="time_casa")
-        with c2: st.text_input("Time da Fora", value=dados_state.get('time_fora', 'Palmeiras'), key="time_fora")
+        with c1:
+            st.text_input("Time da Casa", value=dados_state.get('time_casa', 'Flamengo'), key="time_casa")
+        with c2:
+            st.text_input("Time da Fora", value=dados_state.get('time_fora', 'Palmeiras'), key="time_fora")
 
         st.subheader("🏷 Projeção de Prateleiras")
         st.number_input("Posição do time da casa", 1, 20, value=dados_state.get('pos_casa', 1), key="pos_casa")
         st.number_input("Posição do time da fora", 1, 20, value=dados_state.get('pos_fora', 2), key="pos_fora")
 
         st.subheader("📊 IMA – Últimos 10 jogos")
+        st.markdown("Formato: `V, Adversário, S` (uma linha por jogo)")
         col_j1, col_j2 = st.columns(2)
         with col_j1:
-            st.text_area("Time da casa", height=200, key="jogos_casa_manual")
+            txt_casa = st.text_area("Time da casa", height=200, key="jogos_casa_manual")
         with col_j2:
-            st.text_area("Time da fora", height=200, key="jogos_fora_manual")
+            txt_fora = st.text_area("Time da fora", height=200, key="jogos_fora_manual")
+
+        # Converte os textos em listas de jogos e salva no estado
+        from utils import extrair_jogos
+        if txt_casa:
+            st.session_state.jogos_casa = extrair_jogos(txt_casa)
+        if txt_fora:
+            st.session_state.jogos_fora = extrair_jogos(txt_fora)
 
         st.subheader("📈 OVRall – Métricas da Temporada")
+        st.markdown("Deixe em branco se não souber (a métrica será ignorada).")
         def metrica(label, key_casa, key_fora):
             c1, c2 = st.columns(2)
             vc = para_float(c1.text_input(label, key=f"{key_casa}_val"))
@@ -236,5 +249,11 @@ def tela_manual(dados_state):
             st.number_input("Média gols HT fora", value=dados_state.get('media_ht_fora', 0.65), key="media_ht_fora")
             st.number_input("Média escanteios fora", value=dados_state.get('media_esc_fora', 4.5), key="media_esc_fora")
 
-    calcular = st.button("Calcular MyPredict Manual")
+    # Botão de calcular (só aparece se houver dados)
+    if st.session_state.get('jogos_casa') and st.session_state.get('jogos_fora'):
+        calcular = st.button("⚡ Calcular MyPredict Manual", use_container_width=True)
+    else:
+        calcular = False
+        st.info("Preencha os dados ou cole a resposta da IA para habilitar o cálculo.")
+
     return entrada, calcular
