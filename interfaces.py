@@ -1,4 +1,4 @@
-# interfaces# interfaces.py — MyPredict 2.0 (interface limpa, profissional, com recomendações)
+# interfaces.py — MyPredict 2.0 (versão final, limpa e profissional)
 import streamlit as st
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
 from manual import executar_manual
@@ -16,24 +16,6 @@ def injetar_css():
         .main-title { font-size: 2.8rem; font-weight: 900; text-align: center; background: linear-gradient(135deg, #ffd700, #ffaa00, #ffd700); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.2rem; }
         .subtitle { text-align: center; color: #b0b0b0; font-size: 0.9rem; margin-bottom: 1.5rem; letter-spacing: 2px; }
 
-        .gold-card {
-            background: linear-gradient(145deg, rgba(20,20,35,0.95), rgba(15,15,25,0.98));
-            border: 1px solid rgba(255,215,0,0.25);
-            border-radius: 16px; padding: 16px; margin: 8px 0;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        }
-        .gold-card:hover { border-color: rgba(255,215,0,0.5); }
-
-        .gold-input input, .gold-input textarea {
-            background: rgba(255,255,255,0.03) !important;
-            border: 1px solid rgba(255,215,0,0.2) !important;
-            border-radius: 8px !important; color: #e0e0e0 !important;
-            padding: 6px 10px !important; font-size: 0.85rem !important;
-        }
-        .gold-input input:focus, .gold-input textarea:focus {
-            border-color: #ffd700 !important; box-shadow: 0 0 8px rgba(255,215,0,0.15) !important;
-        }
-
         .divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(255,215,0,0.2), transparent); margin: 16px 0; }
 
         .value-seal {
@@ -48,9 +30,7 @@ def injetar_css():
         .rec-card {
             background: rgba(20,20,35,0.9); border-radius: 14px; padding: 14px;
             border: 1px solid rgba(255,215,0,0.2); text-align: center; margin: 6px 0;
-            transition: all 0.2s;
         }
-        .rec-card.recommended { border-color: #ffd700; box-shadow: 0 0 20px rgba(255,215,0,0.25); }
         .rec-card strong { color: #ffd700; font-size: 1.2rem; }
 
         .stButton > button {
@@ -68,14 +48,28 @@ def injetar_css():
         .score-home, .score-away { font-size: 2rem; font-weight: 900; color: #ffd700; }
         .score-vs { font-size: 1rem; color: #888; margin: 0 12px; }
 
-        .metric-row {
-            display: flex; align-items: center; gap: 8px; padding: 4px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.03);
+        .big-metric {
+            text-align: center; padding: 20px 10px;
+            background: rgba(20,20,35,0.9); border-radius: 20px;
+            border: 1px solid rgba(255,215,0,0.3);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
         }
-        .metric-label { flex: 1; color: #aaa; font-size: 0.8rem; }
-        .metric-value { width: 60px; text-align: center; font-weight: 600; font-size: 0.9rem; }
-        .metric-bar-small { flex: 1; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,215,0,0.08); }
-        .metric-fill { height: 100%; border-radius: 2px; }
+        .big-metric .metric-value {
+            font-size: 2.8rem; font-weight: 900;
+            background: linear-gradient(135deg, #ffd700, #ffaa00);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .big-metric .metric-label {
+            font-size: 0.9rem; color: #ffd700; font-weight: 600; letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+        .big-metric.giant .metric-value {
+            font-size: 4rem;
+        }
+        .big-metric.giant {
+            border-color: #ffd700;
+            box-shadow: 0 0 30px rgba(255,215,0,0.3), 0 0 60px rgba(255,140,0,0.15);
+        }
     </style>
     """, unsafe_allow_html=True)
 
@@ -86,7 +80,7 @@ def tela_automatico(lista_ligas, temporadas, times_carregados, uso_api, limite_a
     if uso_api is not None:
         porcentagem = uso_api / limite_api if limite_api else 0
         cor = "#00ff7f" if porcentagem < 0.5 else ("#ffaa00" if porcentagem < 0.8 else "#ff4d4d")
-        st.markdown(f'<div style="display:flex;justify-content:center;"><div class="gold-card" style="display:inline-flex;align-items:center;gap:8px;padding:6px 16px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{cor};"></span> API: {uso_api}/{limite_api}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="display:flex;justify-content:center;"><div class="rec-card" style="display:inline-flex;align-items:center;gap:8px;padding:6px 16px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{cor};"></span> API: {uso_api}/{limite_api}</div></div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ MyPredict 2.0</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">"O futebol não é uma questão de vida ou morte. É muito mais importante que isso." — Bill Shankly</div>', unsafe_allow_html=True)
     if msg_erro: st.error(msg_erro)
@@ -136,22 +130,22 @@ def tela_manual():
     st.markdown('<div class="main-title">⚽ MyPredict 2.0</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">ANÁLISE PREDITIVA PREMIUM</div>', unsafe_allow_html=True)
 
-    # --- Times e Posições ---
+    # Times e Posições
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown('<div class="gold-card">', unsafe_allow_html=True)
+        st.markdown('<div style="background:rgba(20,20,35,0.9);border-radius:14px;padding:16px;margin:6px 0;">', unsafe_allow_html=True)
         st.markdown('<div style="text-align:center;font-weight:700;color:#ffd700;margin-bottom:8px;">🏠 CASA</div>', unsafe_allow_html=True)
         st.text_input("Nome", key="time_casa_input", value=st.session_state.time_casa, placeholder="Time da casa", label_visibility="collapsed")
         st.number_input("Posição", 1, 20, key="pos_casa_input", value=st.session_state.pos_casa, label_visibility="collapsed")
         st.markdown('</div>', unsafe_allow_html=True)
     with col2:
-        st.markdown('<div class="gold-card">', unsafe_allow_html=True)
+        st.markdown('<div style="background:rgba(20,20,35,0.9);border-radius:14px;padding:16px;margin:6px 0;">', unsafe_allow_html=True)
         st.markdown('<div style="text-align:center;font-weight:700;color:#ffd700;margin-bottom:8px;">🏟️ FORA</div>', unsafe_allow_html=True)
         st.text_input("Nome", key="time_fora_input", value=st.session_state.time_fora, placeholder="Time de fora", label_visibility="collapsed")
         st.number_input("Posição", 1, 20, key="pos_fora_input", value=st.session_state.pos_fora, label_visibility="collapsed")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- IMA ---
+    # IMA
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     st.subheader("📊 IMA · Últimos 10 jogos")
     st.caption("Uma linha por jogo: `V, Adversário, S` (S=mandante, N=visitante)")
@@ -165,7 +159,7 @@ def tela_manual():
                                value="\n".join([f"{j['resultado']}, {j['adversario']}, {'S' if j['mandante'] else 'N'}" for j in st.session_state.jogos_fora]),
                                label_visibility="collapsed")
 
-    # --- OVRall ---
+    # OVRall
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     st.subheader("📈 OVRall · Métricas da Temporada")
     st.caption("Deixe em branco para ignorar. Use vírgula como separador decimal.")
@@ -198,7 +192,7 @@ def tela_manual():
             vf = st.text_input(label, key=f"fora_{key}_val", label_visibility="collapsed", placeholder=label)
             ovrall_fora[key] = para_float(vf) if vf else None
 
-    # --- IC ---
+    # IC
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     st.subheader("🧠 IC · Índice de Contexto")
     ic_casa, ic_fora = {}, {}
@@ -213,7 +207,7 @@ def tela_manual():
             vf = st.text_input(label, key=f"ic_fora_{key}_val", label_visibility="collapsed", placeholder=label)
             ic_fora[key] = para_float(vf) if vf else None
 
-    # --- Médias da Liga ---
+    # Médias da Liga
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     st.subheader("📊 Médias da Liga")
     c1,c2 = st.columns(2)
@@ -226,7 +220,7 @@ def tela_manual():
         mhtf = st.number_input("Média gols HT fora", value=0.65, key="mhtf")
         mecf = st.number_input("Média escanteios fora", value=4.5, key="mecf")
 
-    # --- Botão ---
+    # Botão
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     if st.button("🔥 GERAR MYPREDICT VALUE", use_container_width=True):
         st.session_state.time_casa = st.session_state.time_casa_input
@@ -250,12 +244,11 @@ def tela_manual():
         if err: st.error(err)
         else: st.session_state.resultados = res; st.rerun()
 
-    # --- RESULTADOS ---
+    # RESULTADOS
     if 'resultados' in st.session_state:
         res = st.session_state.resultados
         st.markdown(f'<div class="scoreboard"><span class="score-home">{res["time_casa"]}</span><span class="score-vs">vs</span><span class="score-away">{res["time_fora"]}</span></div>', unsafe_allow_html=True)
 
-        # 1X2
         c1,c2,c3 = st.columns(3)
         with c1: st.metric("🏠 Casa", f"{res['p1']:.1%}")
         with c2: st.metric("🤝 Empate", f"{res['pX']:.1%}")
@@ -263,34 +256,66 @@ def tela_manual():
 
         st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
-        # Métricas principais lado a lado
+        # IMA, OVRall (grandes) e MPV (gigante)
         st.subheader("📊 IMA · OVRall · MPV")
-        cols = st.columns(3)
-        for idx, (titulo, vc, vf, maxv) in enumerate([
-            ("IMA", res['ima_casa'], res['ima_fora'], 100),
-            ("OVRall", res['ovrall_casa'], res['ovrall_fora'], 100),
-            ("MPV", res['mpv_casa'], res['mpv_fora'], 100),
-        ]):
-            with cols[idx]:
-                maior = vc >= vf
-                cc = "gold-text" if maior else "silver-text"
-                cf = "gold-text" if not maior else "silver-text"
-                pct_c = min(vc/maxv,1.0)*100; pct_f = min(vf/maxv,1.0)*100
-                st.markdown(f"""
-                <div style="text-align:center;font-weight:700;color:#ffd700;margin-bottom:6px;">{titulo}</div>
-                <div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#888;">
-                    <span>{res['time_casa'][:12]}</span><span>{res['time_fora'][:12]}</span>
+        cols = st.columns([1, 1, 1.5])
+        with cols[0]:
+            vc = res['ima_casa']; vf = res['ima_fora']
+            maior = vc >= vf
+            cc = "gold-text" if maior else "silver-text"
+            cf = "gold-text" if not maior else "silver-text"
+            st.markdown(f"""
+            <div class="big-metric">
+                <div class="metric-label">⚡ IMA</div>
+                <div style="display:flex;justify-content:space-between;padding:0 10px;">
+                    <span class="{cc}" style="font-size:1.2rem;">{vc:.1f}</span>
+                    <span style="color:#888;">vs</span>
+                    <span class="{cf}" style="font-size:1.2rem;">{vf:.1f}</span>
                 </div>
-                <div style="display:flex;align-items:center;gap:4px;">
-                    <span class="{cc}" style="font-size:1.1rem;">{vc:.1f}</span>
-                    <div style="flex:1;height:3px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,215,0,0.08);border-radius:2px;">
-                        <div style="width:{pct_c}%;height:100%;background:linear-gradient(90deg,#ffd700,#ffaa00);border-radius:2px;"></div>
-                    </div>
-                    <span class="{cf}" style="font-size:1.1rem;">{vf:.1f}</span>
+                <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#888;padding:0 10px;">
+                    <span>{res['time_casa'][:10]}</span><span>{res['time_fora'][:10]}</span>
                 </div>
-                """, unsafe_allow_html=True)
+            </div>
+            """, unsafe_allow_html=True)
 
-        # Dimensões do OVRall
+        with cols[1]:
+            vc = res['ovrall_casa']; vf = res['ovrall_fora']
+            maior = vc >= vf
+            cc = "gold-text" if maior else "silver-text"
+            cf = "gold-text" if not maior else "silver-text"
+            st.markdown(f"""
+            <div class="big-metric">
+                <div class="metric-label">📈 OVRall</div>
+                <div style="display:flex;justify-content:space-between;padding:0 10px;">
+                    <span class="{cc}" style="font-size:1.2rem;">{vc:.1f}</span>
+                    <span style="color:#888;">vs</span>
+                    <span class="{cf}" style="font-size:1.2rem;">{vf:.1f}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#888;padding:0 10px;">
+                    <span>{res['time_casa'][:10]}</span><span>{res['time_fora'][:10]}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with cols[2]:
+            vc = res['mpv_casa']; vf = res['mpv_fora']
+            maior = vc >= vf
+            cc = "gold-text" if maior else "silver-text"
+            cf = "gold-text" if not maior else "silver-text"
+            st.markdown(f"""
+            <div class="big-metric giant">
+                <div class="metric-label">🏆 MYPREDICT VALUE</div>
+                <div style="display:flex;justify-content:space-between;padding:0 10px;">
+                    <span class="{cc}" style="font-size:1.6rem;">{vc:.1f}</span>
+                    <span style="color:#888;">vs</span>
+                    <span class="{cf}" style="font-size:1.6rem;">{vf:.1f}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#888;padding:0 10px;">
+                    <span>{res['time_casa'][:10]}</span><span>{res['time_fora'][:10]}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
         st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
         st.subheader("🔬 Dimensões do OVRall")
         if 'notas_casa' in res:
@@ -314,7 +339,6 @@ def tela_manual():
                 </div>
                 """, unsafe_allow_html=True)
 
-        # Mercados com recomendações
         st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
         st.subheader("🎯 Recomendações de Mercado")
         mercados = [
@@ -340,7 +364,6 @@ def tela_manual():
                     </div>
                     """, unsafe_allow_html=True)
 
-        # Rastreio em expander
         with st.expander("🔎 RASTREIO COMPLETO"):
             st.markdown("### IMA")
             for lado, time, ima, det in [('casa',res['time_casa'],res['ima_casa'],res['detalhes_ima']['casa']),
