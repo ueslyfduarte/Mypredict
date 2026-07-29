@@ -13,11 +13,14 @@ def render_manual():
     st.markdown('<div class="main-title">⚽ MyPredict 2.0</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">Painel de Análise Tática</div>', unsafe_allow_html=True)
 
-    # Inicializar estado
+    # Inicializar estado com TODAS as chaves que a interface usa
     defaults = {
         'time_casa': '', 'time_fora': '',
+        'time_casa_input': '', 'time_fora_input': '',
         'pos_casa': 1, 'pos_fora': 2,
-        'prat_casa': 'Media', 'prat_fora': 'Media',  # Prateleira Projetada
+        'pos_casa_input': 1, 'pos_fora_input': 2,
+        'prat_casa': 'Media', 'prat_fora': 'Media',
+        'prat_casa_input': 'Media', 'prat_fora_input': 'Media',
         'jogos_casa': [], 'jogos_fora': [],
         'ovrall_casa': {}, 'ovrall_fora': {},
         'ic_casa': {}, 'ic_fora': {},
@@ -40,7 +43,7 @@ def render_manual():
         <div class="time-card {"destaque" if prat_real_casa in ["Elite","Alta"] else ""}">
             <div class="time-nome">{st.session_state.time_casa_input or "Time da Casa"}</div>
             <div class="time-detalhe">Posição: {st.session_state.pos_casa_input} | Real: {prat_real_casa}</div>
-            <div class="time-detalhe">Projetada: {st.session_state.get('prat_casa_input', 'Media')}</div>
+            <div class="time-detalhe">Projetada: {st.session_state.prat_casa_input}</div>
         </div>
     ''', unsafe_allow_html=True)
     st.markdown('<div class="vs-divider">VS</div>', unsafe_allow_html=True)
@@ -48,7 +51,7 @@ def render_manual():
         <div class="time-card {"destaque" if prat_real_fora in ["Elite","Alta"] else ""}">
             <div class="time-nome">{st.session_state.time_fora_input or "Time Visitante"}</div>
             <div class="time-detalhe">Posição: {st.session_state.pos_fora_input} | Real: {prat_real_fora}</div>
-            <div class="time-detalhe">Projetada: {st.session_state.get('prat_fora_input', 'Media')}</div>
+            <div class="time-detalhe">Projetada: {st.session_state.prat_fora_input}</div>
         </div>
     ''', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
