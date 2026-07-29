@@ -60,6 +60,33 @@ def momentum_simples(jogos):
 
 def show_results_manual(res):
     # Resgatar dados da sessão para enriquecer a análise
+    # Seção do Contraste Tático
+if 'tactical' in res:
+    st.markdown("## 🧪 Contraste Tático (MPV Dye)")
+    
+    tactical = res['tactical']
+    
+    # Mapa de calor
+    st.image(f"data:image/png;base64,{tactical['heatmap']}", 
+             caption="Zonas de Desequilíbrio — Azul: Vantagem Casa, Vermelho: Vantagem Fora",
+             use_container_width=True)
+    
+    # Rotas Críticas
+    st.markdown("### 🎯 Rotas Críticas do Jogo")
+    for dim, delta, interpretation in tactical['critical_routes']:
+        if delta > 0:
+            st.success(interpretation)
+        else:
+            st.error(interpretation)
+    
+    # Tabela de Deltas
+    st.markdown("### 📊 Diferencial por Dimensão")
+    deltas_df = pd.DataFrame(
+        tactical['deltas'].items(), 
+        columns=['Dimensão', 'Δ (Casa - Fora)']
+    ).sort_values('Δ (Casa - Fora)', key=abs, ascending=False)
+    
+    st.dataframe(deltas_df, use_container_width=True)
     ovr_casa = st.session_state.get('ovrall_casa', {})
     ovr_fora = st.session_state.get('ovrall_fora', {})
     jogos_casa = st.session_state.get('jogos_casa', [])
