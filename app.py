@@ -1,4 +1,8 @@
 # app.py — Ponto de entrada do MyPredict 2.0
+import sys
+import os
+# Garante que o diretório do app.py seja incluído no path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import streamlit as st
 
 def main():
