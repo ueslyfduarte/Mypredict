@@ -1,9 +1,10 @@
-# ui/manual_page.py — Modo Manual (Painel EA Sports)
+# ui/manual_page.py — Painel EA Sports com Prateleira Projetada
 import streamlit as st
 from ui.styles import injetar_css
 from ui.components import show_results_manual
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
 from core.calculations import executar_manual
+from core.ratings import obter_prateleira
 
 PRATELEIRAS = ["Elite", "Alta", "Media", "Baixa", "Critica"]
 
@@ -16,7 +17,7 @@ def render_manual():
     defaults = {
         'time_casa': '', 'time_fora': '',
         'pos_casa': 1, 'pos_fora': 2,
-        'prat_casa': 'Media', 'prat_fora': 'Media',
+        'prat_casa': 'Media', 'prat_fora': 'Media',  # Prateleira Projetada
         'jogos_casa': [], 'jogos_fora': [],
         'ovrall_casa': {}, 'ovrall_fora': {},
         'ic_casa': {}, 'ic_fora': {},
@@ -30,47 +31,51 @@ def render_manual():
         if chave not in st.session_state:
             st.session_state[chave] = padrao
 
-    # --- CONFRONTO (Times lado a lado) ---
+    # --- CONFRONTO (Cards) ---
+    prat_real_casa = obter_prateleira(st.session_state.pos_casa)
+    prat_real_fora = obter_prateleira(st.session_state.pos_fora)
+
     st.markdown('<div class="confronto-container">', unsafe_allow_html=True)
-    # Card Casa
     st.markdown(f'''
-        <div class="time-card {"destaque" if st.session_state.prat_casa in ["Elite","Alta"] else ""}">
+        <div class="time-card {"destaque" if prat_real_casa in ["Elite","Alta"] else ""}">
             <div class="time-nome">{st.session_state.time_casa or "Time da Casa"}</div>
-            <div class="time-detalhe">Posição: {st.session_state.pos_casa} | {st.session_state.prat_casa}</div>
+            <div class="time-detalhe">Posição: {st.session_state.pos_casa} | Real: {prat_real_casa}</div>
+            <div class="time-detalhe">Projetada: {st.session_state.prat_casa}</div>
         </div>
     ''', unsafe_allow_html=True)
     st.markdown('<div class="vs-divider">VS</div>', unsafe_allow_html=True)
-    # Card Fora
     st.markdown(f'''
-        <div class="time-card {"destaque" if st.session_state.prat_fora in ["Elite","Alta"] else ""}">
+        <div class="time-card {"destaque" if prat_real_fora in ["Elite","Alta"] else ""}">
             <div class="time-nome">{st.session_state.time_fora or "Time Visitante"}</div>
-            <div class="time-detalhe">Posição: {st.session_state.pos_fora} | {st.session_state.prat_fora}</div>
+            <div class="time-detalhe">Posição: {st.session_state.pos_fora} | Real: {prat_real_fora}</div>
+            <div class="time-detalhe">Projetada: {st.session_state.prat_fora}</div>
         </div>
     ''', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Edição dos times
+    # Edição rápida
     with st.expander("⚙️ Editar Times", expanded=False):
         col_casa, col_fora = st.columns(2)
         with col_casa:
             st.text_input("Nome", key="time_casa_input", value=st.session_state.time_casa, placeholder="Time da Casa")
             st.number_input("Posição", 1, 20, value=st.session_state.pos_casa, key="pos_casa_input")
-            st.selectbox("Prateleira", PRATELEIRAS, index=PRATELEIRAS.index(st.session_state.prat_casa), key="prat_casa_input")
+            st.selectbox("Prateleira Projetada", PRATELEIRAS,
+                         index=PRATELEIRAS.index(st.session_state.prat_casa), key="prat_casa_input")
         with col_fora:
             st.text_input("Nome", key="time_fora_input", value=st.session_state.time_fora, placeholder="Time Visitante")
             st.number_input("Posição", 1, 20, value=st.session_state.pos_fora, key="pos_fora_input")
-            st.selectbox("Prateleira", PRATELEIRAS, index=PRATELEIRAS.index(st.session_state.prat_fora), key="prat_fora_input")
+            st.selectbox("Prateleira Projetada", PRATELEIRAS,
+                         index=PRATELEIRAS.index(st.session_state.prat_fora), key="prat_fora_input")
 
     # --- PAINEL DE ATRIBUTOS (OVRall) ---
     st.markdown('<div class="section-title">📊 ATRIBUTOS DA TEMPORADA</div>', unsafe_allow_html=True)
 
-    # Preparamos valores padrão para exibição (médias da liga)
     def pegar_valor(dic, chave, padrao):
         v = dic.get(chave)
         return v if v is not None else padrao
 
     atributos_casa = {
-        "ATAQUE": pegar_valor(st.session_state.ovrall_casa, 'gols_media', 1.5) * 20,  # escala 0-100
+        "ATAQUE": pegar_valor(st.session_state.ovrall_casa, 'gols_media', 1.5) * 20,
         "DEFESA": (2.5 - pegar_valor(st.session_state.ovrall_casa, 'gols_sofridos_media', 1.2)) * 25,
         "MEIO-CAMPO": pegar_valor(st.session_state.ovrall_casa, 'posse_media', 50),
         "CONSISTÊNCIA": max(0, 80 - pegar_valor(st.session_state.ovrall_casa, 'desvio_pontos', 0.5)*30),
@@ -86,12 +91,10 @@ def render_manual():
         "GLOBAL": pegar_valor(st.session_state.ovrall_fora, 'escanteios_media', 5.0) * 10,
     }
 
-    # Garantir valores entre 0-100
     for dic in [atributos_casa, atributos_fora]:
         for k in dic:
             dic[k] = max(0, min(100, dic[k]))
 
-    # Exibir barras
     col_att_casa, col_att_fora = st.columns(2)
     for col, atts, nome_time in [
         (col_att_casa, atributos_casa, st.session_state.time_casa or "Casa"),
@@ -116,7 +119,7 @@ def render_manual():
                 </div>
                 ''', unsafe_allow_html=True)
 
-    # Edição detalhada OVRall (expansível)
+    # Edição detalhada OVRall
     with st.expander("✏️ Ajustar Atributos Detalhados", expanded=False):
         dimensoes = {
             "⚔️ ATAQUE": [("Gols marcados", "gols_media", 1.5), ("xG", "xg_media", 1.2),
@@ -160,7 +163,6 @@ def render_manual():
         with col_jogos_casa if chave_jogos == 'jogos_casa' else col_jogos_fora:
             st.markdown(f'<h4 style="color:#fff;">{lado}</h4>', unsafe_allow_html=True)
             jogos = st.session_state[chave_jogos]
-            # Montar tabela HTML
             html = '<table class="jogos-tabela"><tr><th>Res.</th><th>Prat. Adv.</th><th>Mandante</th></tr>'
             for i in range(10):
                 j = jogos[i] if i < len(jogos) else {}
@@ -170,7 +172,6 @@ def render_manual():
                 html += f'<tr><td class="resultado-{res}">{res}</td><td>{prat_adv}</td><td>{mand}</td></tr>'
             html += '</table>'
             st.markdown(html, unsafe_allow_html=True)
-            # Botão para editar
             if st.button(f"Editar {lado}", key=f"edit_{chave_jogos}"):
                 st.session_state[f"editando_{chave_jogos}"] = True
             if st.session_state.get(f"editando_{chave_jogos}"):
@@ -193,7 +194,7 @@ def render_manual():
                         st.session_state[f"editando_{chave_jogos}"] = False
                         st.rerun()
 
-    # --- IC (expansível) ---
+    # --- IC ---
     with st.expander("🧠 Índice de Contexto (IC)", expanded=False):
         metricas_ic = [
             ("Confronto direto %", "confronto_direto", 50.0),
