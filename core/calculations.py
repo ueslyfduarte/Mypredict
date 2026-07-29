@@ -82,13 +82,13 @@ def executar_automatico(liga_nome, temporada, time_casa, time_fora, classificaca
     gols_esp_casa = core.markets._gols_esperados(dados_casa.get('gols_media'), dados_fora.get('gols_sofridos_media'), MEDIA_GOLS_FORA_LIGA)
     gols_esp_fora = core.markets._gols_esperados(dados_fora.get('gols_media'), dados_casa.get('gols_sofridos_media'), MEDIA_GOLS_CASA_LIGA)
     btts = core.markets.prob_ambas_marcam(gols_esp_casa, gols_esp_fora)
-    gol_ht = core.markets.prob_gol_ht(
+    gol_ht = prob_gol_ht(
         dados_casa.get('gols_ht_media', 0.5) or 0.5,
         dados_fora.get('gols_ht_media', 0.5) or 0.5,
         dados_casa.get('gols_ht_sofridos_media', 0.5) or 0.5,
         dados_fora.get('gols_ht_sofridos_media', 0.5) or 0.5
     )
-    esc = core.markets.prob_over_escanteios(
+    esc = prob_over_escanteios(
         dados_casa.get('escanteios_media', 5.0) or 5.0,
         dados_fora.get('escanteios_media', 5.0) or 5.0,
         dados_casa.get('escanteios_sofridos_media', 5.0) or 5.0,
