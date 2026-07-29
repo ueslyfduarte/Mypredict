@@ -10,9 +10,7 @@ from core.markets import (
 from core.market_engine import (
     prob_1x2_v2, prob_over25, prob_btts, prob_gol_ht_v2, prob_over_escanteios_v2
 )
-from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
-from core.elo import calcular_elo, normalizar_elo
-from config import ELO_WEIGHT, ELO_K
+from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA, FATOR_SUPERACAO, ELO_WEIGHT, ELO_K
 
 def executar_automatico(liga_nome, temporada, time_casa, time_fora, classificacao_ant, prateleiras,
                         dados_casa, dados_fora, jogos_casa, jogos_fora):
@@ -38,7 +36,6 @@ def executar_automatico(liga_nome, temporada, time_casa, time_fora, classificaca
     ima_fora = calcular_ima(time_fora, rec_fora['10G'], rec_fora['5G'], rec_fora['3G'],
                             rec_fora['5CF'], rec_fora['3CF'], prateleiras)
 
-    # No modo automático, OVRall e IC são fixos em 50 (neutro)
     mpv_casa = calcular_mpv(ima_casa, 50.0, 50.0)
     mpv_fora = calcular_mpv(ima_fora, 50.0, 50.0)
 
@@ -76,12 +73,14 @@ def executar_automatico(liga_nome, temporada, time_casa, time_fora, classificaca
 
 def executar_manual(dados):
     """Cálculo completo no modo manual, com detalhamento e sem travas por falta de dados."""
-    # --- Prateleiras ---
+    # --- Prateleiras REAIS (baseadas na posição) ---
+    prat_real_casa = obter_prateleira(dados['pos_casa'])
+    prat_real_fora = obter_prateleira(dados['pos_fora'])
     prateleiras = {
-        dados['time_casa']: dados.get('prat_casa', 'Media'),
-        dados['time_fora']: dados.get('prat_fora', 'Media')
+        dados['time_casa']: prat_real_casa,
+        dados['time_fora']: prat_real_fora
     }
-    # Adversários nos jogos
+    # Adversários nos jogos (já trazem prateleira_adv)
     for j in dados.get('jogos_casa', []) + dados.get('jogos_fora', []):
         prat_adv = j.get('prateleira_adv', 'Media')
         nome_adv = j.get('adversario', '')
@@ -131,7 +130,6 @@ def executar_manual(dados):
         ima_det_casa = detalhar_ima(dados['time_casa'], rec_casa)
         ima_det_fora = detalhar_ima(dados['time_fora'], rec_fora)
     else:
-        # Valores neutros se não houver jogos suficientes
         ima_casa = 50.0
         ima_fora = 50.0
         ima_det_casa = {}
@@ -185,25 +183,33 @@ def executar_manual(dados):
     ic_val_casa = calcular_ic(dados.get('ic_casa', {}))
     ic_val_fora = calcular_ic(dados.get('ic_fora', {}))
 
-    # --- MPV ---
+    # --- MPV base ---
     mpv_casa = calcular_mpv(ima_casa, ovrall_val_casa, ic_val_casa)
     mpv_fora = calcular_mpv(ima_fora, ovrall_val_fora, ic_val_fora)
 
-    # Integração ELO
-    from core.elo import calcular_elo, normalizar_elo
-    from config import ELO_WEIGHT, ELO_K
+    # --- Fator de Superação (Real vs Projetada) ---
+    niveis = {'Elite':5, 'Alta':4, 'Media':3, 'Baixa':2, 'Critica':1}
+    def fator_superacao(prat_real, prat_projetada):
+        diff = niveis.get(prat_real, 3) - niveis.get(prat_projetada, 3)
+        return diff * FATOR_SUPERACAO
 
+    superacao_casa = fator_superacao(prat_real_casa, dados.get('prat_casa', 'Media'))
+    superacao_fora = fator_superacao(prat_real_fora, dados.get('prat_fora', 'Media'))
+    mpv_casa += superacao_casa
+    mpv_fora += superacao_fora
+
+    # --- ELO ---
+    from core.elo import calcular_elo, normalizar_elo
     elo_casa = calcular_elo(dados['time_casa'], dados.get('jogos_casa', []), prateleiras, k=ELO_K)
     elo_fora = calcular_elo(dados['time_fora'], dados.get('jogos_fora', []), prateleiras, k=ELO_K)
     elos_liga = [elo_casa, elo_fora]
     elo_norm_casa = normalizar_elo(elo_casa, elos_liga)
     elo_norm_fora = normalizar_elo(elo_fora, elos_liga)
 
-    # Combinar MPV com ELO
     mpv_casa = ELO_WEIGHT * elo_norm_casa + (1 - ELO_WEIGHT) * mpv_casa
     mpv_fora = ELO_WEIGHT * elo_norm_fora + (1 - ELO_WEIGHT) * mpv_fora
 
-    # --- Mercados (versão enriquecida) ---
+    # --- Mercados ---
     bonus_casa = calcular_bonus_casa(dados.get('ovrall_casa', {}).get('diff_aprov_casa_fora') or 0)
     p1, pX, p2 = prob_1x2_v2(mpv_casa, mpv_fora, bonus_casa)
 
@@ -244,4 +250,10 @@ def executar_manual(dados):
         'detalhes_ima': {'casa': ima_det_casa, 'fora': ima_det_fora},
         'detalhes_ovr': detalhes_ovr,
         'prateleiras': prateleiras,
+        'superacao_casa': superacao_casa,
+        'superacao_fora': superacao_fora,
+        'prat_real_casa': prat_real_casa,
+        'prat_real_fora': prat_real_fora,
+        'prat_proj_casa': dados.get('prat_casa', 'Media'),
+        'prat_proj_fora': dados.get('prat_fora', 'Media'),
     }, None
