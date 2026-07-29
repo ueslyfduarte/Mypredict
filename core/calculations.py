@@ -1,20 +1,49 @@
 import pickle
-from core.tactical_dimensions import compute_all_dimensions, modulate_with_context, compute_mpv
-from core.market_engine_v2 import predict_over25, predict_1x2, predict_btts
-## core/calculations.py — Orquestração dos cálculos (automático e manual)
+import numpy as np
 from core.ratings import (
     calcular_ima, calcular_ovrall, calcular_ic, calcular_mpv,
     obter_prateleira, _percentil, calcular_pontuacao_jogo
 )
-from core.markets import (
-    prob_1x2, prob_over_2_5, prob_ambas_marcam, prob_gol_ht,
-    prob_over_escanteios, calcular_bonus_casa, _gols_esperados
-)
-from core.market_engine import (
-    prob_1x2_v2, prob_over25, prob_btts, prob_gol_ht_v2, prob_over_escanteios_v2
-)
+from core.elo import calcular_elo, normalizar_elo
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA, FATOR_SUPERACAO, ELO_WEIGHT, ELO_K
 
+# Novos módulos (já devem estar no repositório)
+from core.tactical_dimensions import compute_all_dimensions, modulate_with_context, compute_mpv
+from core.market_engine_v2 import predict_over25, predict_1x2, predict_btts
+
+# Tentar importar o módulo de contraste – se não existir, as funções retornarão None
+try:
+    from core.contrast import contrast_vector, critical_routes, generate_heatmap
+    CONTRAST_AVAILABLE = True
+except ImportError:
+    CONTRAST_AVAILABLE = False
+
+# ============================================================
+# Função auxiliar: converter dados manuais para dicionário
+# compatível com as dimensões táticas
+# ============================================================
+def _build_stats_for_dimensions(ovrall_dict):
+    """
+    Converte o dicionário do OVRall (que contém 'gols_media', 'posse_media', etc.)
+    em um dicionário com as chaves esperadas pelas dimensões táticas.
+    """
+    stats = {
+        'gols_media': ovrall_dict.get('gols_media', 1.4),
+        'gols_sofridos_media': ovrall_dict.get('gols_sofridos_media', 1.4),
+        'chutes_media': ovrall_dict.get('chutes_media', 12),
+        'chutes_alvo_media': ovrall_dict.get('finalizacoes_alvo_media', 4.5),
+        'chutes_alvo_sofridos_media': ovrall_dict.get('finalizacoes_alvo_sofridas_media', 4.5),
+        'escanteios_media': ovrall_dict.get('escanteios_media', 5.0),
+        'posse_media': ovrall_dict.get('posse_media', 50.0),
+        'conversao': ovrall_dict.get('conversao', 0.25),
+        'gols_escanteio': ovrall_dict.get('gols_escanteio', 0.36),
+        'gols_sofridos_escanteio': ovrall_dict.get('gols_sofridos_escanteio', 0.21),
+    }
+    return stats
+
+# ============================================================
+# executar_automatico (mantida como está, sem alterações)
+# ============================================================
 def executar_automatico(liga_nome, temporada, time_casa, time_fora, classificacao_ant, prateleiras,
                         dados_casa, dados_fora, jogos_casa, jogos_fora):
     """Cálculo completo no modo automático (sem IC e OVRall detalhados)."""
@@ -42,22 +71,22 @@ def executar_automatico(liga_nome, temporada, time_casa, time_fora, classificaca
     mpv_casa = calcular_mpv(ima_casa, 50.0, 50.0)
     mpv_fora = calcular_mpv(ima_fora, 50.0, 50.0)
 
-    bonus_casa = calcular_bonus_casa(dados_casa.get('diff_aprov_casa_fora'))
-    p1, pX, p2 = prob_1x2(mpv_casa, mpv_fora, bonus_casa)
-    over25 = prob_over_2_5(
+    bonus_casa = core.markets.calcular_bonus_casa(dados_casa.get('diff_aprov_casa_fora'))
+    p1, pX, p2 = core.markets.prob_1x2(mpv_casa, mpv_fora, bonus_casa)
+    over25 = core.markets.prob_over_2_5(
         dados_casa.get('gols_media'), dados_fora.get('gols_media'),
         dados_casa.get('gols_sofridos_media'), dados_fora.get('gols_sofridos_media')
     )
-    gols_esp_casa = _gols_esperados(dados_casa.get('gols_media'), dados_fora.get('gols_sofridos_media'), MEDIA_GOLS_FORA_LIGA)
-    gols_esp_fora = _gols_esperados(dados_fora.get('gols_media'), dados_casa.get('gols_sofridos_media'), MEDIA_GOLS_CASA_LIGA)
-    btts = prob_ambas_marcam(gols_esp_casa, gols_esp_fora)
-    gol_ht = prob_gol_ht(
+    gols_esp_casa = core.markets._gols_esperados(dados_casa.get('gols_media'), dados_fora.get('gols_sofridos_media'), MEDIA_GOLS_FORA_LIGA)
+    gols_esp_fora = core.markets._gols_esperados(dados_fora.get('gols_media'), dados_casa.get('gols_sofridos_media'), MEDIA_GOLS_CASA_LIGA)
+    btts = core.markets.prob_ambas_marcam(gols_esp_casa, gols_esp_fora)
+    gol_ht = core.markets.prob_gol_ht(
         dados_casa.get('gols_ht_media', 0.5) or 0.5,
         dados_fora.get('gols_ht_media', 0.5) or 0.5,
         dados_casa.get('gols_ht_sofridos_media', 0.5) or 0.5,
         dados_fora.get('gols_ht_sofridos_media', 0.5) or 0.5
     )
-    esc = prob_over_escanteios(
+    esc = core.markets.prob_over_escanteios(
         dados_casa.get('escanteios_media', 5.0) or 5.0,
         dados_fora.get('escanteios_media', 5.0) or 5.0,
         dados_casa.get('escanteios_sofridos_media', 5.0) or 5.0,
@@ -74,8 +103,11 @@ def executar_automatico(liga_nome, temporada, time_casa, time_fora, classificaca
     }, None
 
 
+# ============================================================
+# executar_manual (AGORA COM O NOVO MOTOR)
+# ============================================================
 def executar_manual(dados):
-    """Cálculo completo no modo manual, com detalhamento e sem travas por falta de dados."""
+    """Cálculo completo no modo manual, com modelo calibrado e mapa tático."""
     # --- Prateleiras REAIS (baseadas na posição) ---
     prat_real_casa = obter_prateleira(dados['pos_casa'])
     prat_real_fora = obter_prateleira(dados['pos_fora'])
@@ -83,7 +115,6 @@ def executar_manual(dados):
         dados['time_casa']: prat_real_casa,
         dados['time_fora']: prat_real_fora
     }
-    # Adversários nos jogos (já trazem prateleira_adv)
     for j in dados.get('jogos_casa', []) + dados.get('jogos_fora', []):
         prat_adv = j.get('prateleira_adv', 'Media')
         nome_adv = j.get('adversario', '')
@@ -138,7 +169,7 @@ def executar_manual(dados):
         ima_det_casa = {}
         ima_det_fora = {}
 
-    # --- OVRall ---
+    # --- OVRall (cálculo tradicional mantido para exibição e diagnóstico) ---
     dados_liga = {}
     todas_chaves = set(dados.get('ovrall_casa', {}).keys()) | set(dados.get('ovrall_fora', {}).keys())
     for k in todas_chaves:
@@ -154,7 +185,6 @@ def executar_manual(dados):
     ovrall_val_casa = calcular_ovrall(dados.get('ovrall_casa', {}), dados_liga)
     ovrall_val_fora = calcular_ovrall(dados.get('ovrall_fora', {}), dados_liga)
 
-    # Detalhamento OVRall
     dims = {
         'Ataque': [('gols_media', False), ('xg_media', False), ('finalizacoes_alvo_media', False), ('conversao', False)],
         'Defesa': [('gols_sofridos_media', True), ('xga_media', True), ('finalizacoes_alvo_sofridas_media', True), ('desarmes_intercep_media', False)],
@@ -186,45 +216,11 @@ def executar_manual(dados):
     ic_val_casa = calcular_ic(dados.get('ic_casa', {}))
     ic_val_fora = calcular_ic(dados.get('ic_fora', {}))
 
-    from core.tactical_dimensions import compute_all_dimensions, modulate_with_context, compute_mpv_from_dimensions
-from core.contrast import contrast_vector, critical_routes, generate_heatmap
+    # --- MPV base (original, para referência) ---
+    mpv_base_casa = calcular_mpv(ima_casa, ovrall_val_casa, ic_val_casa)
+    mpv_base_fora = calcular_mpv(ima_fora, ovrall_val_fora, ic_val_fora)
 
-# ... código existente ...
-
-# NOVO: Cálculo das dimensões táticas
-benchmarks = LEAGUE_BENCHMARKS  # ou carregar de acordo com a liga
-dimensions_casa = compute_all_dimensions(dados_casa, benchmarks)
-dimensions_fora = compute_all_dimensions(dados_fora, benchmarks)
-
-# Modulação por IMA e IC
-mod_casa = modulate_with_context(dimensions_casa, ima_casa, ic_casa)
-mod_fora = modulate_with_context(dimensions_fora, ima_fora, ic_fora)
-
-# MPV via dimensões táticas
-mpv_casa = compute_mpv_from_dimensions(mod_casa, DIMENSION_WEIGHTS)
-mpv_fora = compute_mpv_from_dimensions(mod_fora, DIMENSION_WEIGHTS)
-
-# Contraste
-deltas = contrast_vector(mod_casa, mod_fora)
-routes = critical_routes(deltas)
-heatmap_img = generate_heatmap(deltas)
-
-# Adiciona ao dicionário de resultados
-res['tactical'] = {
-    'dimensions_casa': mod_casa,
-    'dimensions_fora': mod_fora,
-    'deltas': deltas,
-    'critical_routes': routes,
-    'heatmap': heatmap_img,
-    'mpv_tactical_casa': mpv_casa,
-    'mpv_tactical_fora': mpv_fora,
-}
-    
-    # --- MPV base ---
-    mpv_casa = calcular_mpv(ima_casa, ovrall_val_casa, ic_val_casa)
-    mpv_fora = calcular_mpv(ima_fora, ovrall_val_fora, ic_val_fora)
-
-    # --- Fator de Superação (Real vs Projetada) ---
+    # --- Fator de Superação ---
     niveis = {'Elite':5, 'Alta':4, 'Media':3, 'Baixa':2, 'Critica':1}
     def fator_superacao(prat_real, prat_projetada):
         diff = niveis.get(prat_real, 3) - niveis.get(prat_projetada, 3)
@@ -232,57 +228,102 @@ res['tactical'] = {
 
     superacao_casa = fator_superacao(prat_real_casa, dados.get('prat_casa', 'Media'))
     superacao_fora = fator_superacao(prat_real_fora, dados.get('prat_fora', 'Media'))
-
-    # Limitar o ajuste entre -10 e +10
-    mpv_casa += max(-10.0, min(10.0, superacao_casa))
-    mpv_fora += max(-10.0, min(10.0, superacao_fora))
+    mpv_base_casa += max(-10.0, min(10.0, superacao_casa))
+    mpv_base_fora += max(-10.0, min(10.0, superacao_fora))
 
     # --- ELO ---
-    from core.elo import calcular_elo, normalizar_elo
     elo_casa = calcular_elo(dados['time_casa'], dados.get('jogos_casa', []), prateleiras, k=ELO_K)
     elo_fora = calcular_elo(dados['time_fora'], dados.get('jogos_fora', []), prateleiras, k=ELO_K)
     elos_liga = [elo_casa, elo_fora]
     elo_norm_casa = normalizar_elo(elo_casa, elos_liga)
     elo_norm_fora = normalizar_elo(elo_fora, elos_liga)
 
-    mpv_casa = ELO_WEIGHT * elo_norm_casa + (1 - ELO_WEIGHT) * mpv_casa
-    mpv_fora = ELO_WEIGHT * elo_norm_fora + (1 - ELO_WEIGHT) * mpv_fora
+    # MPV original (exibido para compatibilidade, mas não usado nos mercados calibrados)
+    mpv_original_casa = ELO_WEIGHT * elo_norm_casa + (1 - ELO_WEIGHT) * mpv_base_casa
+    mpv_original_fora = ELO_WEIGHT * elo_norm_fora + (1 - ELO_WEIGHT) * mpv_base_fora
 
-    # --- Mercados ---
-    bonus_casa = calcular_bonus_casa(dados.get('ovrall_casa', {}).get('diff_aprov_casa_fora') or 0)
-    p1, pX, p2 = prob_1x2_v2(mpv_casa, mpv_fora, bonus_casa)
+    # ================================================================
+    # NOVO: Cálculo das dimensões táticas e modelo calibrado
+    # ================================================================
+    # Carregar os parâmetros calibrados
+    try:
+        with open('calibration_params.pkl', 'rb') as f:
+            calib = pickle.load(f)
+        benchmarks = calib['benchmarks']
+        dimension_weights = calib['dimension_weights']
+    except FileNotFoundError:
+        # Fallback para não quebrar caso o arquivo não exista
+        benchmarks = {}
+        dimension_weights = {}
 
-    over25 = prob_over25(
-        dados.get('ovrall_casa', {}), dados.get('ovrall_fora', {}),
-        ima_casa, ima_fora, ic_val_casa, ic_val_fora,
-        media_casa=dados.get('media_gols_casa', MEDIA_GOLS_CASA_LIGA),
-        media_fora=dados.get('media_gols_fora', MEDIA_GOLS_FORA_LIGA)
+    # Construir dicionários compatíveis com as dimensões
+    stats_casa = _build_stats_for_dimensions(dados.get('ovrall_casa', {}))
+    stats_fora = _build_stats_for_dimensions(dados.get('ovrall_fora', {}))
+
+    # Indicadores que as dimensões esperam
+    INDICATORS_MAP = {
+        'ataque_posicional': ['gols_media', 'chutes_alvo_media', 'conversao'],
+        'ataque_transicao': [],
+        'defesa_organizada': ['gols_sofridos_media', 'chutes_alvo_sofridos_media'],
+        'defesa_transicao': [],
+        'bola_parada_ofensiva': ['gols_escanteio'],
+        'bola_parada_defensiva': ['gols_sofridos_escanteio'],
+        'controle_meio_campo': ['posse_media'],
+        'pressao_alta': [],
+        'resistencia_pressao': [],
+    }
+
+    # Calcular dimensões brutas e modular
+    dims_casa_raw = compute_all_dimensions(stats_casa, INDICATORS_MAP, benchmarks)
+    dims_fora_raw = compute_all_dimensions(stats_fora, INDICATORS_MAP, benchmarks)
+
+    dims_casa_mod = modulate_with_context(dims_casa_raw, ima_casa, ic_val_casa)
+    dims_fora_mod = modulate_with_context(dims_fora_raw, ima_fora, ic_val_fora)
+
+    # MPV tático (opcional, para diagnóstico)
+    mpv_tactical_casa = compute_mpv(dims_casa_mod, dimension_weights)
+    mpv_tactical_fora = compute_mpv(dims_fora_mod, dimension_weights)
+
+    # --- Previsões de mercado calibradas ---
+    p1, pX, p2 = predict_1x2(mpv_tactical_casa, mpv_tactical_fora).values()
+    over25 = predict_over25(dims_casa_mod, dims_fora_mod)
+    btts = predict_btts(dims_casa_mod, dims_fora_mod)
+
+    # Os mercados de gol HT e escanteios ainda não estão treinados no .pkl, então usaremos
+    # as funções antigas com os valores tradicionais (para não quebrar)
+    gol_ht = core.markets.prob_gol_ht(
+        dados.get('ovrall_casa', {}).get('gols_ht_media', 0.5) or 0.5,
+        dados.get('ovrall_fora', {}).get('gols_ht_media', 0.5) or 0.5,
+        dados.get('ovrall_casa', {}).get('gols_ht_sofridos_media', 0.5) or 0.5,
+        dados.get('ovrall_fora', {}).get('gols_ht_sofridos_media', 0.5) or 0.5
     )
-    btts = prob_btts(
-        dados.get('ovrall_casa', {}), dados.get('ovrall_fora', {}),
-        ima_casa, ima_fora, ic_val_casa, ic_val_fora,
-        media_casa=dados.get('media_gols_casa', MEDIA_GOLS_CASA_LIGA),
-        media_fora=dados.get('media_gols_fora', MEDIA_GOLS_FORA_LIGA)
-    )
-    gol_ht = prob_gol_ht_v2(
-        dados.get('ovrall_casa', {}), dados.get('ovrall_fora', {}),
-        ima_casa, ima_fora, ic_val_casa, ic_val_fora,
-        media_ht_casa=dados.get('media_ht_casa', 0.75),
-        media_ht_fora=dados.get('media_ht_fora', 0.65)
-    )
-    esc = prob_over_escanteios_v2(
-        dados.get('ovrall_casa', {}), dados.get('ovrall_fora', {}),
-        ima_casa, ima_fora, ic_val_casa, ic_val_fora,
-        media_casa=dados.get('media_esc_casa', 5.0),
-        media_fora=dados.get('media_esc_fora', 4.5)
+    esc = core.markets.prob_over_escanteios(
+        dados.get('ovrall_casa', {}).get('escanteios_media', 5.0) or 5.0,
+        dados.get('ovrall_fora', {}).get('escanteios_media', 5.0) or 5.0,
+        dados.get('ovrall_casa', {}).get('escanteios_sofridos_media', 5.0) or 5.0,
+        dados.get('ovrall_fora', {}).get('escanteios_sofridos_media', 5.0) or 5.0
     )
 
-    return {
+    # --- Mapa de Contraste Tático (se disponível) ---
+    if CONTRAST_AVAILABLE:
+        deltas = contrast_vector(dims_casa_mod, dims_fora_mod)
+        routes = critical_routes(deltas)
+        heatmap_img = generate_heatmap(deltas)
+    else:
+        deltas = {}
+        routes = []
+        heatmap_img = None
+
+    # ================================================================
+    # Montagem do resultado final
+    # ================================================================
+    res = {
         'time_casa': dados['time_casa'], 'time_fora': dados['time_fora'],
         'p1': p1, 'pX': pX, 'p2': p2,
         'over25': over25, 'btts': btts, 'gol_ht': gol_ht, 'esc': esc,
         'ima_casa': ima_casa, 'ima_fora': ima_fora,
-        'mpv_casa': mpv_casa, 'mpv_fora': mpv_fora,
+        'mpv_casa': mpv_original_casa,  # mantemos o MPV original para a UI antiga
+        'mpv_fora': mpv_original_fora,
         'ovrall_casa': ovrall_val_casa, 'ovrall_fora': ovrall_val_fora,
         'ic_casa': ic_val_casa, 'ic_fora': ic_val_fora,
         'notas_casa': notas_casa, 'notas_fora': notas_fora,
@@ -295,4 +336,15 @@ res['tactical'] = {
         'prat_real_fora': prat_real_fora,
         'prat_proj_casa': dados.get('prat_casa', 'Media'),
         'prat_proj_fora': dados.get('prat_fora', 'Media'),
-    }, None
+        # Novos campos táticos
+        'mpv_tactical_casa': mpv_tactical_casa,
+        'mpv_tactical_fora': mpv_tactical_fora,
+        'tactical': {
+            'dimensions_casa': dims_casa_mod,
+            'dimensions_fora': dims_fora_mod,
+            'deltas': deltas,
+            'critical_routes': routes,
+            'heatmap': heatmap_img,
+        } if CONTRAST_AVAILABLE else None,
+    }
+    return res, None
