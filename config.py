@@ -91,7 +91,6 @@ MEDIA_GOLS_CASA_LIGA = 1.5
 MEDIA_GOLS_FORA_LIGA = 1.2
 PROPORCAO_GOLS_HT = 0.44
 MARGEM_SEGURANCA_ESCANTEIOS = 2.0
-# config.py (trecho adicional)
 
 # Motor de Mercados – Fatores de ajuste para IMA e IC
 IMA_FACTOR = 0.005        # 0.5% de ajuste por ponto de IMA acima/abaixo de 50
@@ -107,3 +106,6 @@ THRESHOLD_FAVORITO = 0.50 # Favorito
 ELO_INICIAL = 1500
 ELO_K = 20
 ELO_WEIGHT = 0.4          # Peso do ELO no MPV final (0 = só MPV, 1 = só ELO)
+
+# Fator de superação (real vs projetada)
+FATOR_SUPERACAO = 1.5     # pontos de MPV por nível de diferença
