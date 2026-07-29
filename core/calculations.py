@@ -183,6 +183,40 @@ def executar_manual(dados):
     ic_val_casa = calcular_ic(dados.get('ic_casa', {}))
     ic_val_fora = calcular_ic(dados.get('ic_fora', {}))
 
+    from core.tactical_dimensions import compute_all_dimensions, modulate_with_context, compute_mpv_from_dimensions
+from core.contrast import contrast_vector, critical_routes, generate_heatmap
+
+# ... código existente ...
+
+# NOVO: Cálculo das dimensões táticas
+benchmarks = LEAGUE_BENCHMARKS  # ou carregar de acordo com a liga
+dimensions_casa = compute_all_dimensions(dados_casa, benchmarks)
+dimensions_fora = compute_all_dimensions(dados_fora, benchmarks)
+
+# Modulação por IMA e IC
+mod_casa = modulate_with_context(dimensions_casa, ima_casa, ic_casa)
+mod_fora = modulate_with_context(dimensions_fora, ima_fora, ic_fora)
+
+# MPV via dimensões táticas
+mpv_casa = compute_mpv_from_dimensions(mod_casa, DIMENSION_WEIGHTS)
+mpv_fora = compute_mpv_from_dimensions(mod_fora, DIMENSION_WEIGHTS)
+
+# Contraste
+deltas = contrast_vector(mod_casa, mod_fora)
+routes = critical_routes(deltas)
+heatmap_img = generate_heatmap(deltas)
+
+# Adiciona ao dicionário de resultados
+res['tactical'] = {
+    'dimensions_casa': mod_casa,
+    'dimensions_fora': mod_fora,
+    'deltas': deltas,
+    'critical_routes': routes,
+    'heatmap': heatmap_img,
+    'mpv_tactical_casa': mpv_casa,
+    'mpv_tactical_fora': mpv_fora,
+}
+    
     # --- MPV base ---
     mpv_casa = calcular_mpv(ima_casa, ovrall_val_casa, ic_val_casa)
     mpv_fora = calcular_mpv(ima_fora, ovrall_val_fora, ic_val_fora)
