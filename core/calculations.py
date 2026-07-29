@@ -11,6 +11,8 @@ from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA, FATOR_SUPERACAO, 
 from core.tactical_dimensions import compute_all_dimensions, modulate_with_context, compute_mpv
 from core.market_engine_v2 import predict_over25, predict_1x2, predict_btts
 
+from core.markets import prob_gol_ht, prob_over_escanteios
+
 # Tentar importar o módulo de contraste – se não existir, as funções retornarão None
 try:
     from core.contrast import contrast_vector, critical_routes, generate_heatmap
