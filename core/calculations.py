@@ -169,32 +169,37 @@ def executar_manual(dados):
     mpv_casa = calcular_mpv(ima_casa, ovrall_val_casa, ic_val_casa)
     mpv_fora = calcular_mpv(ima_fora, ovrall_val_fora, ic_val_fora)
 
-    # Mercados
-    bonus_casa = calcular_bonus_casa(dados['ovrall_casa'].get('diff_aprov_casa_fora') or 0)
-    p1, pX, p2 = prob_1x2(mpv_casa, mpv_fora, bonus_casa)
+    # Mercados (versão enriquecida com IMA e IC)
+    from core.market_engine import (
+        prob_1x2_v2, prob_over25, prob_btts, prob_gol_ht_v2, prob_over_escanteios_v2
+    )
 
-    over25 = prob_over_2_5(
-        dados['ovrall_casa'].get('gols_media'), dados['ovrall_fora'].get('gols_media'),
-        dados['ovrall_casa'].get('gols_sofridos_media'), dados['ovrall_fora'].get('gols_sofridos_media'),
+    bonus_casa = calcular_bonus_casa(dados['ovrall_casa'].get('diff_aprov_casa_fora') or 0)
+    p1, pX, p2 = prob_1x2_v2(mpv_casa, mpv_fora, bonus_casa)
+
+    over25 = prob_over25(
+        dados['ovrall_casa'], dados['ovrall_fora'],
+        ima_casa, ima_fora, ic_val_casa, ic_val_fora,
         media_casa=dados.get('media_gols_casa', MEDIA_GOLS_CASA_LIGA),
         media_fora=dados.get('media_gols_fora', MEDIA_GOLS_FORA_LIGA)
     )
-    gols_esp_casa = _gols_esperados(dados['ovrall_casa'].get('gols_media'), dados['ovrall_fora'].get('gols_sofridos_media'), dados.get('media_gols_casa', MEDIA_GOLS_CASA_LIGA))
-    gols_esp_fora = _gols_esperados(dados['ovrall_fora'].get('gols_media'), dados['ovrall_casa'].get('gols_sofridos_media'), dados.get('media_gols_fora', MEDIA_GOLS_FORA_LIGA))
-    btts = prob_ambas_marcam(gols_esp_casa, gols_esp_fora)
-    gol_ht = prob_gol_ht(
-        dados['ovrall_casa'].get('gols_ht_media', 0.5) or 0.5,
-        dados['ovrall_fora'].get('gols_ht_media', 0.5) or 0.5,
-        dados['ovrall_casa'].get('gols_ht_sofridos_media', 0.5) or 0.5,
-        dados['ovrall_fora'].get('gols_ht_sofridos_media', 0.5) or 0.5,
-        media_ht_casa=dados.get('media_ht_casa', 0.75), media_ht_fora=dados.get('media_ht_fora', 0.65)
+    btts = prob_btts(
+        dados['ovrall_casa'], dados['ovrall_fora'],
+        ima_casa, ima_fora, ic_val_casa, ic_val_fora,
+        media_casa=dados.get('media_gols_casa', MEDIA_GOLS_CASA_LIGA),
+        media_fora=dados.get('media_gols_fora', MEDIA_GOLS_FORA_LIGA)
     )
-    esc = prob_over_escanteios(
-        dados['ovrall_casa'].get('escanteios_media', 5.0) or 5.0,
-        dados['ovrall_fora'].get('escanteios_media', 5.0) or 5.0,
-        dados['ovrall_casa'].get('escanteios_sofridos_media', 5.0) or 5.0,
-        dados['ovrall_fora'].get('escanteios_sofridos_media', 5.0) or 5.0,
-        media_casa=dados.get('media_esc_casa', 5.0), media_fora=dados.get('media_esc_fora', 4.5)
+    gol_ht = prob_gol_ht_v2(
+        dados['ovrall_casa'], dados['ovrall_fora'],
+        ima_casa, ima_fora, ic_val_casa, ic_val_fora,
+        media_ht_casa=dados.get('media_ht_casa', 0.75),
+        media_ht_fora=dados.get('media_ht_fora', 0.65)
+    )
+    esc = prob_over_escanteios_v2(
+        dados['ovrall_casa'], dados['ovrall_fora'],
+        ima_casa, ima_fora, ic_val_casa, ic_val_fora,
+        media_casa=dados.get('media_esc_casa', 5.0),
+        media_fora=dados.get('media_esc_fora', 4.5)
     )
 
     return {
