@@ -1,3 +1,6 @@
+import pickle
+from core.tactical_dimensions import compute_all_dimensions, modulate_with_context, compute_mpv
+from core.market_engine_v2 import predict_over25, predict_1x2, predict_btts
 ## core/calculations.py — Orquestração dos cálculos (automático e manual)
 from core.ratings import (
     calcular_ima, calcular_ovrall, calcular_ic, calcular_mpv,
