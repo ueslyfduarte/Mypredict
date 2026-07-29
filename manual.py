@@ -6,7 +6,7 @@ from markets import (
     prob_over_escanteios, calcular_bonus_casa, _gols_esperados
 )
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
-from utils import extrair_jogos, para_float   # importa do utils
+from utils import extrair_jogos, para_float
 
 def processar_texto_ia(texto):
     dados = {
