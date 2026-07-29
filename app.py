@@ -1,4 +1,4 @@
-# app.py — MyPredict 2.0 (ponto de entrada)
+# app.py — MyPredict 2.0
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
