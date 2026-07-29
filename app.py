@@ -1,21 +1,26 @@
-# app.py — Ponto de entrada do MyPredict 2.0
-import sys
-import os
-# Garante que o diretório do app.py seja incluído no path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import sys, os
 import streamlit as st
 
-def main():
-    st.set_page_config(page_title="MyPredict 2.0", layout="wide", page_icon="⚽")
-    st.sidebar.markdown("# MyPredict 2.0")
-    modo = st.sidebar.radio("Modo", ["Automático (API)", "Manual"])
+# Força o diretório do app no path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-    if modo == "Automatico (API)":
-        from ui.automatic_page import render_automatico
-        render_automatico()
+# Diagnóstico
+st.set_page_config(page_title="Diagnóstico MyPredict", layout="wide")
+st.title("Verificação de Estrutura")
+
+raiz = os.path.dirname(os.path.abspath(__file__))
+st.write("Diretório do app:", raiz)
+st.write("sys.path:", sys.path[:3])
+
+# Verifica existência das pastas
+for pasta in ["core", "data", "ui"]:
+    if os.path.isdir(pasta):
+        st.success(f"Pasta '{pasta}' existe")
+        arquivos = os.listdir(pasta)
+        st.write(f"  Conteúdo de '{pasta}': {arquivos}")
+        if "__init__.py" not in arquivos:
+            st.error(f"  ❌ Faltando __init__.py em '{pasta}'!")
+        if pasta == "core" and "calculations.py" not in arquivos:
+            st.error(f"  ❌ Faltando calculations.py em '{pasta}'!")
     else:
-        from ui.manual_page import render_manual
-        render_manual()
-
-if __name__ == "__main__":
-    main()
+        st.error(f"Pasta '{pasta}' NÃO encontrada!")
