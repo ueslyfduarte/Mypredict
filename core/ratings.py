@@ -138,3 +138,13 @@ def calcular_mpv(ima, ovrall, ic, pesos=None):
     if pesos is None:
         pesos = PESOS_MPV
     return pesos['IMA'] * ima + pesos['OVRall'] * ovrall + pesos['IC'] * ic
+def calcular_consistencia(desvio_pontos, volatilidade_ima=None):
+    """
+    Retorna um fator de consistência (0 a 1) baseado no desvio padrão de pontos.
+    Quanto menor o desvio, mais consistente.
+    volatilidade_ima: opcional, desvio padrão dos últimos IMA (não implementado ainda).
+    """
+    if desvio_pontos is None:
+        return 0.5
+    # Desvio máximo esperado ~1.5 (3 pontos de amplitude)
+    return max(0.0, min(1.0, 1.0 - (desvio_pontos / 1.5)))
