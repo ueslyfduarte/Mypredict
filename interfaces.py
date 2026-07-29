@@ -1,4 +1,4 @@
-# interfaces.py — MyPredict 2.0 (versão final, limpa e profissional)
+# interfaces.py — MyPredict 2.0 (completo, com IMA interativo)
 import streamlit as st
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
 from manual import executar_manual
@@ -70,6 +70,24 @@ def injetar_css():
             border-color: #ffd700;
             box-shadow: 0 0 30px rgba(255,215,0,0.3), 0 0 60px rgba(255,140,0,0.15);
         }
+
+        .game-row {
+            display: flex; align-items: center; gap: 8px;
+            padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .game-result {
+            width: 50px; height: 50px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 900; font-size: 1.2rem; cursor: pointer;
+            background: rgba(255,255,255,0.05); color: #fff;
+            transition: all 0.2s;
+        }
+        .game-result.V { background: #00ff7f; color: #000; }
+        .game-result.E { background: #ffaa00; color: #000; }
+        .game-result.D { background: #ff4d4d; color: #000; }
+        .game-adv { flex: 1; }
+        .game-adv input { font-size: 0.9rem; padding: 8px; }
+        .game-home-toggle { margin-left: auto; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -113,7 +131,7 @@ def tela_automatico(lista_ligas, temporadas, times_carregados, uso_api, limite_a
         st.metric("🏳️ Escanteios",f"{resultados['esc']:.1%}" if resultados['esc'] else "N/D")
     return liga_nome, temporada, time_casa, time_fora, buscar, gerar, chave
 
-# ---------- TELA MANUAL (limpa, com recomendações) ----------
+# ---------- TELA MANUAL (com IMA interativo) ----------
 def tela_manual():
     st.set_page_config(page_title="MyPredict 2.0 – Manual", layout="centered", page_icon="⚽")
     injetar_css()
@@ -130,36 +148,54 @@ def tela_manual():
     st.markdown('<div class="main-title">⚽ MyPredict 2.0</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">ANÁLISE PREDITIVA PREMIUM</div>', unsafe_allow_html=True)
 
-    # Times e Posições
+    # --- Times e Posições ---
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown('<div style="background:rgba(20,20,35,0.9);border-radius:14px;padding:16px;margin:6px 0;">', unsafe_allow_html=True)
-        st.markdown('<div style="text-align:center;font-weight:700;color:#ffd700;margin-bottom:8px;">🏠 CASA</div>', unsafe_allow_html=True)
-        st.text_input("Nome", key="time_casa_input", value=st.session_state.time_casa, placeholder="Time da casa", label_visibility="collapsed")
-        st.number_input("Posição", 1, 20, key="pos_casa_input", value=st.session_state.pos_casa, label_visibility="collapsed")
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.text_input("Time da Casa", key="time_casa_input", value=st.session_state.time_casa, placeholder="Time da casa")
+        st.number_input("Posição", 1, 20, key="pos_casa_input", value=st.session_state.pos_casa)
     with col2:
-        st.markdown('<div style="background:rgba(20,20,35,0.9);border-radius:14px;padding:16px;margin:6px 0;">', unsafe_allow_html=True)
-        st.markdown('<div style="text-align:center;font-weight:700;color:#ffd700;margin-bottom:8px;">🏟️ FORA</div>', unsafe_allow_html=True)
-        st.text_input("Nome", key="time_fora_input", value=st.session_state.time_fora, placeholder="Time de fora", label_visibility="collapsed")
-        st.number_input("Posição", 1, 20, key="pos_fora_input", value=st.session_state.pos_fora, label_visibility="collapsed")
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.text_input("Time da Fora", key="time_fora_input", value=st.session_state.time_fora, placeholder="Time de fora")
+        st.number_input("Posição", 1, 20, key="pos_fora_input", value=st.session_state.pos_fora)
 
-    # IMA
+    # --- IMA Interativo ---
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     st.subheader("📊 IMA · Últimos 10 jogos")
-    st.caption("Uma linha por jogo: `V, Adversário, S` (S=mandante, N=visitante)")
-    col_j1, col_j2 = st.columns(2)
-    with col_j1:
-        txt_casa = st.text_area("Casa", height=180, key="jogos_casa_input",
-                               value="\n".join([f"{j['resultado']}, {j['adversario']}, {'S' if j['mandante'] else 'N'}" for j in st.session_state.jogos_casa]),
-                               label_visibility="collapsed")
-    with col_j2:
-        txt_fora = st.text_area("Fora", height=180, key="jogos_fora_input",
-                               value="\n".join([f"{j['resultado']}, {j['adversario']}, {'S' if j['mandante'] else 'N'}" for j in st.session_state.jogos_fora]),
-                               label_visibility="collapsed")
 
-    # OVRall
+    col_j1, col_j2 = st.columns(2)
+    jogos_casa_temp = st.session_state.jogos_casa[:10] if st.session_state.jogos_casa else [{"resultado":"","adversario":"","mandante":False} for _ in range(10)]
+    jogos_fora_temp = st.session_state.jogos_fora[:10] if st.session_state.jogos_fora else [{"resultado":"","adversario":"","mandante":False} for _ in range(10)]
+
+    with col_j1:
+        st.markdown("🏠 CASA")
+        for i in range(10):
+            cols = st.columns([0.6, 2, 0.6])
+            with cols[0]:
+                res = st.selectbox("", ["", "V", "E", "D"], key=f"casa_res_{i}", label_visibility="collapsed", index=["", "V", "E", "D"].index(jogos_casa_temp[i]['resultado']) if jogos_casa_temp[i]['resultado'] in ["V","E","D"] else 0)
+            with cols[1]:
+                adv = st.text_input("", key=f"casa_adv_{i}", value=jogos_casa_temp[i]['adversario'], placeholder=f"Adversário {i+1}", label_visibility="collapsed")
+            with cols[2]:
+                mand = st.checkbox("Casa", key=f"casa_mand_{i}", value=jogos_casa_temp[i]['mandante'])
+            if res and adv:
+                jogos_casa_temp[i] = {"resultado": res, "adversario": adv, "mandante": mand}
+            else:
+                jogos_casa_temp[i] = {"resultado":"","adversario":"","mandante":False}
+
+    with col_j2:
+        st.markdown("🏟️ FORA")
+        for i in range(10):
+            cols = st.columns([0.6, 2, 0.6])
+            with cols[0]:
+                res = st.selectbox("", ["", "V", "E", "D"], key=f"fora_res_{i}", label_visibility="collapsed", index=["", "V", "E", "D"].index(jogos_fora_temp[i]['resultado']) if jogos_fora_temp[i]['resultado'] in ["V","E","D"] else 0)
+            with cols[1]:
+                adv = st.text_input("", key=f"fora_adv_{i}", value=jogos_fora_temp[i]['adversario'], placeholder=f"Adversário {i+1}", label_visibility="collapsed")
+            with cols[2]:
+                mand = st.checkbox("Casa", key=f"fora_mand_{i}", value=jogos_fora_temp[i]['mandante'])
+            if res and adv:
+                jogos_fora_temp[i] = {"resultado": res, "adversario": adv, "mandante": mand}
+            else:
+                jogos_fora_temp[i] = {"resultado":"","adversario":"","mandante":False}
+
+    # --- OVRall ---
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     st.subheader("📈 OVRall · Métricas da Temporada")
     st.caption("Deixe em branco para ignorar. Use vírgula como separador decimal.")
@@ -192,7 +228,7 @@ def tela_manual():
             vf = st.text_input(label, key=f"fora_{key}_val", label_visibility="collapsed", placeholder=label)
             ovrall_fora[key] = para_float(vf) if vf else None
 
-    # IC
+    # --- IC ---
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     st.subheader("🧠 IC · Índice de Contexto")
     ic_casa, ic_fora = {}, {}
@@ -207,12 +243,12 @@ def tela_manual():
             vf = st.text_input(label, key=f"ic_fora_{key}_val", label_visibility="collapsed", placeholder=label)
             ic_fora[key] = para_float(vf) if vf else None
 
-    # Médias da Liga
+    # --- Médias da Liga ---
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     st.subheader("📊 Médias da Liga")
     c1,c2 = st.columns(2)
     with c1:
-        mgc = st.number_input("Média gols casa", value=MEDIA_GOLS_CASA_LIGA, key="mgc", label_visibility="visible")
+        mgc = st.number_input("Média gols casa", value=MEDIA_GOLS_CASA_LIGA, key="mgc")
         mhtc = st.number_input("Média gols HT casa", value=0.75, key="mhtc")
         mecc = st.number_input("Média escanteios casa", value=5.0, key="mecc")
     with c2:
@@ -220,15 +256,15 @@ def tela_manual():
         mhtf = st.number_input("Média gols HT fora", value=0.65, key="mhtf")
         mecf = st.number_input("Média escanteios fora", value=4.5, key="mecf")
 
-    # Botão
+    # --- Botão de calcular ---
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     if st.button("🔥 GERAR MYPREDICT VALUE", use_container_width=True):
+        st.session_state.jogos_casa = [j for j in jogos_casa_temp if j['resultado'] and j['adversario']]
+        st.session_state.jogos_fora = [j for j in jogos_fora_temp if j['resultado'] and j['adversario']]
         st.session_state.time_casa = st.session_state.time_casa_input
         st.session_state.time_fora = st.session_state.time_fora_input
         st.session_state.pos_casa = st.session_state.pos_casa_input
         st.session_state.pos_fora = st.session_state.pos_fora_input
-        st.session_state.jogos_casa = extrair_jogos(txt_casa) if txt_casa else []
-        st.session_state.jogos_fora = extrair_jogos(txt_fora) if txt_fora else []
         st.session_state.ovrall_casa = ovrall_casa
         st.session_state.ovrall_fora = ovrall_fora
         st.session_state.ic_casa = ic_casa
@@ -244,7 +280,7 @@ def tela_manual():
         if err: st.error(err)
         else: st.session_state.resultados = res; st.rerun()
 
-    # RESULTADOS
+    # --- RESULTADOS ---
     if 'resultados' in st.session_state:
         res = st.session_state.resultados
         st.markdown(f'<div class="scoreboard"><span class="score-home">{res["time_casa"]}</span><span class="score-vs">vs</span><span class="score-away">{res["time_fora"]}</span></div>', unsafe_allow_html=True)
@@ -255,8 +291,6 @@ def tela_manual():
         with c3: st.metric("🏟️ Fora", f"{res['p2']:.1%}")
 
         st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-
-        # IMA, OVRall (grandes) e MPV (gigante)
         st.subheader("📊 IMA · OVRall · MPV")
         cols = st.columns([1, 1, 1.5])
         with cols[0]:
@@ -277,7 +311,6 @@ def tela_manual():
                 </div>
             </div>
             """, unsafe_allow_html=True)
-
         with cols[1]:
             vc = res['ovrall_casa']; vf = res['ovrall_fora']
             maior = vc >= vf
@@ -296,7 +329,6 @@ def tela_manual():
                 </div>
             </div>
             """, unsafe_allow_html=True)
-
         with cols[2]:
             vc = res['mpv_casa']; vf = res['mpv_fora']
             maior = vc >= vf
