@@ -1,529 +1,234 @@
-# ui/manual_page.py — Painel EA Sports completo com comparativos, alertas e resumo executivo
+# ui/manual_page.py — Modo Manual escalável com Central de Times e Ligas
 import streamlit as st
 import pandas as pd
+import os
 from ui.styles import injetar_css
 from ui.components import show_results_manual
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
 from core.calculations import executar_manual
 from core.ratings import obter_prateleira
 
-PRATELEIRAS = ["Elite", "Alta", "Media", "Baixa", "Critica"]
+# ============================================================
+# FRASES INSPIRADORAS (para cabeçalho e resultados)
+# ============================================================
+FRASES_CABECALHO = [
+    "Futebol é a arte do imprevisível. Mas o imprevisível também tem padrões.",
+    "Tática é saber o que fazer quando não se tem a bola. Estratégia é saber o que fazer com ela. – Johan Cruyff",
+    "O futebol não é uma ciência exata, mas a análise pode revelar os caminhos que os olhos não veem.",
+]
 
+FRASES_RESULTADOS = [
+    "Os números nunca ganham jogos, mas mostram onde as batalhas serão vencidas.",
+    "Em cada passe, em cada desarme, existe uma rota. Nós só a colorimos.",
+    "Prever não é adivinhar. É reconhecer padrões que o tempo ainda não revelou.",
+    "A análise não substitui a paixão, mas a direciona.",
+    "Quem conhece o caminho, chega mais rápido.",
+]
+
+# ============================================================
+# MAPA DE LIGAS → ARQUIVO .PKL (adicione novas ligas aqui)
+# ============================================================
+LIGAS_DISPONIVEIS = {
+    "Premier League": "calibration_premier.pkl",
+    "La Liga": "calibration_laliga.pkl",
+    "Brasileirão": "calibration_brasileirao.pkl",
+    # Outras ligas podem ser adicionadas conforme gerar os .pkl
+}
+
+# ============================================================
+# FUNÇÕES AUXILIARES
+# ============================================================
+def gerar_linha_tempo(jogos):
+    """Retorna string de bolinhas coloridas para os últimos 10 jogos."""
+    if not jogos:
+        return ""
+    return ' '.join(['🟢' if j['resultado']=='V' else ('🟡' if j['resultado']=='E' else '🔴') for j in jogos[:10]])
+
+def pegar_valor(dic, chave, padrao):
+    v = dic.get(chave)
+    return v if v is not None else padrao
+
+# ============================================================
+# INTERFACE PRINCIPAL
+# ============================================================
 def render_manual():
     injetar_css()
-    st.markdown('<div class="main-title">⚽ MyPredict 2.0</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitle">Painel de Análise Tática</div>', unsafe_allow_html=True)
-
-    # Inicializar estado
-    defaults = {
-        'time_casa': '', 'time_fora': '',
-        'time_casa_input': '', 'time_fora_input': '',
-        'pos_casa': 1, 'pos_fora': 2,
-        'pos_casa_input': 1, 'pos_fora_input': 2,
-        'prat_casa': 'Media', 'prat_fora': 'Media',
-        'prat_casa_input': 'Media', 'prat_fora_input': 'Media',
-        'jogos_casa': [], 'jogos_fora': [],
-        'ovrall_casa': {}, 'ovrall_fora': {},
-        'ic_casa': {}, 'ic_fora': {},
-        'media_gols_casa': MEDIA_GOLS_CASA_LIGA,
-        'media_gols_fora': MEDIA_GOLS_FORA_LIGA,
-        'media_ht_casa': 0.75, 'media_ht_fora': 0.65,
-        'media_esc_casa': 5.0, 'media_esc_fora': 4.5,
-        'prateleiras_extra': {}
-    }
-    for chave, padrao in defaults.items():
-        if chave not in st.session_state:
-            st.session_state[chave] = padrao
-
-    # --- CONFRONTO (Cards) ---
-    prat_real_casa = obter_prateleira(st.session_state.pos_casa_input)
-    prat_real_fora = obter_prateleira(st.session_state.pos_fora_input)
-
-    st.markdown('<div class="confronto-container">', unsafe_allow_html=True)
-    st.markdown(f'''
-        <div class="time-card {"destaque" if prat_real_casa in ["Elite","Alta"] else ""}">
-            <div class="time-nome">{st.session_state.time_casa_input or "Time da Casa"}</div>
-            <div class="time-detalhe">Posição: {st.session_state.pos_casa_input} | Real: {prat_real_casa}</div>
-            <div class="time-detalhe">Projetada: {st.session_state.prat_casa_input}</div>
-        </div>
-    ''', unsafe_allow_html=True)
-    st.markdown('<div class="vs-divider">VS</div>', unsafe_allow_html=True)
-    st.markdown(f'''
-        <div class="time-card {"destaque" if prat_real_fora in ["Elite","Alta"] else ""}">
-            <div class="time-nome">{st.session_state.time_fora_input or "Time Visitante"}</div>
-            <div class="time-detalhe">Posição: {st.session_state.pos_fora_input} | Real: {prat_real_fora}</div>
-            <div class="time-detalhe">Projetada: {st.session_state.prat_fora_input}</div>
-        </div>
-    ''', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # Edição rápida
-    with st.expander("⚙️ Editar Times", expanded=False):
-        col_casa, col_fora = st.columns(2)
-        with col_casa:
-            st.text_input("Nome", key="time_casa_input", value=st.session_state.time_casa, placeholder="Time da Casa")
-            st.number_input("Posição", 1, 20, value=st.session_state.pos_casa, key="pos_casa_input")
-            st.selectbox("Prateleira Projetada", PRATELEIRAS,
-                         index=PRATELEIRAS.index(st.session_state.prat_casa), key="prat_casa_input")
-        with col_fora:
-            st.text_input("Nome", key="time_fora_input", value=st.session_state.time_fora, placeholder="Time Visitante")
-            st.number_input("Posição", 1, 20, value=st.session_state.pos_fora, key="pos_fora_input")
-            st.selectbox("Prateleira Projetada", PRATELEIRAS,
-                         index=PRATELEIRAS.index(st.session_state.prat_fora), key="prat_fora_input")
-
-    # --- PAINEL DE ATRIBUTOS (OVRall) ---
-    st.markdown('<div class="section-title">📊 ATRIBUTOS DA TEMPORADA</div>', unsafe_allow_html=True)
-
-    def pegar_valor(dic, chave, padrao):
-        v = dic.get(chave)
-        return v if v is not None else padrao
-
-    atributos_casa = {
-        "ATAQUE": pegar_valor(st.session_state.ovrall_casa, 'gols_media', 1.5) * 20,
-        "DEFESA": (2.5 - pegar_valor(st.session_state.ovrall_casa, 'gols_sofridos_media', 1.2)) * 25,
-        "MEIO-CAMPO": pegar_valor(st.session_state.ovrall_casa, 'posse_media', 50),
-        "CONSISTÊNCIA": max(0, 80 - pegar_valor(st.session_state.ovrall_casa, 'desvio_pontos', 0.5)*30),
-        "RESILIÊNCIA": pegar_valor(st.session_state.ovrall_casa, 'pontos_pos_desvantagem_media', 1.0) * 25,
-        "GLOBAL": pegar_valor(st.session_state.ovrall_casa, 'escanteios_media', 5.0) * 10,
-    }
-    atributos_fora = {
-        "ATAQUE": pegar_valor(st.session_state.ovrall_fora, 'gols_media', 1.5) * 20,
-        "DEFESA": (2.5 - pegar_valor(st.session_state.ovrall_fora, 'gols_sofridos_media', 1.2)) * 25,
-        "MEIO-CAMPO": pegar_valor(st.session_state.ovrall_fora, 'posse_media', 50),
-        "CONSISTÊNCIA": max(0, 80 - pegar_valor(st.session_state.ovrall_fora, 'desvio_pontos', 0.5)*30),
-        "RESILIÊNCIA": pegar_valor(st.session_state.ovrall_fora, 'pontos_pos_desvantagem_media', 1.0) * 25,
-        "GLOBAL": pegar_valor(st.session_state.ovrall_fora, 'escanteios_media', 5.0) * 10,
-    }
-
-    for dic in [atributos_casa, atributos_fora]:
-        for k in dic:
-            dic[k] = max(0, min(100, dic[k]))
-
-    col_att_casa, col_att_fora = st.columns(2)
-    for col, atts, nome_time in [
-        (col_att_casa, atributos_casa, st.session_state.time_casa_input or "Casa"),
-        (col_att_fora, atributos_fora, st.session_state.time_fora_input or "Fora")
-    ]:
-        with col:
-            st.markdown(f'<h3 style="color:#fff; text-align:center;">{nome_time}</h3>', unsafe_allow_html=True)
-            for nome, valor in atts.items():
-                cor_classe = {
-                    "ATAQUE": "ataque", "DEFESA": "defesa", "MEIO-CAMPO": "meio",
-                    "CONSISTÊNCIA": "cons", "RESILIÊNCIA": "res", "GLOBAL": "global"
-                }.get(nome, "ataque")
-                st.markdown(f'''
-                <div class="atributo-card">
-                    <div class="atributo-header">
-                        <span class="atributo-nome">{nome}</span>
-                        <span class="atributo-valor">{int(valor)}</span>
-                    </div>
-                    <div class="atributo-barra">
-                        <div class="atributo-barra-preenchimento {cor_classe}" style="width:{valor}%;"></div>
-                    </div>
-                </div>
-                ''', unsafe_allow_html=True)
-
-    # ====================== NOVAS SEÇÕES ANALÍTICAS ======================
-
-    # 1. COMPARATIVO REAL (valores absolutos)
-    st.markdown('<div class="section-title">📋 COMPARATIVO REAL</div>', unsafe_allow_html=True)
-    col_r1, col_r2, col_r3 = st.columns(3)
-    metricas_reais = [
-        ("Gols Marcados (média)", "gols_media", 1.5),
-        ("Gols Sofridos (média)", "gols_sofridos_media", 1.2),
-        ("Posse de Bola (%)", "posse_media", 50.0),
-        ("Finalizações Alvo (média)", "finalizacoes_alvo_media", 4.0),
-        ("xG (média)", "xg_media", 1.2),
-        ("Chutes Totais (média)", "chutes_media", 12.0),
-    ]
-    for i, (label, chave, padrao) in enumerate(metricas_reais):
-        val_casa = pegar_valor(st.session_state.ovrall_casa, chave, padrao)
-        val_fora = pegar_valor(st.session_state.ovrall_fora, chave, padrao)
-        with col_r1 if i % 3 == 0 else (col_r2 if i % 3 == 1 else col_r3):
-            st.metric(label=label, value=f"{val_casa:.1f}" if val_casa is not None else "-", delta=f"vs {val_fora:.1f}" if val_fora is not None else None)
-
-    # 2. COMPARATIVOS DIRETOS (Ataque vs Defesa, etc.)
-    st.markdown('<div class="section-title">⚔️ CONFRONTOS DIRETOS DE FORÇA</div>', unsafe_allow_html=True)
-    def calc_confronto(nome, atk_casa, def_fora, atk_fora, def_casa):
-        casa_force = atk_casa * (def_fora / MEDIA_GOLS_FORA_LIGA) if def_fora else 0
-        fora_force = atk_fora * (def_casa / MEDIA_GOLS_CASA_LIGA) if def_casa else 0
-        return f"{casa_force:.2f} vs {fora_force:.2f}"
-
-    gols_casa = pegar_valor(st.session_state.ovrall_casa, 'gols_media', 1.5)
-    gols_sofridos_casa = pegar_valor(st.session_state.ovrall_casa, 'gols_sofridos_media', 1.2)
-    gols_fora = pegar_valor(st.session_state.ovrall_fora, 'gols_media', 1.2)
-    gols_sofridos_fora = pegar_valor(st.session_state.ovrall_fora, 'gols_sofridos_media', 1.5)
-
-    col_f1, col_f2, col_f3 = st.columns(3)
-    with col_f1:
-        st.markdown("**Ataque Casa vs Defesa Fora**")
-        st.metric("", calc_confronto("", gols_casa, gols_sofridos_fora, gols_fora, gols_sofridos_casa).split(" vs ")[0])
-    with col_f2:
-        st.markdown("**Defesa Casa vs Ataque Fora**")
-        st.metric("", calc_confronto("", gols_casa, gols_sofridos_fora, gols_fora, gols_sofridos_casa).split(" vs ")[1])
-    with col_f3:
-        st.markdown("**Meio‑Campo**")
-        posse_casa = pegar_valor(st.session_state.ovrall_casa, 'posse_media', 50)
-        posse_fora = pegar_valor(st.session_state.ovrall_fora, 'posse_media', 50)
-        st.metric("Posse", f"{posse_casa:.0f}%", delta=f"vs {posse_fora:.0f}%")
-
-    # 3. RESUMO ÚLTIMOS 5 JOGOS
-    st.markdown('<div class="section-title">⏳ ÚLTIMOS 5 JOGOS (Médias Móveis)</div>', unsafe_allow_html=True)
-    def resumo_ultimos_5(jogos):
-        if len(jogos) < 5:
-            return None
-        ultimos = jogos[:5]
-        gols_pro = [j.get('gols_pro', 0) for j in ultimos]
-        gols_contra = [j.get('gols_contra', 0) for j in ultimos]
-        media_gols = sum(gols_pro) / 5
-        media_sofridos = sum(gols_contra) / 5
-        btts = sum(1 for gp, gc in zip(gols_pro, gols_contra) if gp > 0 and gc > 0) / 5
-        over25 = sum(1 for gp, gc in zip(gols_pro, gols_contra) if gp + gc > 2.5) / 5
-        pontos = sum(3 if gp > gc else (1 if gp == gc else 0) for gp, gc in zip(gols_pro, gols_contra))
-        aprov = pontos / 15 * 100
-        return {
-            'media_gols': media_gols,
-            'media_sofridos': media_sofridos,
-            'btts': btts,
-            'over25': over25,
-            'aproveitamento': aprov
-        }
-
-    resumo_casa = resumo_ultimos_5(st.session_state.jogos_casa)
-    resumo_fora = resumo_ultimos_5(st.session_state.jogos_fora)
-
-    col_u1, col_u2 = st.columns(2)
-    with col_u1:
-        st.markdown("**Casa**")
-        if resumo_casa:
-            st.metric("Gols Marcados", f"{resumo_casa['media_gols']:.2f}")
-            st.metric("Gols Sofridos", f"{resumo_casa['media_sofridos']:.2f}")
-            st.metric("BTTS %", f"{resumo_casa['btts']:.0%}")
-            st.metric("Over 2.5 %", f"{resumo_casa['over25']:.0%}")
-            st.metric("Aproveitamento", f"{resumo_casa['aproveitamento']:.0f}%")
-        else:
-            st.caption("Dados insuficientes.")
-    with col_u2:
-        st.markdown("**Fora**")
-        if resumo_fora:
-            st.metric("Gols Marcados", f"{resumo_fora['media_gols']:.2f}")
-            st.metric("Gols Sofridos", f"{resumo_fora['media_sofridos']:.2f}")
-            st.metric("BTTS %", f"{resumo_fora['btts']:.0%}")
-            st.metric("Over 2.5 %", f"{resumo_fora['over25']:.0%}")
-            st.metric("Aproveitamento", f"{resumo_fora['aproveitamento']:.0f}%")
-        else:
-            st.caption("Dados insuficientes.")
-
-    # 4. PLACAR PROVÁVEL
-    st.markdown('<div class="section-title">🎯 PLACAR PROVÁVEL</div>', unsafe_allow_html=True)
-    gols_esp_casa = gols_casa * (gols_sofridos_fora / MEDIA_GOLS_FORA_LIGA)
-    gols_esp_fora = gols_fora * (gols_sofridos_casa / MEDIA_GOLS_CASA_LIGA)
-    st.markdown(f"<h2 style='text-align:center; color:#ffd700;'>{gols_esp_casa:.2f} - {gols_esp_fora:.2f}</h2>", unsafe_allow_html=True)
-
-    # 5. INDICADORES DE CONSISTÊNCIA E RESILIÊNCIA
-    st.markdown('<div class="section-title">📈 CONSISTÊNCIA & RESILIÊNCIA</div>', unsafe_allow_html=True)
-    col_cons1, col_cons2 = st.columns(2)
-    with col_cons1:
-        desv_casa = pegar_valor(st.session_state.ovrall_casa, 'desvio_pontos', 0.5)
-        if desv_casa < 0.4:
-            st.success("Casa: muito consistente (desvio baixo)")
-        elif desv_casa < 0.8:
-            st.info("Casa: consistência moderada")
-        else:
-            st.warning("Casa: irregular (desvio alto)")
-        res_casa = pegar_valor(st.session_state.ovrall_casa, 'pontos_pos_desvantagem_media', 1.0)
-        if res_casa > 1.5:
-            st.success("Boa recuperação quando sai atrás")
-        elif res_casa < 0.5:
-            st.error("Dificuldade em reagir após desvantagem")
-    with col_cons2:
-        desv_fora = pegar_valor(st.session_state.ovrall_fora, 'desvio_pontos', 0.5)
-        if desv_fora < 0.4:
-            st.success("Fora: muito consistente")
-        elif desv_fora < 0.8:
-            st.info("Fora: consistência moderada")
-        else:
-            st.warning("Fora: irregular")
-        res_fora = pegar_valor(st.session_state.ovrall_fora, 'pontos_pos_desvantagem_media', 1.0)
-        if res_fora > 1.5:
-            st.success("Boa recuperação quando sai atrás")
-        elif res_fora < 0.5:
-            st.error("Dificuldade em reagir")
-
-    # 6. MOMENTUM (seta de evolução)
-    st.markdown('<div class="section-title">📈 MOMENTUM (IMA Recente)</div>', unsafe_allow_html=True)
-    def momentum_simples(jogos):
-        if len(jogos) < 3:
-            return None
-        pts_ultimos3 = sum(3 if j['resultado']=='V' else (1 if j['resultado']=='E' else 0) for j in jogos[:3])
-        pts_anteriores3 = sum(3 if j['resultado']=='V' else (1 if j['resultado']=='E' else 0) for j in jogos[3:6]) if len(jogos)>=6 else 4.5
-        if pts_ultimos3 > pts_anteriores3 + 1:
-            return "⬆️ Em alta"
-        elif pts_ultimos3 < pts_anteriores3 - 1:
-            return "⬇️ Em queda"
-        else:
-            return "➡️ Estável"
-    mom_casa = momentum_simples(st.session_state.jogos_casa)
-    mom_fora = momentum_simples(st.session_state.jogos_fora)
-    col_mom1, col_mom2 = st.columns(2)
-    with col_mom1:
-        st.write(f"Casa: {mom_casa if mom_casa else 'Indisponível'}")
-    with col_mom2:
-        st.write(f"Fora: {mom_fora if mom_fora else 'Indisponível'}")
-
-    # 7. LINHA DO TEMPO DO IMA (pontos corridos) – ADICIONADO
-    st.markdown('<div class="section-title">⚡ LINHA DO TEMPO DE PONTOS (IMA)</div>', unsafe_allow_html=True)
-    def render_linha_tempo(jogos, nome):
-        if len(jogos) < 10:
-            st.caption(f"{nome}: dados insuficientes para 10 jogos.")
-            return
-        resultados = [j['resultado'] for j in jogos[:10]]
-        # Cálculo de pontos corridos dos últimos 5
-        pts_ultimos5 = sum(3 if r=='V' else (1 if r=='E' else 0) for r in resultados[:5])
-        pts_anteriores5 = sum(3 if r=='V' else (1 if r=='E' else 0) for r in resultados[5:10])
-        # Renderizar bolinhas
-        bolas = ' '.join(['🟢' if r=='V' else ('🟡' if r=='E' else '🔴') for r in resultados])
-        st.markdown(f"**{nome}**  {bolas}")
-        st.write(f"Últimos 5 jogos: **{pts_ultimos5} pontos** | 5 anteriores: **{pts_anteriores5} pontos**")
-    col_l1, col_l2 = st.columns(2)
-    with col_l1:
-        render_linha_tempo(st.session_state.jogos_casa, st.session_state.time_casa_input or "Casa")
-    with col_l2:
-        render_linha_tempo(st.session_state.jogos_fora, st.session_state.time_fora_input or "Fora")
-
-    # 8. COMPARAÇÃO COM A MÉDIA DA LIGA – ADICIONADO
-    st.markdown('<div class="section-title">📈 COMPARAÇÃO COM A MÉDIA DA LIGA</div>', unsafe_allow_html=True)
-    medias_liga = {
-        "gols_media": MEDIA_GOLS_CASA_LIGA,  # usar média casa como referência geral? vamos usar a média geral (casa+fora)/2
-        "gols_sofridos_media": (MEDIA_GOLS_CASA_LIGA + MEDIA_GOLS_FORA_LIGA)/2,
-        "posse_media": 50.0,
-        "finalizacoes_alvo_media": 4.0,
-        "xg_media": 1.2,
-        "chutes_media": 12.0,
-    }
-    # Ajustar médias da liga para gols: usaremos a média dos dois times? Melhor usar a média global fixa do config.
-    medias_liga["gols_media"] = (MEDIA_GOLS_CASA_LIGA + MEDIA_GOLS_FORA_LIGA)/2
-    medias_liga["gols_sofridos_media"] = (MEDIA_GOLS_CASA_LIGA + MEDIA_GOLS_FORA_LIGA)/2
-
-    col_comp1, col_comp2 = st.columns(2)
-    for col, time_key, nome in [(col_comp1, 'ovrall_casa', st.session_state.time_casa_input or "Casa"), 
-                                (col_comp2, 'ovrall_fora', st.session_state.time_fora_input or "Fora")]:
-        with col:
-            st.markdown(f"**{nome}**")
-            for metrica, media in medias_liga.items():
-                valor_time = pegar_valor(st.session_state[time_key], metrica, media)
-                if valor_time is not None:
-                    diff = valor_time - media
-                    if metrica == "gols_sofridos_media":
-                        diff = -diff  # inverter: menor que a média é melhor
-                    if diff > 0.1:
-                        st.success(f"{metrica}: {valor_time:.1f} (+{diff:.1f})")
-                    elif diff < -0.1:
-                        st.error(f"{metrica}: {valor_time:.1f} ({diff:.1f})")
-                    else:
-                        st.info(f"{metrica}: {valor_time:.1f} (na média)")
+    
+    # Cabeçalho inspirador
+    import random
+    frase = random.choice(FRASES_CABECALHO)
+    st.markdown(f"""
+    <div style="text-align:center; padding: 20px 0 10px 0;">
+        <h1 style="color:#FFD700; margin-bottom:0;">MyPredict 2.0</h1>
+        <p style="color:#aaa; font-style:italic; font-size:1.1rem;">"{frase}"</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Abas principais
+    tab_liga, tab_times, tab_analise = st.tabs(["🏆 Liga", "⚽ Times", "🔍 Analisar"])
+    
+    # ================================================================
+    # ABA 1: LIGA
+    # ================================================================
+    with tab_liga:
+        st.subheader("Selecione o campeonato")
+        liga_nome = st.selectbox("Liga Ativa", list(LIGAS_DISPONIVEIS.keys()),
+                                 help="Escolha a liga para carregar o modelo calibrado correto.")
+        pkl_file = LIGAS_DISPONIVEIS[liga_nome]
+        
+        if st.button("Carregar Liga", use_container_width=True):
+            if os.path.exists(pkl_file):
+                st.session_state.liga_ativa = liga_nome
+                st.session_state.pkl_path = pkl_file
+                st.success(f"Liga '{liga_nome}' carregada com sucesso! Modelo pronto para uso.")
+            else:
+                st.warning(f"Arquivo '{pkl_file}' não encontrado. O modelo padrão será usado.")
+                st.session_state.liga_ativa = liga_nome
+                st.session_state.pkl_path = 'calibration_params.pkl'  # fallback
+        
+        if st.session_state.liga_ativa:
+            st.info(f"🏟️ Liga atual: **{st.session_state.liga_ativa}**")
+    
+    # ================================================================
+    # ABA 2: CENTRAL DE TIMES
+    # ================================================================
+    with tab_times:
+        st.subheader("Central de Times")
+        st.caption("Cadastre os times da liga ativa. Eles ficarão salvos para análises futuras.")
+        
+        with st.expander("➕ Adicionar / Editar Time", expanded=False):
+            nome_time = st.text_input("Nome do Time", key="ed_nome")
+            posicao = st.number_input("Posição atual na tabela", 1, 20, key="ed_pos")
+            prat_proj = st.selectbox("Prateleira Projetada", ["Elite", "Alta", "Media", "Baixa", "Critica"],
+                                     help="Expectativa antes da temporada (usada apenas para o fator de superação).")
+            
+            # Estatísticas OVRall
+            st.markdown("**📊 Estatísticas do Time (médias por jogo)**")
+            col1, col2, col3 = st.columns(3)
+            gols_media = col1.number_input("⚽ Gols Marcados", 0.0, 5.0, 1.4, 0.1, key="ed_gols")
+            gols_sofridos = col2.number_input("🛡️ Gols Sofridos", 0.0, 5.0, 1.4, 0.1, key="ed_gols_s")
+            posse = col3.number_input("📊 Posse (%)", 0, 100, 50, key="ed_posse")
+            finalizacoes = col1.number_input("🎯 Finalizações Alvo", 0.0, 15.0, 4.0, 0.5, key="ed_fin")
+            xg = col2.number_input("📈 xG", 0.0, 4.0, 1.2, 0.1, key="ed_xg")
+            escanteios = col3.number_input("🏁 Escanteios", 0.0, 15.0, 5.0, 0.5, key="ed_esc")
+            
+            # Últimos jogos (tabela dinâmica)
+            st.markdown("**📋 Últimos 10 Jogos**")
+            st.caption("Prateleira do adversário: REAL (posição na tabela no momento do jogo).")
+            num_jogos = st.slider("Quantos jogos adicionar?", 3, 10, 5, key="ed_num_jogos")
+            jogos_list = []
+            for i in range(num_jogos):
+                cols = st.columns([2, 3, 3, 1, 1])
+                res = cols[0].selectbox("Res.", ['V', 'E', 'D'], key=f"ed_res_{i}")
+                adv = cols[1].text_input("Adversário", key=f"ed_adv_{i}")
+                prat_adv = cols[2].selectbox("Prat. Real Adv.", ["Elite", "Alta", "Media", "Baixa", "Critica"], key=f"ed_prat_{i}")
+                gols_pro = cols[3].number_input("GP", 0, 10, 0, key=f"ed_gp_{i}")
+                gols_contra = cols[4].number_input("GC", 0, 10, 0, key=f"ed_gc_{i}")
+                jogos_list.append({
+                    'resultado': res,
+                    'adversario': adv,
+                    'prateleira_adv': prat_adv,
+                    'gols_pro': gols_pro,
+                    'gols_contra': gols_contra,
+                    'mandante': True  # simplificação: assumimos que o time é mandante nos jogos em casa
+                })
+            
+            if st.button("Salvar Time", use_container_width=True):
+                if nome_time:
+                    st.session_state.times[nome_time] = {
+                        'nome': nome_time,
+                        'pos_casa': posicao,
+                        'prat_casa': prat_proj,
+                        'ovrall_casa': {
+                            'gols_media': gols_media,
+                            'gols_sofridos_media': gols_sofridos,
+                            'posse_media': posse,
+                            'finalizacoes_alvo_media': finalizacoes,
+                            'xg_media': xg,
+                            'escanteios_media': escanteios,
+                            'conversao': 0.25,  # pode ser calculado
+                            'desvio_pontos': 0.5, # placeholder
+                            'pontos_pos_desvantagem_media': 1.0,
+                        },
+                        'jogos_casa': jogos_list,
+                        'jogos_fora': jogos_list,  # mesma lista para simplificar
+                    }
+                    st.success(f"Time '{nome_time}' salvo!")
                 else:
-                    st.caption(f"{metrica}: sem dados")
-
-    # 9. GRÁFICO COMPARATIVO (barras) – mantido
-    with st.expander("📊 Gráfico Comparativo dos Atributos", expanded=False):
-        categorias = list(atributos_casa.keys())
-        df_comp = pd.DataFrame({
-            'Categoria': categorias,
-            'Casa': [atributos_casa[c] for c in categorias],
-            'Fora': [atributos_fora[c] for c in categorias]
-        })
-        st.bar_chart(df_comp.set_index('Categoria'))
-        st.caption("Valores próximos a 100 indicam força máxima na categoria.")
-
-    # 10. RESUMO EXECUTIVO – ADICIONADO (cereja do bolo)
-    st.markdown('<div class="section-title">📝 RESUMO EXECUTIVO</div>', unsafe_allow_html=True)
-    def gerar_resumo():
-        nome_casa = st.session_state.time_casa_input or "Time da Casa"
-        nome_fora = st.session_state.time_fora_input or "Time Visitante"
-        gols_c = gols_casa
-        gols_sof_c = gols_sofridos_casa
-        gols_f = gols_fora
-        gols_sof_f = gols_sofridos_fora
-        posse_c = posse_casa
-        posse_f = posse_fora
-        consistencia_c = desv_casa
-        consistencia_f = desv_fora
-        resiliencia_c = res_casa
-        resiliencia_f = res_fora
-
-        frases = []
-        # Ataque vs defesa
-        if gols_c > gols_sof_f + 0.3:
-            frases.append(f"O ataque do {nome_casa} ({(gols_c):.1f} gols/jogo) deve explorar a defesa frágil do {nome_fora} ({(gols_sof_f):.1f} sofridos).")
-        elif gols_c < gols_sof_f - 0.3:
-            frases.append(f"O ataque do {nome_casa} pode ter dificuldades contra a sólida defesa do {nome_fora}.")
+                    st.error("Informe o nome do time.")
+        
+        # Lista de times cadastrados
+        st.markdown("---")
+        st.markdown("### Times Cadastrados")
+        if st.session_state.times:
+            for nome, data in st.session_state.times.items():
+                st.write(f"**{nome}** | Posição: {data['pos_casa']} | Projetada: {data['prat_casa']}")
         else:
-            frases.append(f"Ataque e defesa equilibrados entre {nome_casa} e {nome_fora}.")
-
-        if gols_f > gols_sof_c + 0.3:
-            frases.append(f"O {nome_fora} possui um ataque eficiente ({(gols_f):.1f} gols/jogo) que pode castigar a defesa do {nome_casa}.")
-        elif gols_f < gols_sof_c - 0.3:
-            frases.append(f"O ataque do {nome_fora} deve enfrentar uma defesa bem postada do {nome_casa}.")
-
-        # Posse
-        if posse_c > posse_f + 5:
-            frases.append(f"O {nome_casa} tende a controlar a posse ({(posse_c):.0f}% vs {(posse_f):.0f}%), podendo ditar o ritmo.")
-        elif posse_f > posse_c + 5:
-            frases.append(f"O {nome_fora} deve ter mais a bola ({(posse_f):.0f}% vs {(posse_c):.0f}%), forçando o {nome_casa} a se defender.")
-
-        # Consistência
-        if consistencia_c < 0.4:
-            frases.append(f"O {nome_casa} é muito consistente nos resultados.")
-        if consistencia_f < 0.4:
-            frases.append(f"O {nome_fora} também apresenta regularidade.")
-
-        # Resiliência
-        if resiliencia_c > 1.5:
-            frases.append(f"O {nome_casa} mostra força mental, recuperando pontos mesmo quando sai atrás.")
-        if resiliencia_f > 1.5:
-            frases.append(f"O {nome_fora} é resiliente em desvantagem.")
-
-        if not frases:
-            return "Preencha mais dados para gerar um resumo automático."
-        return " ".join(frases)
-
-    st.write(gerar_resumo())
-
-    # Edição detalhada OVRall
-    with st.expander("✏️ Ajustar Atributos Detalhados", expanded=False):
-        dimensoes = {
-            "⚔️ ATAQUE": [("Gols marcados", "gols_media", 1.5), ("xG", "xg_media", 1.2),
-                          ("Finalizações alvo", "finalizacoes_alvo_media", 4.0), ("Conversão %", "conversao", 12.0)],
-            "🛡️ DEFESA": [("Gols sofridos", "gols_sofridos_media", 1.2), ("xGA", "xga_media", 1.1),
-                           ("Finalizações alvo sofridas", "finalizacoes_alvo_sofridas_media", 3.5),
-                           ("Desarmes+Intercept.", "desarmes_intercep_media", 15.0)],
-            "🧩 MEIO-CAMPO": [("Posse %", "posse_media", 50.0), ("Passes certos %", "passes_certos_pct", 80.0),
-                             ("Passes-chave", "passes_chave_media", 2.0), ("Assistências", "assistencias_media", 1.5),
-                             ("Chutes totais", "chutes_media", 12.0)],
-            "📏 CONSISTÊNCIA": [("Desvio padrão pontos", "desvio_pontos", 0.5), ("Desvio gols pró", "desvio_gols_pro", 0.4),
-                               ("Desvio gols sofridos", "desvio_gols_sofridos", 0.4),
-                               ("Jogos sem sofrer gol %", "clean_sheets_pct", 35.0)],
-            "🔄 RESILIÊNCIA": [("Pontos após sair atrás", "pontos_pos_desvantagem_media", 1.2),
-                              ("Gols últimos 15 min", "gols_ultimos_15min_media", 0.3),
-                              ("Pontos após derrota", "pontos_apos_derrota_media", 1.0),
-                              ("Dif. aprovação casa-fora %", "diff_aprov_casa_fora", 15.0),
-                              ("Viradas a favor %", "aprov_viradas_favor", 12.0),
-                              ("Viradas contra %", "aprov_viradas_contra", 10.0)],
-            "🌐 ESTATÍSTICAS GLOBAIS": [("Gols 1º tempo (média)", "gols_ht_media", 0.6),
-                                        ("Gols sofridos 1º tempo", "gols_ht_sofridos_media", 0.4),
-                                        ("Escanteios (média)", "escanteios_media", 5.5),
-                                        ("Escanteios sofridos", "escanteios_sofridos_media", 4.5)]
+            st.info("Nenhum time cadastrado ainda. Use o formulário acima.")
+    
+    # ================================================================
+    # ABA 3: ANALISAR JOGO
+    # ================================================================
+    with tab_analise:
+        st.subheader("Analisar Confronto")
+        
+        if not st.session_state.times:
+            st.warning("Cadastre ao menos dois times na aba 'Times' antes de analisar.")
+            return
+        
+        nomes_times = list(st.session_state.times.keys())
+        col_a, col_b = st.columns(2)
+        time_casa_nome = col_a.selectbox("Time Casa", nomes_times, key="sel_casa")
+        time_fora_nome = col_b.selectbox("Time Fora", nomes_times, key="sel_fora")
+        
+        if time_casa_nome == time_fora_nome:
+            st.error("Selecione times diferentes.")
+            return
+        
+        # Dados dos times
+        dados_casa = st.session_state.times[time_casa_nome]
+        dados_fora = st.session_state.times[time_fora_nome]
+        
+        # Ajustes de contexto (IC)
+        with st.expander("🧠 Ajustes de Contexto (opcional)"):
+            st.markdown("Preencha para melhorar a precisão do Índice de Contexto.")
+            ic_casa = {}
+            ic_fora = {}
+            ic_casa['confronto_direto'] = st.slider(f"Aproveitamento {time_casa_nome} nos últimos 6 jogos contra {time_fora_nome} (%)", 0, 100, 50) / 100
+            ic_fora['confronto_direto'] = 1.0 - ic_casa['confronto_direto']
+            ic_casa['fator_casa'] = st.slider(f"Aproveitamento como mandante (%)", 0, 100, 60) / 100
+            ic_fora['fator_casa'] = st.slider(f"Aproveitamento como visitante (%)", 0, 100, 40) / 100
+            # Outros fatores podem ser adicionados aqui
+        
+        # Montar dicionário para executar_manual
+        dados = {
+            'time_casa': time_casa_nome,
+            'time_fora': time_fora_nome,
+            'pos_casa': dados_casa['pos_casa'],
+            'pos_fora': dados_fora['pos_casa'],
+            'prat_casa': dados_casa['prat_casa'],
+            'prat_fora': dados_fora['prat_casa'],
+            'ovrall_casa': dados_casa['ovrall_casa'],
+            'ovrall_fora': dados_fora['ovrall_casa'],
+            'jogos_casa': dados_casa['jogos_casa'],
+            'jogos_fora': dados_fora['jogos_fora'],
+            'ic_casa': ic_casa,
+            'ic_fora': ic_fora,
+            'media_gols_casa': MEDIA_GOLS_CASA_LIGA,
+            'media_gols_fora': MEDIA_GOLS_FORA_LIGA,
+            'media_ht_casa': 0.75,
+            'media_ht_fora': 0.65,
+            'media_esc_casa': 5.0,
+            'media_esc_fora': 4.5,
+            'prateleiras_extra': {},
         }
-        col_casa_ovr, col_fora_ovr = st.columns(2)
-        for time_key, lado in [('ovrall_casa', '🏠 CASA'), ('ovrall_fora', '🏟️ FORA')]:
-            with col_casa_ovr if time_key == 'ovrall_casa' else col_fora_ovr:
-                st.markdown(f'**{lado}**')
-                for nome_dim, indicadores in dimensoes.items():
-                    st.caption(nome_dim)
-                    for label, key, padrao in indicadores:
-                        val = st.session_state[time_key].get(key, padrao)
-                        novo = st.number_input(label, value=float(val), step=0.1,
-                                               key=f"{time_key}_{key}", label_visibility="visible")
-                        st.session_state[time_key][key] = novo
-
-    # --- ÚLTIMOS JOGOS (IMA) ---
-    st.markdown('<div class="section-title">⚡ ÚLTIMOS JOGOS (IMA)</div>', unsafe_allow_html=True)
-    col_jogos_casa, col_jogos_fora = st.columns(2)
-    for lado, chave_jogos in [('🏠 Casa', 'jogos_casa'), ('🏟️ Fora', 'jogos_fora')]:
-        with col_jogos_casa if chave_jogos == 'jogos_casa' else col_jogos_fora:
-            st.markdown(f'<h4 style="color:#fff;">{lado}</h4>', unsafe_allow_html=True)
-            jogos = st.session_state[chave_jogos]
-            html = '<table class="jogos-tabela"><tr><th>Res.</th><th>Prat. Adv.</th><th>Mandante</th></tr>'
-            for i in range(10):
-                j = jogos[i] if i < len(jogos) else {}
-                res = j.get('resultado', '-')
-                prat_adv = j.get('prateleira_adv', '-')
-                mand = 'Sim' if j.get('mandante') else 'Não'
-                html += f'<tr><td class="resultado-{res}">{res}</td><td>{prat_adv}</td><td>{mand}</td></tr>'
-            html += '</table>'
-            st.markdown(html, unsafe_allow_html=True)
-            if st.button(f"Editar {lado}", key=f"edit_{chave_jogos}"):
-                st.session_state[f"editando_{chave_jogos}"] = True
-            if st.session_state.get(f"editando_{chave_jogos}"):
-                with st.form(key=f"form_{chave_jogos}"):
-                    novos_jogos = []
-                    for i in range(10):
-                        j = jogos[i] if i < len(jogos) else {}
-                        c1, c2, c3 = st.columns([1, 2, 1])
-                        res = c1.selectbox("Res.", ["", "V", "E", "D"],
-                                           index=["", "V", "E", "D"].index(j.get('resultado', '')) if j.get('resultado') in ["V","E","D"] else 0,
-                                           key=f"{chave_jogos}_{i}_res")
-                        prat_adv = c2.selectbox("Prat. adv.", PRATELEIRAS,
-                                                index=PRATELEIRAS.index(j.get('prateleira_adv', 'Media')),
-                                                key=f"{chave_jogos}_{i}_prat")
-                        mand = c3.checkbox("Mandante", value=j.get('mandante', False), key=f"{chave_jogos}_{i}_mand")
-                        if res:
-                            novos_jogos.append({"resultado": res, "prateleira_adv": prat_adv, "mandante": mand})
-                    if st.form_submit_button("Salvar"):
-                        st.session_state[chave_jogos] = novos_jogos
-                        st.session_state[f"editando_{chave_jogos}"] = False
-                        st.rerun()
-
-    # --- IC ---
-    with st.expander("🧠 Índice de Contexto (IC)", expanded=False):
-        metricas_ic = [
-            ("Confronto direto %", "confronto_direto", 50.0),
-            ("Mesmo escalão %", "mesmo_escalao", 50.0),
-            ("Contra escalão adversário %", "contra_escalao_adversario", 50.0),
-            ("Fator casa %", "fator_casa", 50.0),
-            ("Odds (decimal)", "odds", 2.0),
-        ]
-        col_casa_ic, col_fora_ic = st.columns(2)
-        for time_key, lado in [('ic_casa', '🏠 CASA'), ('ic_fora', '🏟️ FORA')]:
-            with col_casa_ic if time_key == 'ic_casa' else col_fora_ic:
-                st.markdown(f'**{lado}**')
-                for label, key, padrao in metricas_ic:
-                    val = st.session_state[time_key].get(key, padrao)
-                    novo = st.number_input(label, value=float(val), step=1.0 if key != 'odds' else 0.1,
-                                           key=f"{time_key}_{key}", label_visibility="visible")
-                    st.session_state[time_key][key] = novo
-
-    # --- Médias da Liga ---
-    with st.expander("📊 Médias da Liga", expanded=False):
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.number_input("Gols casa", value=st.session_state.media_gols_casa, key="mgc")
-            st.number_input("Gols HT casa", value=st.session_state.media_ht_casa, key="mhtc")
-            st.number_input("Escanteios casa", value=st.session_state.media_esc_casa, key="mecc")
-        with c2:
-            st.number_input("Gols fora", value=st.session_state.media_gols_fora, key="mgf")
-            st.number_input("Gols HT fora", value=st.session_state.media_ht_fora, key="mhtf")
-            st.number_input("Escanteios fora", value=st.session_state.media_esc_fora, key="mecf")
-
-    # --- GERAR ---
-    st.markdown('<div style="margin: 30px 0;"></div>', unsafe_allow_html=True)
-    if st.button("🔥 GERAR ANÁLISE COMPLETA", use_container_width=True):
-        st.session_state.time_casa = st.session_state.time_casa_input or "Time da Casa"
-        st.session_state.time_fora = st.session_state.time_fora_input or "Time Visitante"
-        st.session_state.pos_casa = st.session_state.pos_casa_input
-        st.session_state.pos_fora = st.session_state.pos_fora_input
-        st.session_state.prat_casa = st.session_state.prat_casa_input
-        st.session_state.prat_fora = st.session_state.prat_fora_input
-        st.session_state.media_gols_casa = st.session_state.mgc
-        st.session_state.media_gols_fora = st.session_state.mgf
-        st.session_state.media_ht_casa = st.session_state.mhtc
-        st.session_state.media_ht_fora = st.session_state.mhtf
-        st.session_state.media_esc_casa = st.session_state.mecc
-        st.session_state.media_esc_fora = st.session_state.mecf
-
-        dados = {k: v for k, v in st.session_state.items() if k in [
-            'time_casa', 'time_fora', 'pos_casa', 'pos_fora', 'prat_casa', 'prat_fora',
-            'jogos_casa', 'jogos_fora', 'ovrall_casa', 'ovrall_fora', 'ic_casa', 'ic_fora',
-            'media_gols_casa', 'media_gols_fora', 'media_ht_casa', 'media_ht_fora',
-            'media_esc_casa', 'media_esc_fora', 'prateleiras_extra'
-        ]}
-        res, err = executar_manual(dados)
-        if err:
-            st.error(err)
-        else:
-            st.session_state.resultados = res
-            st.rerun()
-
-    if 'resultados' in st.session_state and st.session_state.resultados is not None:
-        show_results_manual(st.session_state.resultados)
+        
+        if st.button("⚡ Calcular Análise Completa", use_container_width=True, type="primary"):
+            pkl_path = st.session_state.get('pkl_path', 'calibration_params.pkl')
+            res, err = executar_manual(dados, pkl_path)
+            if err:
+                st.error(err)
+            else:
+                show_results_manual(res)
+                # Frase aleatória de resultado
+                st.info(random.choice(FRASES_RESULTADOS))
