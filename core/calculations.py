@@ -1,4 +1,4 @@
-# core/calculations.py — Orquestração dos cálculos (automático e manual)
+## core/calculations.py — Orquestração dos cálculos (automático e manual)
 from core.ratings import (
     calcular_ima, calcular_ovrall, calcular_ic, calcular_mpv,
     obter_prateleira, _percentil, calcular_pontuacao_jogo
@@ -195,8 +195,10 @@ def executar_manual(dados):
 
     superacao_casa = fator_superacao(prat_real_casa, dados.get('prat_casa', 'Media'))
     superacao_fora = fator_superacao(prat_real_fora, dados.get('prat_fora', 'Media'))
-    mpv_casa += superacao_casa
-    mpv_fora += superacao_fora
+
+    # Limitar o ajuste entre -10 e +10
+    mpv_casa += max(-10.0, min(10.0, superacao_casa))
+    mpv_fora += max(-10.0, min(10.0, superacao_fora))
 
     # --- ELO ---
     from core.elo import calcular_elo, normalizar_elo
