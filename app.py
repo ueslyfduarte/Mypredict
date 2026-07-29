@@ -10,7 +10,7 @@ def main():
     st.sidebar.markdown("# MyPredict 2.0")
     modo = st.sidebar.radio("Modo", ["Automático (API)", "Manual"])
 
-    if modo == "Automático (API)":
+    if modo == "Automatico (API)":
         from ui.automatic_page import render_automatico
         render_automatico()
     else:
