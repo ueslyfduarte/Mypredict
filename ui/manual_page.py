@@ -1,4 +1,5 @@
 # ui/manual_page.py — Modo Manual escalável com Central de Times e Ligas
+st.write("✅ Manual page carregada com sucesso!")
 import streamlit as st
 import pandas as pd
 import os
