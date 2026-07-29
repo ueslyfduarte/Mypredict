@@ -1,6 +1,6 @@
 # ui/components.py — Componentes reutilizáveis da interface
 import streamlit as st
-from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
+from config import THRESHOLD_GOLD, THRESHOLD_VALUE, THRESHOLD_FAVORITO
 
 def show_api_usage(uso, limite):
     if uso is not None:
@@ -8,37 +8,19 @@ def show_api_usage(uso, limite):
         cor = "#00ff7f" if porcentagem < 0.5 else ("#ffaa00" if porcentagem < 0.8 else "#ff4d4d")
         st.markdown(f'<div style="display:flex;justify-content:center;"><div style="display:inline-flex;align-items:center;gap:8px;padding:6px 16px;background:rgba(20,20,35,0.9);border-radius:20px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{cor};"></span> API: {uso}/{limite}</div></div>', unsafe_allow_html=True)
 
-def show_results_auto(resultados):
-    st.markdown(f'<div style="text-align:center;margin:20px 0;"><span style="font-size:2rem;font-weight:900;color:#ffd700;">{resultados["time_casa"]}</span><span style="font-size:1.5rem;color:#888;margin:0 12px;">vs</span><span style="font-size:2rem;font-weight:900;color:#c0c0c0;">{resultados["time_fora"]}</span></div>', unsafe_allow_html=True)
-    c1,c2,c3=st.columns(3)
-    c1.metric("🏠 Casa", f"{resultados['p1']:.1%}")
-    c2.metric("🤝 Empate", f"{resultados['pX']:.1%}")
-    c3.metric("🏟️ Fora", f"{resultados['p2']:.1%}")
-    if resultados.get('rec_p1'): st.markdown('<div style="color:#ffd700;text-align:center;font-weight:bold;">VALUE CASA</div>', unsafe_allow_html=True)
-    if resultados.get('rec_p2'): st.markdown('<div style="color:#ffd700;text-align:center;font-weight:bold;">VALUE FORA</div>', unsafe_allow_html=True)
-    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-    st.subheader("🎯 Recomendações de Mercado")
-    mercados = [
-        ("Over 2.5 Gols", resultados.get('over25')),
-        ("Ambas Marcam", resultados.get('btts')),
-        ("Gol 1º Tempo", resultados.get('gol_ht')),
-        ("Over Escanteios", resultados.get('esc')),
-    ]
-    cols = st.columns(len(mercados))
-    for col, (nome, prob) in zip(cols, mercados):
-        with col:
-            if prob is not None:
-                rec = "VALUE" if prob >= 0.60 else ("FAVORITO" if prob >= 0.50 else "NÃO RECOMENDADO")
-                border = "2px solid #ffd700" if rec=="VALUE" else ("1px solid #888" if rec=="NÃO RECOMENDADO" else "1px solid #aaa")
-                st.markdown(f"""
-                <div style="background:rgba(20,20,35,0.9); border-radius:14px; padding:14px; border:{border}; text-align:center;">
-                    <div style="color:#aaa; font-size:0.8rem;">{nome}</div>
-                    <strong style="color:#ffd700; font-size:1.2rem;">{prob:.1%}</strong>
-                    <div style="color:#ffd700; font-size:0.7rem; margin-top:4px;">{rec}</div>
-                </div>
-                """, unsafe_allow_html=True)
+def get_selo(prob):
+    if prob is None:
+        return ""
+    if prob >= THRESHOLD_GOLD:
+        return "🥇 MyPredict GOLD"
+    elif prob >= THRESHOLD_VALUE:
+        return "✅ Value"
+    elif prob >= THRESHOLD_FAVORITO:
+        return "🔵 Favorito"
+    else:
+        return ""
 
-def show_results_manual(res, detalhes_expandidos=True):
+def show_results_manual(res):
     st.markdown(f"""
     <div style="text-align:center; margin:20px 0;">
         <span style="font-size:2rem; font-weight:900; color:#ffd700;">{res['time_casa']}</span>
@@ -101,13 +83,14 @@ def show_results_manual(res, detalhes_expandidos=True):
         </div>
         """, unsafe_allow_html=True)
 
-    # Probabilidades
+    # Probabilidades 1X2
     st.subheader("📊 PROBABILIDADES 1X2")
     col1, col2, col3 = st.columns(3)
     col1.metric("🏠 Casa", f"{res['p1']:.1%}")
     col2.metric("🤝 Empate", f"{res['pX']:.1%}")
     col3.metric("🏟️ Fora", f"{res['p2']:.1%}")
 
+    # Mercados com selos
     st.subheader("🎯 RECOMENDAÇÕES DE MERCADO")
     mercados = [
         ("Over 2.5 Gols", res.get('over25')),
@@ -119,18 +102,45 @@ def show_results_manual(res, detalhes_expandidos=True):
     for col, (nome, prob) in zip(cols, mercados):
         with col:
             if prob is not None:
-                rec = "VALUE" if prob >= 0.60 else ("FAVORITO" if prob >= 0.50 else "NÃO RECOMENDADO")
-                border = "2px solid #ffd700" if rec=="VALUE" else ("1px solid #888" if rec=="NÃO RECOMENDADO" else "1px solid #aaa")
+                selo = get_selo(prob)
+                border = "2px solid gold" if selo.startswith("🥇") else (
+                    "1px solid #4CAF50" if "✅" in selo else (
+                        "1px solid #2196F3" if "🔵" in selo else "1px solid #888"
+                    )
+                )
                 st.markdown(f"""
-                <div style="background:rgba(20,20,35,0.9); border-radius:14px; padding:14px; border:{border}; text-align:center;">
+                <div style="background:rgba(20,20,35,0.9); border-radius:14px; padding:14px; 
+                     border:{border}; text-align:center;">
                     <div style="color:#aaa; font-size:0.8rem;">{nome}</div>
                     <strong style="color:#ffd700; font-size:1.2rem;">{prob:.1%}</strong>
-                    <div style="color:#ffd700; font-size:0.7rem; margin-top:4px;">{rec}</div>
+                    <div style="color:#ffd700; font-size:0.7rem; margin-top:4px;">{selo}</div>
                 </div>
                 """, unsafe_allow_html=True)
 
-    if detalhes_expandidos:
-        # Detalhamento expandível simplificado (pode ser enriquecido)
-        with st.expander("🔍 Como o MP Value é calculado?"):
-            st.write("**MP Value = (IMA + OVRall + IC) / 3**")
-            st.markdown("Detalhamento completo disponível no modo manual (aba 'Detalhes').")
+    # Detalhamento por etapa (expanders individuais)
+    with st.expander("⚡ Como o IMA foi calculado?"):
+        if 'detalhes_ima' in res:
+            st.write("**Casa:**")
+            for recorte, jogos in res['detalhes_ima']['casa'].items():
+                if jogos:
+                    st.write(f"**{recorte}** (média: {sum(j['pontos'] for j in jogos)/len(jogos):.2f})")
+            st.write("**Fora:**")
+            for recorte, jogos in res['detalhes_ima']['fora'].items():
+                if jogos:
+                    st.write(f"**{recorte}** (média: {sum(j['pontos'] for j in jogos)/len(jogos):.2f})")
+        else:
+            st.write("Detalhamento não disponível.")
+
+    with st.expander("📈 Como o OVRall foi calculado?"):
+        if 'notas_casa' in res:
+            st.write("**Casa:**")
+            st.write(res['notas_casa'])
+            st.write("**Fora:**")
+            st.write(res['notas_fora'])
+        else:
+            st.write("Detalhamento não disponível.")
+
+    with st.expander("🧠 Como o IC foi calculado?"):
+        st.write("O IC é a média ponderada dos fatores fornecidos (confronto direto, fator casa, etc.).")
+        st.write(f"Casa: {res['ic_casa']:.1f}")
+        st.write(f"Fora: {res['ic_fora']:.1f}")
