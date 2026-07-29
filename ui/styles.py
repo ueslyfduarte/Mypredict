@@ -75,5 +75,13 @@ def injetar_css():
         .detail-table { width: 100%; border-collapse: collapse; margin: 12px 0; }
         .detail-table th { color: #ffd700; font-weight: 600; padding: 8px; border-bottom: 1px solid #333; text-align: left; }
         .detail-table td { padding: 8px; border-bottom: 1px solid #222; color: #ddd; }
+        .team-block.gold-highlight {
+    border: 2px solid #ffd700 !important;
+    box-shadow: 0 0 20px rgba(255,215,0,0.4);
+}
+.team-block.gold-highlight .team-title {
+    font-size: 1.6rem;
+    text-shadow: 0 0 10px rgba(255,215,0,0.5);
+}
     </style>
     """, unsafe_allow_html=True)
