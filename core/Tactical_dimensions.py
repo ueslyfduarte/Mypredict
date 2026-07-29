@@ -1,110 +1,49 @@
-# core/tactical_dimensions.py
 import numpy as np
-from config import (
-    LEAGUE_BENCHMARKS,
-    DIMENSION_INDICATORS,
-    DIMENSION_WEIGHTS,
-    IMA_MOD_SENSITIVITY,
-    IC_MOD_SENSITIVITY
-)
 
-def z_score(value, mean, std):
-    """Calcula z-score com proteção contra divisão por zero"""
-    if std == 0:
-        return 0
-    return (value - mean) / std
-
-def z_to_scale(z, k=1.5):
-    """Converte z-score para escala 0-100 usando sigmoide"""
-    return 100 / (1 + np.exp(-k * z))
-
-def compute_dimension_score(team_data, dimension_name, benchmarks):
-    """
-    Calcula o escore de uma dimensão tática para um time.
-    
-    Args:
-        team_data: dict com todos os indicadores do time
-        dimension_name: string (ex: 'ataque_posicional')
-        benchmarks: dict com médias e desvios da liga por indicador
-    
-    Returns:
-        float: escore bruto 0-100
-    """
-    indicators = DIMENSION_INDICATORS.get(dimension_name, [])
+def compute_dimension_score(team_stats, dimension_name, indicators_map, benchmarks):
+    indicadores = indicators_map.get(dimension_name, [])
+    if not indicadores:
+        return 50.0
     scores = []
-    
-    for ind in indicators:
-        value = team_data.get(ind)
-        if value is None:
+    for ind in indicadores:
+        if ind not in team_stats or ind not in benchmarks:
             continue
-        
-        mean = benchmarks[ind]['mean']
-        std = benchmarks[ind]['std']
-        
-        z = z_score(value, mean, std)
-        
-        # Inverte para indicadores onde menor é melhor
-        if benchmarks[ind].get('lower_better', False):
+        val = team_stats[ind]
+        b = benchmarks[ind]
+        if b['std'] == 0:
+            z = 0
+        else:
+            z = (val - b['mean']) / b['std']
+        if b.get('lower_better', False):
             z = -z
-            
-        score = z_to_scale(z)
+        score = 100 / (1 + np.exp(-1.5 * z))
         scores.append(score)
-    
     if not scores:
-        return 50.0  # neutro se não houver dados
-    
+        return 50.0
     return np.mean(scores)
 
-def compute_all_dimensions(team_data, benchmarks):
-    """
-    Retorna vetor tático completo para um time.
-    
-    Returns:
-        dict: {dimension_name: raw_score}
-    """
-    dimensions = {}
-    for dim in DIMENSION_INDICATORS.keys():
-        dimensions[dim] = compute_dimension_score(team_data, dim, benchmarks)
-    return dimensions
+def compute_all_dimensions(team_stats, indicators_map, benchmarks):
+    dims = {}
+    for dim_name in indicators_map:
+        dims[dim_name] = compute_dimension_score(team_stats, dim_name, indicators_map, benchmarks)
+    return dims
 
-def modulate_with_context(raw_scores, ima, ic):
-    """
-    Aplica modulação de momento (IMA) e contexto (IC) nos escores.
-    
-    Args:
-        raw_scores: dict de scores brutos por dimensão
-        ima: float 0-100
-        ic: float 0-100
-    
-    Returns:
-        dict: scores modulados
-    """
+def modulate_with_context(dimensions, ima, ic, ima_sens=0.3, ic_sens=0.2):
     modulated = {}
-    ima_factor = 1 + IMA_MOD_SENSITIVITY * (ima - 50) / 50
-    ic_factor = 1 + IC_MOD_SENSITIVITY * (ic - 50) / 50
-    
-    for dim, score in raw_scores.items():
+    ima_factor = 1 + ima_sens * (ima - 50) / 50
+    ic_factor = 1 + ic_sens * (ic - 50) / 50
+    for dim, score in dimensions.items():
         adjusted = score * ima_factor * ic_factor
         modulated[dim] = max(0, min(100, adjusted))
-    
     return modulated
 
-def compute_mpv_from_dimensions(modulated_scores, weights):
-    """
-    Calcula o MPV como média ponderada das dimensões táticas.
-    
-    Args:
-        modulated_scores: dict com scores modulados
-        weights: dict com peso de cada dimensão
-    
-    Returns:
-        float: MPV 0-100
-    """
+def compute_mpv(dimensions, weights):
     total = 0
-    weight_sum = 0
-    for dim, score in modulated_scores.items():
-        w = weights.get(dim, 0)
-        total += w * score
-        weight_sum += w
-    
-    return total / weight_sum if weight_sum > 0 else 50.0
+    total_weight = 0
+    for dim, w in weights.items():
+        if dim in dimensions:
+            total += dimensions[dim] * w
+            total_weight += w
+    if total_weight == 0:
+        return 50.0
+    return total / total_weight
