@@ -32,23 +32,23 @@ def render_manual():
             st.session_state[chave] = padrao
 
     # --- CONFRONTO (Cards) ---
-    prat_real_casa = obter_prateleira(st.session_state.pos_casa)
-    prat_real_fora = obter_prateleira(st.session_state.pos_fora)
+    prat_real_casa = obter_prateleira(st.session_state.pos_casa_input)
+    prat_real_fora = obter_prateleira(st.session_state.pos_fora_input)
 
     st.markdown('<div class="confronto-container">', unsafe_allow_html=True)
     st.markdown(f'''
         <div class="time-card {"destaque" if prat_real_casa in ["Elite","Alta"] else ""}">
-            <div class="time-nome">{st.session_state.time_casa or "Time da Casa"}</div>
-            <div class="time-detalhe">Posição: {st.session_state.pos_casa} | Real: {prat_real_casa}</div>
-            <div class="time-detalhe">Projetada: {st.session_state.prat_casa}</div>
+            <div class="time-nome">{st.session_state.time_casa_input or "Time da Casa"}</div>
+            <div class="time-detalhe">Posição: {st.session_state.pos_casa_input} | Real: {prat_real_casa}</div>
+            <div class="time-detalhe">Projetada: {st.session_state.get('prat_casa_input', 'Media')}</div>
         </div>
     ''', unsafe_allow_html=True)
     st.markdown('<div class="vs-divider">VS</div>', unsafe_allow_html=True)
     st.markdown(f'''
         <div class="time-card {"destaque" if prat_real_fora in ["Elite","Alta"] else ""}">
-            <div class="time-nome">{st.session_state.time_fora or "Time Visitante"}</div>
-            <div class="time-detalhe">Posição: {st.session_state.pos_fora} | Real: {prat_real_fora}</div>
-            <div class="time-detalhe">Projetada: {st.session_state.prat_fora}</div>
+            <div class="time-nome">{st.session_state.time_fora_input or "Time Visitante"}</div>
+            <div class="time-detalhe">Posição: {st.session_state.pos_fora_input} | Real: {prat_real_fora}</div>
+            <div class="time-detalhe">Projetada: {st.session_state.get('prat_fora_input', 'Media')}</div>
         </div>
     ''', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -97,8 +97,8 @@ def render_manual():
 
     col_att_casa, col_att_fora = st.columns(2)
     for col, atts, nome_time in [
-        (col_att_casa, atributos_casa, st.session_state.time_casa or "Casa"),
-        (col_att_fora, atributos_fora, st.session_state.time_fora or "Fora")
+        (col_att_casa, atributos_casa, st.session_state.time_casa_input or "Casa"),
+        (col_att_fora, atributos_fora, st.session_state.time_fora_input or "Fora")
     ]:
         with col:
             st.markdown(f'<h3 style="color:#fff; text-align:center;">{nome_time}</h3>', unsafe_allow_html=True)
