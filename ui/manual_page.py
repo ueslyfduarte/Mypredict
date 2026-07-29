@@ -1,7 +1,6 @@
-# ui/manual_page.py — Painel EA Sports completo com comparativos e alertas
+# ui/manual_page.py — Painel EA Sports completo com comparativos, alertas e resumo executivo
 import streamlit as st
 import pandas as pd
-import math
 from ui.styles import injetar_css
 from ui.components import show_results_manual
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
@@ -272,7 +271,61 @@ def render_manual():
     with col_mom2:
         st.write(f"Fora: {mom_fora if mom_fora else 'Indisponível'}")
 
-    # 7. GRÁFICO COMPARATIVO (barras)
+    # 7. LINHA DO TEMPO DO IMA (pontos corridos) – ADICIONADO
+    st.markdown('<div class="section-title">⚡ LINHA DO TEMPO DE PONTOS (IMA)</div>', unsafe_allow_html=True)
+    def render_linha_tempo(jogos, nome):
+        if len(jogos) < 10:
+            st.caption(f"{nome}: dados insuficientes para 10 jogos.")
+            return
+        resultados = [j['resultado'] for j in jogos[:10]]
+        # Cálculo de pontos corridos dos últimos 5
+        pts_ultimos5 = sum(3 if r=='V' else (1 if r=='E' else 0) for r in resultados[:5])
+        pts_anteriores5 = sum(3 if r=='V' else (1 if r=='E' else 0) for r in resultados[5:10])
+        # Renderizar bolinhas
+        bolas = ' '.join(['🟢' if r=='V' else ('🟡' if r=='E' else '🔴') for r in resultados])
+        st.markdown(f"**{nome}**  {bolas}")
+        st.write(f"Últimos 5 jogos: **{pts_ultimos5} pontos** | 5 anteriores: **{pts_anteriores5} pontos**")
+    col_l1, col_l2 = st.columns(2)
+    with col_l1:
+        render_linha_tempo(st.session_state.jogos_casa, st.session_state.time_casa_input or "Casa")
+    with col_l2:
+        render_linha_tempo(st.session_state.jogos_fora, st.session_state.time_fora_input or "Fora")
+
+    # 8. COMPARAÇÃO COM A MÉDIA DA LIGA – ADICIONADO
+    st.markdown('<div class="section-title">📈 COMPARAÇÃO COM A MÉDIA DA LIGA</div>', unsafe_allow_html=True)
+    medias_liga = {
+        "gols_media": MEDIA_GOLS_CASA_LIGA,  # usar média casa como referência geral? vamos usar a média geral (casa+fora)/2
+        "gols_sofridos_media": (MEDIA_GOLS_CASA_LIGA + MEDIA_GOLS_FORA_LIGA)/2,
+        "posse_media": 50.0,
+        "finalizacoes_alvo_media": 4.0,
+        "xg_media": 1.2,
+        "chutes_media": 12.0,
+    }
+    # Ajustar médias da liga para gols: usaremos a média dos dois times? Melhor usar a média global fixa do config.
+    medias_liga["gols_media"] = (MEDIA_GOLS_CASA_LIGA + MEDIA_GOLS_FORA_LIGA)/2
+    medias_liga["gols_sofridos_media"] = (MEDIA_GOLS_CASA_LIGA + MEDIA_GOLS_FORA_LIGA)/2
+
+    col_comp1, col_comp2 = st.columns(2)
+    for col, time_key, nome in [(col_comp1, 'ovrall_casa', st.session_state.time_casa_input or "Casa"), 
+                                (col_comp2, 'ovrall_fora', st.session_state.time_fora_input or "Fora")]:
+        with col:
+            st.markdown(f"**{nome}**")
+            for metrica, media in medias_liga.items():
+                valor_time = pegar_valor(st.session_state[time_key], metrica, media)
+                if valor_time is not None:
+                    diff = valor_time - media
+                    if metrica == "gols_sofridos_media":
+                        diff = -diff  # inverter: menor que a média é melhor
+                    if diff > 0.1:
+                        st.success(f"{metrica}: {valor_time:.1f} (+{diff:.1f})")
+                    elif diff < -0.1:
+                        st.error(f"{metrica}: {valor_time:.1f} ({diff:.1f})")
+                    else:
+                        st.info(f"{metrica}: {valor_time:.1f} (na média)")
+                else:
+                    st.caption(f"{metrica}: sem dados")
+
+    # 9. GRÁFICO COMPARATIVO (barras) – mantido
     with st.expander("📊 Gráfico Comparativo dos Atributos", expanded=False):
         categorias = list(atributos_casa.keys())
         df_comp = pd.DataFrame({
@@ -282,6 +335,60 @@ def render_manual():
         })
         st.bar_chart(df_comp.set_index('Categoria'))
         st.caption("Valores próximos a 100 indicam força máxima na categoria.")
+
+    # 10. RESUMO EXECUTIVO – ADICIONADO (cereja do bolo)
+    st.markdown('<div class="section-title">📝 RESUMO EXECUTIVO</div>', unsafe_allow_html=True)
+    def gerar_resumo():
+        nome_casa = st.session_state.time_casa_input or "Time da Casa"
+        nome_fora = st.session_state.time_fora_input or "Time Visitante"
+        gols_c = gols_casa
+        gols_sof_c = gols_sofridos_casa
+        gols_f = gols_fora
+        gols_sof_f = gols_sofridos_fora
+        posse_c = posse_casa
+        posse_f = posse_fora
+        consistencia_c = desv_casa
+        consistencia_f = desv_fora
+        resiliencia_c = res_casa
+        resiliencia_f = res_fora
+
+        frases = []
+        # Ataque vs defesa
+        if gols_c > gols_sof_f + 0.3:
+            frases.append(f"O ataque do {nome_casa} ({(gols_c):.1f} gols/jogo) deve explorar a defesa frágil do {nome_fora} ({(gols_sof_f):.1f} sofridos).")
+        elif gols_c < gols_sof_f - 0.3:
+            frases.append(f"O ataque do {nome_casa} pode ter dificuldades contra a sólida defesa do {nome_fora}.")
+        else:
+            frases.append(f"Ataque e defesa equilibrados entre {nome_casa} e {nome_fora}.")
+
+        if gols_f > gols_sof_c + 0.3:
+            frases.append(f"O {nome_fora} possui um ataque eficiente ({(gols_f):.1f} gols/jogo) que pode castigar a defesa do {nome_casa}.")
+        elif gols_f < gols_sof_c - 0.3:
+            frases.append(f"O ataque do {nome_fora} deve enfrentar uma defesa bem postada do {nome_casa}.")
+
+        # Posse
+        if posse_c > posse_f + 5:
+            frases.append(f"O {nome_casa} tende a controlar a posse ({(posse_c):.0f}% vs {(posse_f):.0f}%), podendo ditar o ritmo.")
+        elif posse_f > posse_c + 5:
+            frases.append(f"O {nome_fora} deve ter mais a bola ({(posse_f):.0f}% vs {(posse_c):.0f}%), forçando o {nome_casa} a se defender.")
+
+        # Consistência
+        if consistencia_c < 0.4:
+            frases.append(f"O {nome_casa} é muito consistente nos resultados.")
+        if consistencia_f < 0.4:
+            frases.append(f"O {nome_fora} também apresenta regularidade.")
+
+        # Resiliência
+        if resiliencia_c > 1.5:
+            frases.append(f"O {nome_casa} mostra força mental, recuperando pontos mesmo quando sai atrás.")
+        if resiliencia_f > 1.5:
+            frases.append(f"O {nome_fora} é resiliente em desvantagem.")
+
+        if not frases:
+            return "Preencha mais dados para gerar um resumo automático."
+        return " ".join(frases)
+
+    st.write(gerar_resumo())
 
     # Edição detalhada OVRall
     with st.expander("✏️ Ajustar Atributos Detalhados", expanded=False):
