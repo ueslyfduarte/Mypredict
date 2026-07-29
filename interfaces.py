@@ -1,10 +1,16 @@
-# interfaces.py — MyPredict 2.0 (com OVRall completo e intuitivo)
+# interfaces.py — MyPredict 2.0 (com MP Value destacado e detalhamento completo)
 import streamlit as st
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
 from manual import executar_manual
-from utils import para_float, extrair_jogos
+from utils import para_float
 from data_source_api_football import get_api_usage
 from automatico import inicializar_estado, carregar_ligas, buscar_temporadas, buscar_times, executar_automatico
+
+# Constantes do projeto para exibição educativa (não afetam o cálculo)
+PRATELEIRAS_EX = {'Elite': (1,3), 'Alta': (4,7), 'Media': (8,13), 'Baixa': (14,16), 'Critica': (17,99)}
+PESOS_RECORTES_EX = {'10G': 0.10, '5G': 0.15, '3G': 0.20, '5CF': 0.25, '3CF': 0.30}
+PESOS_OVRALL_EX = {'Ataque': 0.25, 'Defesa': 0.25, 'MeioCampo': 0.20, 'Consistencia': 0.15, 'Resiliencia': 0.15}
+PESOS_IC_EX = {'confronto_direto': 0.25, 'mesmo_escalao': 0.20, 'contra_escalao_adversario': 0.20, 'fator_casa': 0.20, 'odds': 0.15}
 
 def injetar_css():
     st.markdown("""
@@ -19,21 +25,6 @@ def injetar_css():
 
         .divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(255,215,0,0.2), transparent); margin: 24px 0; }
 
-        .value-seal {
-            background: linear-gradient(145deg, #ffd700, #ff8c00, #b8860b);
-            color: #000; font-weight: 900; text-align: center; border-radius: 50%;
-            width: 70px; height: 70px; display: flex; align-items: center; justify-content: center;
-            font-size: 0.7rem; letter-spacing: 1px; box-shadow: 0 0 25px rgba(255,215,0,0.5);
-            animation: sealPulse 2s ease-in-out infinite; margin: 10px auto;
-        }
-        @keyframes sealPulse { 0%,100%{box-shadow:0 0 15px rgba(255,215,0,0.4);} 50%{box-shadow:0 0 30px rgba(255,215,0,0.8);} }
-
-        .rec-card {
-            background: rgba(20,20,35,0.9); border-radius: 14px; padding: 14px;
-            border: 1px solid rgba(255,215,0,0.2); text-align: center; margin: 6px 0;
-        }
-        .rec-card strong { color: #ffd700; font-size: 1.2rem; }
-
         .stButton > button {
             background: linear-gradient(135deg, #ffd700, #ff8c00); color: #000; border: none;
             font-weight: 700; font-size: 1rem; border-radius: 12px; padding: 12px 24px;
@@ -41,34 +32,13 @@ def injetar_css():
         }
         .stButton > button:hover { transform: scale(1.02); box-shadow: 0 8px 25px rgba(255,215,0,0.5); }
 
-        .scoreboard {
-            background: linear-gradient(180deg, rgba(0,0,0,0.5), rgba(20,20,30,0.8));
-            border: 2px solid rgba(255,215,0,0.4); border-radius: 20px;
-            padding: 16px; text-align: center; margin: 16px 0;
-        }
-        .score-home, .score-away { font-size: 2rem; font-weight: 900; color: #ffd700; }
-        .score-vs { font-size: 1rem; color: #888; margin: 0 12px; }
-
+        /* Times */
         .team-block {
-            border-radius: 16px;
-            padding: 18px 14px;
-            margin-bottom: 20px;
+            border-radius: 16px; padding: 18px 14px; margin-bottom: 20px;
         }
-        .team-block.home {
-            background: linear-gradient(145deg, rgba(255,215,0,0.08), rgba(255,215,0,0.02));
-            border: 1px solid rgba(255,215,0,0.3);
-        }
-        .team-block.away {
-            background: linear-gradient(145deg, rgba(192,192,192,0.08), rgba(192,192,192,0.02));
-            border: 1px solid rgba(192,192,192,0.3);
-        }
-
-        .team-title {
-            font-size: 1.4rem;
-            font-weight: 800;
-            text-align: center;
-            margin-bottom: 16px;
-        }
+        .team-block.home { background: linear-gradient(145deg, rgba(255,215,0,0.08), rgba(255,215,0,0.02)); border: 1px solid rgba(255,215,0,0.3); }
+        .team-block.away { background: linear-gradient(145deg, rgba(192,192,192,0.08), rgba(192,192,192,0.02)); border: 1px solid rgba(192,192,192,0.3); }
+        .team-title { font-size: 1.4rem; font-weight: 800; text-align: center; margin-bottom: 16px; }
         .team-title.home-title { color: #ffd700; }
         .team-title.away-title { color: #c0c0c0; }
 
@@ -78,37 +48,52 @@ def injetar_css():
             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
             margin: 32px 0 16px 0;
         }
+        .dimension-title { font-size: 1.1rem; font-weight: 700; color: #ffd700; margin: 12px 0 8px 0; padding-left: 8px; border-left: 3px solid #ffd700; }
 
-        .dimension-title {
-            font-size: 1.1rem; font-weight: 700; color: #ffd700;
-            margin: 12px 0 8px 0; padding-left: 8px; border-left: 3px solid #ffd700;
+        /* MP Value Hero */
+        .mpv-hero {
+            background: radial-gradient(circle at 50% 0%, rgba(255,215,0,0.18) 0%, transparent 75%);
+            border: 2px solid #ffd700;
+            border-radius: 32px;
+            padding: 28px 16px;
+            text-align: center;
+            margin: 24px 0;
+            animation: heroGlow 2s ease-in-out infinite alternate;
         }
+        @keyframes heroGlow {
+            from { box-shadow: 0 0 25px rgba(255,215,0,0.25); }
+            to { box-shadow: 0 0 50px rgba(255,215,0,0.6), 0 0 100px rgba(255,140,0,0.3); }
+        }
+        .mpv-crown { font-size: 3rem; margin-bottom: 8px; }
+        .mpv-main-values { display: flex; justify-content: center; align-items: center; gap: 24px; }
+        .mpv-value { font-size: 5rem; font-weight: 900; line-height: 1; }
+        .mpv-value.home-value { background: linear-gradient(180deg, #ffd700 0%, #ff8c00 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .mpv-value.away-value { background: linear-gradient(180deg, #c0c0c0 0%, #a0a0a0 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .mpv-vs { font-size: 1.8rem; color: #888; font-weight: 700; }
+        .mpv-bar {
+            height: 8px; background: #333; border-radius: 4px; margin: 16px 0 8px; overflow: hidden;
+            display: flex;
+        }
+        .mpv-bar-fill { height: 100%; background: linear-gradient(90deg, #ffd700, #ff8c00); }
+        .mpv-bar-fill.away { background: linear-gradient(90deg, #c0c0c0, #a0a0a0); }
 
-        /* Cartões comparativos */
-        .big-metric {
-            text-align: center; padding: 20px 10px;
-            background: rgba(20,20,35,0.9); border-radius: 20px;
-            border: 1px solid rgba(255,215,0,0.3);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        /* Cartões de composição */
+        .comp-card {
+            background: rgba(20,20,35,0.9); border-radius: 16px; padding: 16px;
+            border: 1px solid rgba(255,215,0,0.25); text-align: center;
         }
-        .big-metric .metric-value {
-            font-size: 2.8rem; font-weight: 900;
-            background: linear-gradient(135deg, #ffd700, #ffaa00);
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        }
-        .big-metric .metric-label {
-            font-size: 0.9rem; color: #ffd700; font-weight: 600; letter-spacing: 1px;
-            margin-bottom: 8px;
-        }
-        .big-metric.giant .metric-value { font-size: 4rem; }
-        .big-metric.giant {
-            border-color: #ffd700;
-            box-shadow: 0 0 30px rgba(255,215,0,0.3), 0 0 60px rgba(255,140,0,0.15);
-        }
+        .comp-card h4 { color: #ffd700; margin-bottom: 8px; }
+        .comp-card .big { font-size: 2rem; font-weight: 900; }
+        .comp-card .small { font-size: 0.8rem; color: #aaa; }
+
+        /* Tabelas de detalhe */
+        .detail-table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+        .detail-table th { color: #ffd700; font-weight: 600; padding: 8px; border-bottom: 1px solid #333; text-align: left; }
+        .detail-table td { padding: 8px; border-bottom: 1px solid #222; color: #ddd; }
     </style>
     """, unsafe_allow_html=True)
 
-# ---------- TELA AUTOMÁTICA ----------
+# ---------- TELA AUTOMÁTICA (mantida) ----------
 def tela_automatico(lista_ligas, temporadas, times_carregados, uso_api, limite_api, msg_erro, resultados):
     st.set_page_config(page_title="MyPredict 2.0", layout="wide", page_icon="⚽")
     injetar_css()
@@ -148,7 +133,7 @@ def tela_automatico(lista_ligas, temporadas, times_carregados, uso_api, limite_a
         st.metric("🏳️ Escanteios",f"{resultados['esc']:.1%}" if resultados['esc'] else "N/D")
     return liga_nome, temporada, time_casa, time_fora, buscar, gerar, chave
 
-# ---------- TELA MANUAL (com OVRall intuitivo e completo) ----------
+# ---------- NOVA TELA MANUAL COM MP VALUE DESTACADO ----------
 def tela_manual():
     st.set_page_config(page_title="MyPredict 2.0 – Manual", layout="centered", page_icon="⚽")
     injetar_css()
@@ -165,7 +150,7 @@ def tela_manual():
     st.markdown('<div class="main-title">⚽ MyPredict 2.0</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">ANÁLISE PREDITIVA PREMIUM</div>', unsafe_allow_html=True)
 
-    # --- Times e Posições ---
+    # --- Times ---
     st.markdown('<div class="section-title">⚔️ TIMES</div>', unsafe_allow_html=True)
     col_casa, col_fora = st.columns(2)
     with col_casa:
@@ -181,7 +166,7 @@ def tela_manual():
         st.number_input("Posição", 1, 20, key="pos_fora_input", value=st.session_state.pos_fora)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- IMA ---
+    # --- IMA (últimos 10 jogos) ---
     st.markdown('<div class="section-title">📊 IMA · ÚLTIMOS 10 JOGOS</div>', unsafe_allow_html=True)
     st.markdown('<span class="gold-highlight">IMA</span>', unsafe_allow_html=True)
 
@@ -206,7 +191,6 @@ def tela_manual():
             else:
                 jogos_casa_temp[i] = {"resultado":"","adversario":"","mandante":False}
         st.markdown('</div>', unsafe_allow_html=True)
-
     with col2:
         st.markdown('<div class="team-block away">', unsafe_allow_html=True)
         st.markdown('<div class="team-title away-title">🏟️ FORA</div>', unsafe_allow_html=True)
@@ -225,57 +209,35 @@ def tela_manual():
                 jogos_fora_temp[i] = {"resultado":"","adversario":"","mandante":False}
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- OVRall (intuitivo por dimensões) ---
+    # --- OVRall (agrupado por dimensões) ---
     st.markdown('<div class="section-title">📈 OVRALL · MÉTRICAS DA TEMPORADA</div>', unsafe_allow_html=True)
     st.markdown('<span class="gold-highlight">OVR</span>', unsafe_allow_html=True)
-    st.caption("Preencha as métricas do time. Deixe em branco para ignorar. A nota OVRall é calculada a partir de 5 dimensões (Ataque, Defesa, Meio-Campo, Consistência, Resiliência).")
+    st.caption("Preencha as métricas do time. A nota OVRall é calculada a partir de 5 dimensões ponderadas.")
 
     ovrall_casa, ovrall_fora = {}, {}
-
-    # Dimensões e indicadores (conforme manual.py)
     dimensoes = {
-        "⚔️ ATAQUE": [
-            ("Gols marcados (média)", "gols_media"),
-            ("xG (média)", "xg_media"),
-            ("Finalizações no alvo (média)", "finalizacoes_alvo_media"),
-            ("Conversão (%)", "conversao"),
-        ],
-        "🛡️ DEFESA": [
-            ("Gols sofridos (média)", "gols_sofridos_media"),
-            ("xGA (média)", "xga_media"),
-            ("Finalizações no alvo sofridas (média)", "finalizacoes_alvo_sofridas_media"),
-            ("Desarmes + Interceptações (média)", "desarmes_intercep_media"),
-        ],
-        "🧩 MEIO-CAMPO": [
-            ("Posse de bola (%)", "posse_media"),
-            ("Passes certos (%)", "passes_certos_pct"),
-            ("Passes-chave (média)", "passes_chave_media"),
-            ("Assistências (média)", "assistencias_media"),
-            ("Chutes totais (média)", "chutes_media"),
-        ],
-        "📏 CONSISTÊNCIA": [
-            ("Desvio padrão pontos", "desvio_pontos"),
-            ("Desvio padrão gols pró", "desvio_gols_pro"),
-            ("Desvio padrão gols sofridos", "desvio_gols_sofridos"),
-            ("Jogos sem sofrer gols (%)", "clean_sheets_pct"),
-        ],
-        "🔄 RESILIÊNCIA": [
-            ("Pontos após sair atrás", "pontos_pos_desvantagem_media"),
-            ("Gols nos últimos 15 min", "gols_ultimos_15min_media"),
-            ("Pontos após derrota", "pontos_apos_derrota_media"),
-            ("Dif. aprovação casa-fora (%)", "diff_aprov_casa_fora"),
-            ("Viradas a favor (%)", "aprov_viradas_favor"),
-            ("Viradas contra (%)", "aprov_viradas_contra"),
-        ],
-        # Métricas extras para mercados (não entram no OVRall, mas necessárias)
-        "⚡ MERCADOS (1ºT / ESCANTEIOS)": [
-            ("Gols 1º tempo (média)", "gols_ht_media"),
-            ("Gols sofridos 1º tempo (média)", "gols_ht_sofridos_media"),
-            ("Escanteios (média)", "escanteios_media"),
-            ("Escanteios sofridos (média)", "escanteios_sofridos_media"),
-        ]
+        "⚔️ ATAQUE": [("Gols marcados (média)","gols_media"),("xG (média)","xg_media"),
+                      ("Finalizações no alvo (média)","finalizacoes_alvo_media"),("Conversão (%)","conversao")],
+        "🛡️ DEFESA": [("Gols sofridos (média)","gols_sofridos_media"),("xGA (média)","xga_media"),
+                       ("Finalizações no alvo sofridas (média)","finalizacoes_alvo_sofridas_media"),
+                       ("Desarmes + Interceptações (média)","desarmes_intercep_media")],
+        "🧩 MEIO-CAMPO": [("Posse de bola (%)","posse_media"),("Passes certos (%)","passes_certos_pct"),
+                         ("Passes-chave (média)","passes_chave_media"),("Assistências (média)","assistencias_media"),
+                         ("Chutes totais (média)","chutes_media")],
+        "📏 CONSISTÊNCIA": [("Desvio padrão pontos","desvio_pontos"),("Desvio padrão gols pró","desvio_gols_pro"),
+                           ("Desvio padrão gols sofridos","desvio_gols_sofridos"),
+                           ("Jogos sem sofrer gols (%)","clean_sheets_pct")],
+        "🔄 RESILIÊNCIA": [("Pontos após sair atrás","pontos_pos_desvantagem_media"),
+                          ("Gols nos últimos 15 min","gols_ultimos_15min_media"),
+                          ("Pontos após derrota","pontos_apos_derrota_media"),
+                          ("Dif. aprovação casa-fora (%)","diff_aprov_casa_fora"),
+                          ("Viradas a favor (%)","aprov_viradas_favor"),
+                          ("Viradas contra (%)","aprov_viradas_contra")],
+        "⚡ MERCADOS (1ºT / ESCANTEIOS)": [("Gols 1º tempo (média)","gols_ht_media"),
+                                          ("Gols sofridos 1º tempo (média)","gols_ht_sofridos_media"),
+                                          ("Escanteios (média)","escanteios_media"),
+                                          ("Escanteios sofridos (média)","escanteios_sofridos_media")]
     }
-
     col_casa_ovr, col_fora_ovr = st.columns(2)
     with col_casa_ovr:
         st.markdown('<div class="team-block home">', unsafe_allow_html=True)
@@ -286,7 +248,6 @@ def tela_manual():
                 val = st.text_input(label, key=f"casa_ovr_{key}", placeholder=label, label_visibility="visible")
                 ovrall_casa[key] = para_float(val) if val else None
         st.markdown('</div>', unsafe_allow_html=True)
-
     with col_fora_ovr:
         st.markdown('<div class="team-block away">', unsafe_allow_html=True)
         st.markdown('<div class="team-title away-title">🏟️ FORA</div>', unsafe_allow_html=True)
@@ -300,7 +261,6 @@ def tela_manual():
     # --- IC ---
     st.markdown('<div class="section-title">🧠 IC · ÍNDICE DE CONTEXTO</div>', unsafe_allow_html=True)
     st.markdown('<span class="gold-highlight">IC</span>', unsafe_allow_html=True)
-
     ic_casa, ic_fora = {}, {}
     metricas_ic = [
         ("Confronto direto (%)","confronto_direto"),
@@ -337,7 +297,7 @@ def tela_manual():
         mhtf = st.number_input("Média gols HT fora", value=0.65, key="mhtf")
         mecf = st.number_input("Média escanteios fora", value=4.5, key="mecf")
 
-    # --- Botão de calcular ---
+    # --- Botão GERAR ---
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     if st.button("🔥 GERAR MYPREDICT VALUE", use_container_width=True):
         st.session_state.jogos_casa = [j for j in jogos_casa_temp if j['resultado'] and j['adversario']]
@@ -361,109 +321,163 @@ def tela_manual():
         if err: st.error(err)
         else: st.session_state.resultados = res; st.rerun()
 
-    # --- RESULTADOS (idêntico ao anterior, com resumo individual e comparativo) ---
+    # ---------- RESULTADOS (NOVA INTERFACE) ----------
     if 'resultados' in st.session_state:
         res = st.session_state.resultados
-        st.markdown(f'<div class="scoreboard"><span class="score-home">{res["time_casa"]}</span><span class="score-vs">vs</span><span class="score-away">{res["time_fora"]}</span></div>', unsafe_allow_html=True)
+        st.markdown(f"""
+        <div style="text-align:center; margin:20px 0;">
+            <span style="font-size:2rem; font-weight:900; color:#ffd700;">{res['time_casa']}</span>
+            <span style="font-size:1.5rem; color:#888; margin:0 12px;">vs</span>
+            <span style="font-size:2rem; font-weight:900; color:#c0c0c0;">{res['time_fora']}</span>
+        </div>
+        """, unsafe_allow_html=True)
 
-        c1,c2,c3 = st.columns(3)
-        with c1: st.metric("🏠 Casa", f"{res['p1']:.1%}")
-        with c2: st.metric("🤝 Empate", f"{res['pX']:.1%}")
-        with c3: st.metric("🏟️ Fora", f"{res['p2']:.1%}")
+        # ----- MP VALUE HERO -----
+        st.markdown('<div class="mpv-hero">', unsafe_allow_html=True)
+        st.markdown('<div class="mpv-crown">👑</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:1.2rem; color:#ffd700; letter-spacing:3px; margin-bottom:8px;">MYPREDICT VALUE</div>', unsafe_allow_html=True)
 
-        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-        st.subheader("🏆 COMPARATIVO DE FORÇA")
-        cols = st.columns([1, 1, 1.5])
-        with cols[0]:
-            vc = res['ima_casa']; vf = res['ima_fora']
-            maior = vc >= vf
-            cc = "gold-text" if maior else "silver-text"
-            cf = "gold-text" if not maior else "silver-text"
+        # Valores lado a lado
+        st.markdown(f"""
+        <div class="mpv-main-values">
+            <span class="mpv-value home-value">{res['mpv_casa']:.1f}</span>
+            <span class="mpv-vs">×</span>
+            <span class="mpv-value away-value">{res['mpv_fora']:.1f}</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Barra comparativa
+        total = res['mpv_casa'] + res['mpv_fora']
+        pct_casa = (res['mpv_casa'] / total * 100) if total > 0 else 50
+        pct_fora = 100 - pct_casa
+        st.markdown(f"""
+        <div class="mpv-bar">
+            <div class="mpv-bar-fill" style="width:{pct_casa}%;"></div>
+            <div class="mpv-bar-fill away" style="width:{pct_fora}%;"></div>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#aaa;">
+            <span>{res['time_casa']} {res['mpv_casa']:.1f}</span>
+            <span>{res['time_fora']} {res['mpv_fora']:.1f}</span>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # ----- COMPOSIÇÃO DO MPV (três pilares) -----
+        st.markdown('<div class="section-title">🧱 COMPOSIÇÃO DO MP VALUE</div>', unsafe_allow_html=True)
+        col_ima, col_ovr, col_ic = st.columns(3)
+        with col_ima:
             st.markdown(f"""
-            <div class="big-metric">
-                <div class="metric-label">⚡ IMA</div>
-                <div style="display:flex;justify-content:space-between;padding:0 10px;">
-                    <span class="{cc}" style="font-size:1.2rem;">{vc:.1f}</span>
-                    <span style="color:#888;">vs</span>
-                    <span class="{cf}" style="font-size:1.2rem;">{vf:.1f}</span>
-                </div>
+            <div class="comp-card">
+                <h4>⚡ IMA</h4>
+                <div class="big" style="color:#ffd700;">{res['ima_casa']:.1f} <span style="font-size:0.8rem;">vs</span> {res['ima_fora']:.1f}</div>
+                <div class="small">Peso: {PESOS_RECORTES_EX['10G']+PESOS_RECORTES_EX['5G']+PESOS_RECORTES_EX['3G']+PESOS_RECORTES_EX['5CF']+PESOS_RECORTES_EX['3CF']:.0%} (1/3)</div>
+                <div class="small">Contribuição: Casa {res['ima_casa']/3:.2f} | Fora {res['ima_fora']/3:.2f}</div>
             </div>
             """, unsafe_allow_html=True)
-        with cols[1]:
-            vc = res['ovrall_casa']; vf = res['ovrall_fora']
-            maior = vc >= vf
-            cc = "gold-text" if maior else "silver-text"
-            cf = "gold-text" if not maior else "silver-text"
+        with col_ovr:
             st.markdown(f"""
-            <div class="big-metric">
-                <div class="metric-label">📈 OVRall</div>
-                <div style="display:flex;justify-content:space-between;padding:0 10px;">
-                    <span class="{cc}" style="font-size:1.2rem;">{vc:.1f}</span>
-                    <span style="color:#888;">vs</span>
-                    <span class="{cf}" style="font-size:1.2rem;">{vf:.1f}</span>
-                </div>
+            <div class="comp-card">
+                <h4>📈 OVRall</h4>
+                <div class="big" style="color:#ffd700;">{res['ovrall_casa']:.1f} <span style="font-size:0.8rem;">vs</span> {res['ovrall_fora']:.1f}</div>
+                <div class="small">Peso: 1/3</div>
+                <div class="small">Contribuição: Casa {res['ovrall_casa']/3:.2f} | Fora {res['ovrall_fora']/3:.2f}</div>
             </div>
             """, unsafe_allow_html=True)
-        with cols[2]:
-            vc = res['mpv_casa']; vf = res['mpv_fora']
-            maior = vc >= vf
-            cc = "gold-text" if maior else "silver-text"
-            cf = "gold-text" if not maior else "silver-text"
+        with col_ic:
             st.markdown(f"""
-            <div class="big-metric giant">
-                <div class="metric-label">🏆 MPV</div>
-                <div style="display:flex;justify-content:space-between;padding:0 10px;">
-                    <span class="{cc}" style="font-size:1.6rem;">{vc:.1f}</span>
-                    <span style="color:#888;">vs</span>
-                    <span class="{cf}" style="font-size:1.6rem;">{vf:.1f}</span>
-                </div>
+            <div class="comp-card">
+                <h4>🧠 IC</h4>
+                <div class="big" style="color:#ffd700;">{res['ic_casa']:.1f} <span style="font-size:0.8rem;">vs</span> {res['ic_fora']:.1f}</div>
+                <div class="small">Peso: 1/3</div>
+                <div class="small">Contribuição: Casa {res['ic_casa']/3:.2f} | Fora {res['ic_fora']/3:.2f}</div>
             </div>
             """, unsafe_allow_html=True)
 
-        col_res_casa, col_res_fora = st.columns(2)
-        with col_res_casa:
-            st.markdown('<div class="team-block home">', unsafe_allow_html=True)
-            st.markdown(f'<div class="team-title home-title">🏠 {res["time_casa"]}</div>', unsafe_allow_html=True)
-            st.markdown(f"""
-                <div style="font-size:1.5rem; font-weight:900; color:#ffd700;">IMA: {res['ima_casa']:.1f}</div>
-                <div style="font-size:1.2rem; color:#ffaa00;">OVRall: {res['ovrall_casa']:.1f}</div>
-                <div style="font-size:1.4rem; color:#ffd700;">MPV: {res['mpv_casa']:.1f}</div>
-            """, unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-        with col_res_fora:
-            st.markdown('<div class="team-block away">', unsafe_allow_html=True)
-            st.markdown(f'<div class="team-title away-title">🏟️ {res["time_fora"]}</div>', unsafe_allow_html=True)
-            st.markdown(f"""
-                <div style="font-size:1.5rem; font-weight:900; color:#c0c0c0;">IMA: {res['ima_fora']:.1f}</div>
-                <div style="font-size:1.2rem; color:#aaaaaa;">OVRall: {res['ovrall_fora']:.1f}</div>
-                <div style="font-size:1.4rem; color:#c0c0c0;">MPV: {res['mpv_fora']:.1f}</div>
-            """, unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
+        # ----- DETALHAMENTO EXPANDÍVEL -----
         st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-        st.subheader("🔬 DIMENSÕES DO OVRALL")
-        if 'notas_casa' in res:
-            for dim in ['Ataque','Defesa','MeioCampo','Consistencia','Resiliencia']:
-                vc = res['notas_casa'].get(dim,0); vf = res['notas_fora'].get(dim,0)
-                maior = vc >= vf
-                cc = "gold-text" if maior else "silver-text"; cf = "gold-text" if not maior else "silver-text"
-                pct_c = min(vc/100,1.0)*100; pct_f = min(vf/100,1.0)*100
-                st.markdown(f"""
-                <div style="display:flex;align-items:center;gap:8px;padding:2px 0;">
-                    <span style="width:80px;font-size:0.8rem;color:#aaa;">{dim}</span>
-                    <span class="{cc}" style="width:40px;text-align:right;font-size:0.9rem;">{vc:.1f}</span>
-                    <div style="flex:1;height:3px;background:rgba(255,255,255,0.06);border-radius:2px;border:1px solid rgba(255,215,0,0.06);">
-                        <div style="width:{pct_c}%;height:100%;background:linear-gradient(90deg,#ffd700,#ffaa00);border-radius:2px;"></div>
-                    </div>
-                    <span style="font-size:0.8rem;color:#ffd700;width:20px;text-align:center;">VS</span>
-                    <div style="flex:1;height:3px;background:rgba(255,255,255,0.06);border-radius:2px;border:1px solid rgba(255,215,0,0.06);">
-                        <div style="width:{pct_f}%;height:100%;background:linear-gradient(90deg,#c0c0c0,#a0a0a0);border-radius:2px;"></div>
-                    </div>
-                    <span class="{cf}" style="width:40px;text-align:left;font-size:0.9rem;">{vf:.1f}</span>
-                </div>
-                """, unsafe_allow_html=True)
+        with st.expander("🔍 COMO O MP VALUE É CALCULADO?", expanded=False):
+            st.markdown("**MP Value = (IMA × 1/3) + (OVRall × 1/3) + (IC × 1/3)**")
+            st.markdown("Abaixo, cada componente é detalhado com seus subfatores e pesos.")
 
+            # IMA detalhamento
+            st.markdown("### ⚡ IMA (Índice de Momentum Atual)")
+            st.markdown("Pesos dos recortes: 10G=0.10, 5G=0.15, 3G=0.20, 5CF=0.25, 3CF=0.30")
+            for lado, time, ima, detalhes in [('Casa', res['time_casa'], res['ima_casa'], res['detalhes_ima']['casa']),
+                                              ('Fora', res['time_fora'], res['ima_fora'], res['detalhes_ima']['fora'])]:
+                st.write(f"**{time}** (IMA={ima:.1f})")
+                dados_recortes = []
+                for recorte, jogos in detalhes.items():
+                    if jogos:
+                        media = sum(j['pontos'] for j in jogos) / len(jogos)
+                        peso = PESOS_RECORTES_EX[recorte]
+                        contrib = media * peso
+                        dados_recortes.append((recorte, peso, media, contrib))
+                if dados_recortes:
+                    st.markdown("<table class='detail-table'><tr><th>Recorte</th><th>Peso</th><th>Média Pontos</th><th>Contrib.</th></tr>", unsafe_allow_html=True)
+                    for rec, p, m, c in dados_recortes:
+                        st.markdown(f"<tr><td>{rec}</td><td>{p:.2f}</td><td>{m:.2f}</td><td>{c:.2f}</td></tr>", unsafe_allow_html=True)
+                    st.markdown("</table>", unsafe_allow_html=True)
+                    soma_contrib = sum(c for _,_,_,c in dados_recortes)
+                    st.caption(f"Soma das contribuições: {soma_contrib:.2f} (após piso/teto = {ima:.1f})")
+                else:
+                    st.write("Sem dados.")
+
+            # OVRall detalhamento
+            st.markdown("### 📈 OVRall")
+            st.markdown("Pesos das dimensões: Ataque=0.25, Defesa=0.25, MeioCampo=0.20, Consistencia=0.15, Resiliencia=0.15")
+            for lado, time, ovr, notas in [('Casa', res['time_casa'], res['ovrall_casa'], res['notas_casa']),
+                                           ('Fora', res['time_fora'], res['ovrall_fora'], res['notas_fora'])]:
+                st.write(f"**{time}** (OVRall={ovr:.1f})")
+                rows = []
+                for dim, peso in PESOS_OVRALL_EX.items():
+                    nota = notas.get(dim, 0)
+                    contrib = nota * peso
+                    rows.append((dim, peso, nota, contrib))
+                st.markdown("<table class='detail-table'><tr><th>Dimensão</th><th>Peso</th><th>Nota (0-100)</th><th>Contrib.</th></tr>", unsafe_allow_html=True)
+                for dim, p, n, c in rows:
+                    st.markdown(f"<tr><td>{dim}</td><td>{p:.2f}</td><td>{n:.1f}</td><td>{c:.2f}</td></tr>", unsafe_allow_html=True)
+                st.markdown("</table>", unsafe_allow_html=True)
+                soma_contrib = sum(c for _,_,_,c in rows)
+                st.caption(f"Soma das contribuições: {soma_contrib:.2f} (OVRall final = {ovr:.1f})")
+
+            # IC detalhamento
+            st.markdown("### 🧠 IC (Índice de Contexto)")
+            st.markdown("Pesos: Confronto direto=0.25, Mesmo escalão=0.20, Contra escalão adversário=0.20, Fator casa=0.20, Odds=0.15")
+            for lado, time, ic_val, ic_dict in [('Casa', res['time_casa'], res['ic_casa'], st.session_state.ic_casa),
+                                                 ('Fora', res['time_fora'], res['ic_fora'], st.session_state.ic_fora)]:
+                st.write(f"**{time}** (IC={ic_val:.1f})")
+                rows = []
+                for nome, chave in metricas_ic:
+                    peso = PESOS_IC_EX[chave]
+                    valor = ic_dict.get(chave, None)
+                    if valor is not None:
+                        contrib = valor * peso
+                        rows.append((nome, peso, valor, contrib))
+                    else:
+                        rows.append((nome, peso, '-', '-'))
+                st.markdown("<table class='detail-table'><tr><th>Componente</th><th>Peso</th><th>Valor</th><th>Contrib.</th></tr>", unsafe_allow_html=True)
+                for nome, p, v, c in rows:
+                    v_str = f"{v:.1f}" if isinstance(v, (int,float)) else v
+                    c_str = f"{c:.2f}" if isinstance(c, (int,float)) else c
+                    st.markdown(f"<tr><td>{nome}</td><td>{p:.2f}</td><td>{v_str}</td><td>{c_str}</td></tr>", unsafe_allow_html=True)
+                st.markdown("</table>", unsafe_allow_html=True)
+                if rows and isinstance(rows[0][3], (int,float)):
+                    soma_contrib = sum(c for _,_,_,c in rows if isinstance(c, (int,float)))
+                    st.caption(f"Soma das contribuições: {soma_contrib:.2f} (IC final = {ic_val:.1f})")
+
+            st.markdown("---")
+            st.markdown("**Bônus assimétricos** (aplicados automaticamente conforme prateleiras):")
+            st.markdown("- Vitória de Crítico sobre Elite: +2.0  \n- Vitória de Baixa sobre Elite: +0.5  \n- Derrota de Elite para Crítico: -2.0  \n- Empate Crítico vs Elite: +2.0 (Crítico) / -1.0 (Elite)")
+            st.caption("As prateleiras são definidas pela posição: Elite (1-3), Alta (4-7), Média (8-13), Baixa (14-16), Crítica (17+).")
+
+        # ----- PROBABILIDADES E MERCADOS (secundário) -----
         st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+        st.subheader("📊 PROBABILIDADES 1X2")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("🏠 Casa", f"{res['p1']:.1%}")
+        col2.metric("🤝 Empate", f"{res['pX']:.1%}")
+        col3.metric("🏟️ Fora", f"{res['p2']:.1%}")
+
         st.subheader("🎯 RECOMENDAÇÕES DE MERCADO")
         mercados = [
             ("Over 2.5 Gols", res.get('over25')),
@@ -475,30 +489,12 @@ def tela_manual():
         for col, (nome, prob) in zip(cols, mercados):
             with col:
                 if prob is not None:
-                    rec = ""
-                    if prob >= 0.60: rec = "VALUE"
-                    elif prob >= 0.50: rec = "FAVORITO"
-                    else: rec = "NÃO RECOMENDADO"
-                    border = "border:2px solid #ffd700;" if rec=="VALUE" else ("border:1px solid #888;" if rec=="NÃO RECOMENDADO" else "border:1px solid #aaa;")
+                    rec = "VALUE" if prob >= 0.60 else ("FAVORITO" if prob >= 0.50 else "NÃO RECOMENDADO")
+                    border = "2px solid #ffd700" if rec=="VALUE" else ("1px solid #888" if rec=="NÃO RECOMENDADO" else "1px solid #aaa")
                     st.markdown(f"""
-                    <div class="rec-card" style="{border}">
-                        <div style="font-size:0.8rem;color:#aaa;">{nome}</div>
-                        <strong>{prob:.1%}</strong>
-                        <div style="font-size:0.7rem;color:#ffd700;margin-top:4px;">{rec}</div>
+                    <div style="background:rgba(20,20,35,0.9); border-radius:14px; padding:14px; border:{border}; text-align:center;">
+                        <div style="color:#aaa; font-size:0.8rem;">{nome}</div>
+                        <strong style="color:#ffd700; font-size:1.2rem;">{prob:.1%}</strong>
+                        <div style="color:#ffd700; font-size:0.7rem; margin-top:4px;">{rec}</div>
                     </div>
                     """, unsafe_allow_html=True)
-
-        with st.expander("🔎 RASTREIO COMPLETO"):
-            st.markdown("### IMA")
-            for lado, time, ima, det in [('casa',res['time_casa'],res['ima_casa'],res['detalhes_ima']['casa']),
-                                         ('fora',res['time_fora'],res['ima_fora'],res['detalhes_ima']['fora'])]:
-                st.write(f"**{time}**: {ima:.1f}")
-                for recorte, jogos in det.items():
-                    if jogos:
-                        st.write(f"*{recorte}*: {sum(j['pontos'] for j in jogos)/len(jogos):.2f} média")
-            st.markdown("### OVRall")
-            for nome, det in res.get('detalhes_ovr',{}).items():
-                st.write(f"**{nome}**: Casa {res['notas_casa'][nome]:.1f} / Fora {res['notas_fora'][nome]:.1f}")
-            st.markdown("### IC e MPV")
-            st.write(f"IC: Casa {res['ic_casa']:.1f} / Fora {res['ic_fora']:.1f}")
-            st.write(f"MPV: Casa {res['mpv_casa']:.1f} / Fora {res['mpv_fora']:.1f}")
