@@ -91,3 +91,19 @@ MEDIA_GOLS_CASA_LIGA = 1.5
 MEDIA_GOLS_FORA_LIGA = 1.2
 PROPORCAO_GOLS_HT = 0.44
 MARGEM_SEGURANCA_ESCANTEIOS = 2.0
+# config.py (trecho adicional)
+
+# Motor de Mercados – Fatores de ajuste para IMA e IC
+IMA_FACTOR = 0.005        # 0.5% de ajuste por ponto de IMA acima/abaixo de 50
+IC_FACTOR = 0.003         # 0.3% de ajuste por ponto de IC
+CONSISTENCY_FACTOR = 0.002  # Peso da consistência (desvio padrão) no ajuste
+
+# Thresholds para selos
+THRESHOLD_GOLD = 0.70     # MyPredict Gold (probabilidade >= 70%)
+THRESHOLD_VALUE = 0.60    # Value
+THRESHOLD_FAVORITO = 0.50 # Favorito
+
+# ELO
+ELO_INICIAL = 1500
+ELO_K = 20
+ELO_WEIGHT = 0.4          # Peso do ELO no MPV final (0 = só MPV, 1 = só ELO)
