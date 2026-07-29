@@ -1,4 +1,4 @@
-# manual.py — MyPredict 2.0 (lógica do modo manual)
+# manual.py — MyPredict 2.0 (parser adaptado ao formato real da IA)
 import streamlit as st
 from ratings import calcular_ima, calcular_ovrall, calcular_ic, calcular_mpv, obter_prateleira
 from markets import (
@@ -9,6 +9,7 @@ from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
 from utils import extrair_jogos, para_float
 
 def processar_texto_ia(texto):
+    """Processa o texto corrido da IA e retorna um dicionário com os dados."""
     dados = {
         'time_casa': "Flamengo", 'time_fora': "Palmeiras",
         'pos_casa': 1, 'pos_fora': 2,
@@ -21,57 +22,113 @@ def processar_texto_ia(texto):
         'prateleiras_extra': {}
     }
 
-    blocos = texto.strip().split('\n\n')
-    for bloco in blocos:
-        linhas = bloco.strip().split('\n')
-        if not linhas: continue
-        primeira = linhas[0].strip()
-        if primeira.startswith('Time da casa:'): dados['time_casa'] = primeira.split(':',1)[1].strip()
-        elif primeira.startswith('Time da fora:'): dados['time_fora'] = primeira.split(':',1)[1].strip()
-        elif 'Posições:' in primeira:
-            for l in linhas[1:]:
-                if l.startswith('Casa:'):
-                    try: dados['pos_casa'] = int(l.split(':')[1].strip())
-                    except: pass
-                elif l.startswith('Fora:'):
-                    try: dados['pos_fora'] = int(l.split(':')[1].strip())
-                    except: pass
-        elif 'Últimos 10 jogos do time da casa' in primeira:
-            dados['jogos_casa'] = extrair_jogos('\n'.join(linhas[1:]))
-        elif 'Últimos 10 jogos do time da fora' in primeira:
-            dados['jogos_fora'] = extrair_jogos('\n'.join(linhas[1:]))
-        elif 'Métricas OVRall do time da casa' in primeira:
-            chaves = ["gols_media","gols_sofridos_media","xg_media","xga_media","finalizacoes_alvo_media","finalizacoes_alvo_sofridas_media","chutes_media","desarmes_intercep_media","posse_media","passes_certos_pct","passes_chave_media","assistencias_media","conversao","clean_sheets_pct","desvio_pontos","desvio_gols_pro","desvio_gols_sofridos","pontos_pos_desvantagem_media","gols_ultimos_15min_media","pontos_apos_derrota_media","diff_aprov_casa_fora","aprov_viradas_favor","aprov_viradas_contra"]
-            vals = [para_float(x) for x in linhas[-1].split(',')]
-            if len(vals) == 23: dados['ovrall_casa'] = {chaves[i]: vals[i] for i in range(23)}
-        elif 'Métricas OVRall do time da fora' in primeira:
-            chaves = ["gols_media","gols_sofridos_media","xg_media","xga_media","finalizacoes_alvo_media","finalizacoes_alvo_sofridas_media","chutes_media","desarmes_intercep_media","posse_media","passes_certos_pct","passes_chave_media","assistencias_media","conversao","clean_sheets_pct","desvio_pontos","desvio_gols_pro","desvio_gols_sofridos","pontos_pos_desvantagem_media","gols_ultimos_15min_media","pontos_apos_derrota_media","diff_aprov_casa_fora","aprov_viradas_favor","aprov_viradas_contra"]
-            vals = [para_float(x) for x in linhas[-1].split(',')]
-            if len(vals) == 23: dados['ovrall_fora'] = {chaves[i]: vals[i] for i in range(23)}
-        elif 'Métricas IC do time da casa' in primeira:
-            chaves = ["confronto_direto","mesmo_escalao","contra_escalao_adversario","fator_casa","odds"]
-            vals = [para_float(x) for x in linhas[-1].split(',')]
-            if len(vals) == 5: dados['ic_casa'] = {chaves[i]: vals[i] for i in range(5)}
-        elif 'Métricas IC do time da fora' in primeira:
-            chaves = ["confronto_direto","mesmo_escalao","contra_escalao_adversario","fator_casa","odds"]
-            vals = [para_float(x) for x in linhas[-1].split(',')]
-            if len(vals) == 5: dados['ic_fora'] = {chaves[i]: vals[i] for i in range(5)}
-        elif 'Médias da Liga' in primeira:
-            for l in linhas[1:]:
-                if 'casa:' in l: dados['media_gols_casa'] = para_float(l.split(':')[1])
-                elif 'fora:' in l: dados['media_gols_fora'] = para_float(l.split(':')[1])
-                elif '1º tempo casa:' in l: dados['media_ht_casa'] = para_float(l.split(':')[1])
-                elif '1º tempo fora:' in l: dados['media_ht_fora'] = para_float(l.split(':')[1])
-                elif 'escanteios casa:' in l: dados['media_esc_casa'] = para_float(l.split(':')[1])
-                elif 'escanteios fora:' in l: dados['media_esc_fora'] = para_float(l.split(':')[1])
-        elif 'Prateleiras' in primeira:
-            for l in linhas[1:]:
-                if ':' in l:
-                    adv, prat = l.split(':',1)
-                    dados['prateleiras_extra'][adv.strip()] = prat.strip()
+    # Remove quebras de linha e espaços extras
+    texto = texto.replace('\n', ' ').strip()
 
+    # Dividimos pelas seções usando palavras-chave
+    secoes = {
+        'Time da casa:': 'time_casa',
+        'Time da fora:': 'time_fora',
+        'Posições:': 'posicoes',
+        'Últimos 10 jogos do time da casa:': 'jogos_casa',
+        'Últimos 10 jogos do time da fora:': 'jogos_fora',
+        'Métricas OVRall do time da casa (23 valores em uma única linha, na ordem exata: gols_media, gols_sofridos_media, xg_media, xga_media, finalizacoes_alvo_media, finalizacoes_alvo_sofridas_media, chutes_media, desarmes_intercep_media, posse_media, passes_certos_pct, passes_chave_media, assistencias_media, conversao, clean_sheets_pct, desvio_pontos, desvio_gols_pro, desvio_gols_sofridos, pontos_pos_desvantagem_media, gols_ultimos_15min_media, pontos_apos_derrota_media, diff_aprov_casa_fora, aprov_viradas_favor, aprov_viradas_contra):': 'ovrall_casa',
+        'Métricas OVRall do time da fora (mesma ordem, 23 valores em uma linha):': 'ovrall_fora',
+        'Métricas IC do time da casa (5 valores em uma linha, ordem: confronto_direto, mesmo_escalao, contra_escalao_adversario, fator_casa, odds):': 'ic_casa',
+        'Métricas IC do time da fora (mesma ordem, 5 valores):': 'ic_fora',
+        'Médias da Liga:': 'medias_liga',
+        'Prateleiras (apenas se diferentes de "Media"):': 'prateleiras'
+    }
+
+    # Encontra as posições das seções no texto
+    posicoes = {}
+    for chave, nome in secoes.items():
+        idx = texto.find(chave)
+        if idx != -1:
+            posicoes[idx] = (nome, chave)
+
+    # Ordena as seções pela posição no texto
+    ordenado = sorted(posicoes.items(), key=lambda x: x[0])
+    partes = {}
+    for i, (pos, (nome, chave)) in enumerate(ordenado):
+        inicio = pos + len(chave)
+        fim = ordenado[i+1][0] if i+1 < len(ordenado) else len(texto)
+        conteudo = texto[inicio:fim].strip()
+        # Remove o cabeçalho da próxima seção do conteúdo atual
+        if i+1 < len(ordenado):
+            prox_chave = ordenado[i+1][1][1]
+            conteudo = conteudo.replace(prox_chave, '').strip()
+        partes[nome] = conteudo
+
+    # Processa cada parte
+    if 'time_casa' in partes:
+        dados['time_casa'] = partes['time_casa'].split(',')[0].strip()
+    if 'time_fora' in partes:
+        dados['time_fora'] = partes['time_fora'].split(',')[0].strip()
+
+    if 'posicoes' in partes:
+        # Extrai "Casa: X" e "Fora: Y"
+        p = partes['posicoes']
+        for item in p.split(' '):
+            if item.startswith('Casa:'):
+                try: dados['pos_casa'] = int(item.split(':')[1])
+                except: pass
+            elif item.startswith('Fora:'):
+                try: dados['pos_fora'] = int(item.split(':')[1])
+                except: pass
+
+    if 'jogos_casa' in partes:
+        dados['jogos_casa'] = extrair_jogos(partes['jogos_casa'])
+    if 'jogos_fora' in partes:
+        dados['jogos_fora'] = extrair_jogos(partes['jogos_fora'])
+
+    chaves_ovr = ["gols_media","gols_sofridos_media","xg_media","xga_media","finalizacoes_alvo_media","finalizacoes_alvo_sofridas_media","chutes_media","desarmes_intercep_media","posse_media","passes_certos_pct","passes_chave_media","assistencias_media","conversao","clean_sheets_pct","desvio_pontos","desvio_gols_pro","desvio_gols_sofridos","pontos_pos_desvantagem_media","gols_ultimos_15min_media","pontos_apos_derrota_media","diff_aprov_casa_fora","aprov_viradas_favor","aprov_viradas_contra"]
+    if 'ovrall_casa' in partes:
+        vals = [para_float(x) for x in partes['ovrall_casa'].split(',') if x.strip()]
+        if len(vals) >= 23:
+            for i in range(23): dados['ovrall_casa'][chaves_ovr[i]] = vals[i]
+    if 'ovrall_fora' in partes:
+        vals = [para_float(x) for x in partes['ovrall_fora'].split(',') if x.strip()]
+        if len(vals) >= 23:
+            for i in range(23): dados['ovrall_fora'][chaves_ovr[i]] = vals[i]
+
+    chaves_ic = ["confronto_direto","mesmo_escalao","contra_escalao_adversario","fator_casa","odds"]
+    if 'ic_casa' in partes:
+        vals = [para_float(x) for x in partes['ic_casa'].split(',') if x.strip()]
+        if len(vals) >= 5:
+            for i in range(5): dados['ic_casa'][chaves_ic[i]] = vals[i]
+    if 'ic_fora' in partes:
+        vals = [para_float(x) for x in partes['ic_fora'].split(',') if x.strip()]
+        if len(vals) >= 5:
+            for i in range(5): dados['ic_fora'][chaves_ic[i]] = vals[i]
+
+    if 'medias_liga' in partes:
+        m = partes['medias_liga']
+        for item in m.split(' '):
+            if item.startswith('Média gols casa:'):
+                dados['media_gols_casa'] = para_float(item.split(':')[1])
+            elif item.startswith('Média gols fora:'):
+                dados['media_gols_fora'] = para_float(item.split(':')[1])
+            elif item.startswith('Média gols 1º tempo casa:'):
+                dados['media_ht_casa'] = para_float(item.split(':')[1])
+            elif item.startswith('Média gols 1º tempo fora:'):
+                dados['media_ht_fora'] = para_float(item.split(':')[1])
+            elif item.startswith('Média escanteios casa:'):
+                dados['media_esc_casa'] = para_float(item.split(':')[1])
+            elif item.startswith('Média escanteios fora:'):
+                dados['media_esc_fora'] = para_float(item.split(':')[1])
+
+    if 'prateleiras' in partes:
+        prat_texto = partes['prateleiras']
+        for item in prat_texto.split(','):
+            item = item.strip()
+            if ':' in item:
+                adv, prat = item.split(':', 1)
+                dados['prateleiras_extra'][adv.strip()] = prat.strip()
+
+    # Fallback para jogos: se não encontrou, tenta extrair de todo o texto
     if len(dados['jogos_casa']) < 10 or len(dados['jogos_fora']) < 10:
-        todos_jogos = extrair_jogos(texto)
+        todos_jogos = extrair_jogos(texto.replace(' ', ','))
         if len(todos_jogos) >= 20:
             dados['jogos_casa'] = todos_jogos[:10]
             dados['jogos_fora'] = todos_jogos[10:20]
