@@ -170,7 +170,7 @@ def render_manual():
 
     # 3. RESUMO ÚLTIMOS 5 JOGOS
     st.markdown('<div class="section-title">⏳ ÚLTIMOS 5 JOGOS (Médias Móveis)</div>', unsafe_allow_html=True)
-    def resumo_ultimos_5(jogos, eh_mandante=True):
+    def resumo_ultimos_5(jogos):
         if len(jogos) < 5:
             return None
         ultimos = jogos[:5]
@@ -253,7 +253,6 @@ def render_manual():
 
     # 6. MOMENTUM (seta de evolução)
     st.markdown('<div class="section-title">📈 MOMENTUM (IMA Recente)</div>', unsafe_allow_html=True)
-    # Nota: o IMA ainda não está calculado (só após GERAR). Podemos usar uma estimativa simples baseada nos últimos 3 jogos.
     def momentum_simples(jogos):
         if len(jogos) < 3:
             return None
@@ -273,24 +272,18 @@ def render_manual():
     with col_mom2:
         st.write(f"Fora: {mom_fora if mom_fora else 'Indisponível'}")
 
-    # 7. GRÁFICO RADAR (expandível)
-    with st.expander("📡 Gráfico Radar dos Atributos", expanded=False):
-        # Preparar dados para radar
+    # 7. GRÁFICO COMPARATIVO (barras)
+    with st.expander("📊 Gráfico Comparativo dos Atributos", expanded=False):
         categorias = list(atributos_casa.keys())
-        valores_casa = [atributos_casa[c] for c in categorias]
-        valores_fora = [atributos_fora[c] for c in categorias]
-        df_casa = pd.DataFrame({'Categoria': categorias, 'Valor': valores_casa, 'Time': 'Casa'})
-        df_fora = pd.DataFrame({'Categoria': categorias, 'Valor': valores_fora, 'Time': 'Fora'})
-        df_radar = pd.concat([df_casa, df_fora])
-        radar_chart = alt.Chart(df_radar).mark_line(point=True).encode(
-            theta=alt.Theta('Categoria:N', stack=True),
-            radius=alt.Radius('Valor:Q', scale=alt.Scale(zero=True, domain=[0,100])),
-            color='Time:N'
-        ).properties(width=200, height=200).facet(column='Time:N').resolve_scale(radius='independent')
-        st.altair_chart(radar_chart, use_container_width=True)
+        df_comp = pd.DataFrame({
+            'Categoria': categorias,
+            'Casa': [atributos_casa[c] for c in categorias],
+            'Fora': [atributos_fora[c] for c in categorias]
+        })
+        st.bar_chart(df_comp.set_index('Categoria'))
         st.caption("Valores próximos a 100 indicam força máxima na categoria.")
 
-    # Edição detalhada OVRall (mantida)
+    # Edição detalhada OVRall
     with st.expander("✏️ Ajustar Atributos Detalhados", expanded=False):
         dimensoes = {
             "⚔️ ATAQUE": [("Gols marcados", "gols_media", 1.5), ("xG", "xg_media", 1.2),
