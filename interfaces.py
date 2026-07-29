@@ -1,8 +1,7 @@
-# interfaces.py — MyPredict 2.0 (apenas 2 modos manuais)
+# interfaces.py — MyPredict 2.0 (apenas manual)
 import streamlit as st
-import re
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
-from manual import processar_texto_ia, executar_manual
+from manual import executar_manual
 from utils import para_float, extrair_jogos
 from data_source_api_football import get_api_usage
 from automatico import inicializar_estado, carregar_ligas, buscar_temporadas, buscar_times, executar_automatico
@@ -45,7 +44,7 @@ def injetar_css():
     </style>
     """, unsafe_allow_html=True)
 
-# ---------- TELA AUTOMÁTICA (original) ----------
+# ---------- TELA AUTOMÁTICA (original, mantida para compatibilidade) ----------
 def tela_automatico(lista_ligas, temporadas, times_carregados, uso_api, limite_api, msg_erro, resultados):
     st.set_page_config(page_title="MyPredict 2.0", layout="wide")
     injetar_css()
@@ -134,11 +133,12 @@ def tela_automatico(lista_ligas, temporadas, times_carregados, uso_api, limite_a
 
     return liga_nome, temporada, time_casa, time_fora, buscar, gerar, chave_times
 
-# ---------- TELA MANUAL (apenas 2 modos) ----------
+# ---------- TELA MANUAL (apenas preenchimento manual, com rastreio) ----------
 def tela_manual():
     st.set_page_config(page_title="MyPredict 2.0 – Manual", layout="centered")
     injetar_css()
 
+    # Inicialização
     for chave, padrao in {
         'time_casa': 'Flamengo', 'time_fora': 'Palmeiras', 'pos_casa': 1, 'pos_fora': 2,
         'jogos_casa': [], 'jogos_fora': [], 'ovrall_casa': {}, 'ovrall_fora': {},
@@ -149,73 +149,126 @@ def tela_manual():
         if chave not in st.session_state: st.session_state[chave] = padrao
 
     st.markdown('<div class="title-glow">⚽ MyPredict 2.0</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitle-glow">Modo Manual · Análise Preditiva Premium</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle-glow">Preenchimento Manual</div>', unsafe_allow_html=True)
 
-    entrada = st.radio("Método de entrada",
-                       ["Preenchimento Manual", "Colar resposta da IA"],
-                       horizontal=True, key="modo_manual")
+    # Times e posições
+    c1, c2 = st.columns(2)
+    with c1:
+        st.text_input("Time da Casa", key="time_casa_input", value=st.session_state.time_casa)
+        st.number_input("Posição", 1, 20, key="pos_casa_input", value=st.session_state.pos_casa)
+    with c2:
+        st.text_input("Time da Fora", key="time_fora_input", value=st.session_state.time_fora)
+        st.number_input("Posição", 1, 20, key="pos_fora_input", value=st.session_state.pos_fora)
 
-    if entrada == "Colar resposta da IA":
-        st.subheader("📥 Cole aqui a resposta completa da IA")
-        st.text_area("Resposta da IA", height=300, key="widget_ia", label_visibility="collapsed")
-        if st.button("✨ Processar Dados da IA", use_container_width=True):
-            texto = st.session_state.widget_ia
-            if not texto or not texto.strip():
-                st.warning("Cole o texto da IA no campo acima.")
-            else:
-                try:
-                    dados = processar_texto_ia(texto)
-                    for chave, valor in dados.items():
-                        st.session_state[chave] = valor
-                    st.success(f"✅ Dados processados! {len(st.session_state.jogos_casa)} jogos Casa, {len(st.session_state.jogos_fora)} jogos Fora")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Erro ao processar o texto: {str(e)}")
+    # IMA
+    st.subheader("📊 IMA – Últimos 10 jogos")
+    st.markdown("Formato: `V, Adversário, S` (uma linha por jogo)")
+    col_j1, col_j2 = st.columns(2)
+    with col_j1:
+        txt_casa = st.text_area("Time da casa", height=200, key="jogos_casa_input")
+    with col_j2:
+        txt_fora = st.text_area("Time da fora", height=200, key="jogos_fora_input")
 
-        if st.session_state.jogos_casa:
-            with st.expander("📋 Dados carregados"):
-                c1, c2 = st.columns(2)
-                c1.write(f"🏠 **{st.session_state.time_casa}**")
-                c2.write(f"🏟️ **{st.session_state.time_fora}**")
-
-    else:
-        # Preenchimento manual
+    # OVRall
+    st.subheader("📈 OVRall – Métricas da Temporada")
+    st.markdown("Deixe em branco se não souber (a métrica será ignorada). Use vírgula como separador decimal.")
+    def metrica(label, key_casa, key_fora):
         c1, c2 = st.columns(2)
-        with c1:
-            st.text_input("Time da Casa", value=st.session_state.time_casa, key="time_casa_input")
-            st.number_input("Posição", 1, 20, value=st.session_state.pos_casa, key="pos_casa_input")
-            txt_casa = st.text_area("Últimos 10 jogos (Formato: V, Adv, S)", height=200, key="jogos_casa_input")
-        with c2:
-            st.text_input("Time da Fora", value=st.session_state.time_fora, key="time_fora_input")
-            st.number_input("Posição", 1, 20, value=st.session_state.pos_fora, key="pos_fora_input")
-            txt_fora = st.text_area("Últimos 10 jogos (Formato: V, Adv, S)", height=200, key="jogos_fora_input")
+        vc = para_float(c1.text_input(label, key=f"{key_casa}_val"))
+        vf = para_float(c2.text_input(label, key=f"{key_fora}_val"))
+        return vc, vf
 
-        # OVRall e IC manuais (campos)
-        st.subheader("📈 OVRall (deixe em branco para ignorar)")
-        # ... (campos de métricas – mantidos iguais ao último que funcionava)
-        # Para não repetir código, manterei a lógica existente.
+    ovrall_casa = {}
+    ovrall_fora = {}
+    for label, key in [
+        ("Gols marcados (média)", "gols_media"),
+        ("Gols sofridos (média)", "gols_sofridos_media"),
+        ("xG (média)", "xg_media"),
+        ("xGA (média)", "xga_media"),
+        ("Finalizações no alvo (média)", "finalizacoes_alvo_media"),
+        ("Finalizações no alvo sofridas (média)", "finalizacoes_alvo_sofridas_media"),
+        ("Chutes totais (média)", "chutes_media"),
+        ("Desarmes + Interceptações (média)", "desarmes_intercep_media"),
+        ("Posse de bola (%)", "posse_media"),
+        ("Passes certos (%)", "passes_certos_pct"),
+        ("Passes-chave (média)", "passes_chave_media"),
+        ("Assistências (média)", "assistencias_media"),
+        ("Conversão de finalizações (%)", "conversao"),
+        ("Jogos sem sofrer gols (%)", "clean_sheets_pct"),
+        ("Desvio padrão dos pontos", "desvio_pontos"),
+        ("Desvio padrão gols marcados", "desvio_gols_pro"),
+        ("Desvio padrão gols sofridos", "desvio_gols_sofridos"),
+        ("Pontos após sair atrás (média)", "pontos_pos_desvantagem_media"),
+        ("Gols nos últimos 15 min (média)", "gols_ultimos_15min_media"),
+        ("Pontos após derrota (média)", "pontos_apos_derrota_media"),
+        ("Diferença aprovação casa-fora (%)", "diff_aprov_casa_fora"),
+        ("Aproveitamento viradas a favor (%)", "aprov_viradas_favor"),
+        ("Aproveitamento viradas contra (%)", "aprov_viradas_contra"),
+    ]:
+        vc, vf = metrica(label, f"casa_{key}", f"fora_{key}")
+        if vc is not None: ovrall_casa[key] = vc
+        if vf is not None: ovrall_fora[key] = vf
 
-        if st.button("Salvar e Calcular"):
-            st.session_state.jogos_casa = extrair_jogos(txt_casa)
-            st.session_state.jogos_fora = extrair_jogos(txt_fora)
-            st.success("Dados salvos!")
+    # IC
+    st.subheader("🧠 IC – Fatores Contextuais")
+    ic_casa = {}
+    ic_fora = {}
+    for label, key in [
+        ("Confronto direto (%)", "confronto_direto"),
+        ("Mesmo escalão (%)", "mesmo_escalao"),
+        ("Contra escalão adversário (%)", "contra_escalao_adversario"),
+        ("Fator casa (%)", "fator_casa"),
+        ("Odd", "odds"),
+    ]:
+        vc, vf = metrica(label, f"ic_casa_{key}", f"ic_fora_{key}")
+        if vc is not None: ic_casa[key] = vc
+        if vf is not None: ic_fora[key] = vf
+
+    # Médias da liga
+    st.subheader("📊 Médias da Liga")
+    c1, c2 = st.columns(2)
+    with c1:
+        media_gols_casa = st.number_input("Média gols casa", value=MEDIA_GOLS_CASA_LIGA, key="media_gols_casa_input")
+        media_ht_casa = st.number_input("Média gols HT casa", value=0.75, key="media_ht_casa_input")
+        media_esc_casa = st.number_input("Média escanteios casa", value=5.0, key="media_esc_casa_input")
+    with c2:
+        media_gols_fora = st.number_input("Média gols fora", value=MEDIA_GOLS_FORA_LIGA, key="media_gols_fora_input")
+        media_ht_fora = st.number_input("Média gols HT fora", value=0.65, key="media_ht_fora_input")
+        media_esc_fora = st.number_input("Média escanteios fora", value=4.5, key="media_esc_fora_input")
+
+    # Botão de calcular
+    st.markdown("---")
+    if st.button("🔥 GERAR MYPREDICT VALUE", use_container_width=True):
+        # Atualiza estado com os valores dos campos
+        st.session_state.time_casa = st.session_state.time_casa_input
+        st.session_state.time_fora = st.session_state.time_fora_input
+        st.session_state.pos_casa = st.session_state.pos_casa_input
+        st.session_state.pos_fora = st.session_state.pos_fora_input
+        st.session_state.jogos_casa = extrair_jogos(txt_casa) if txt_casa else []
+        st.session_state.jogos_fora = extrair_jogos(txt_fora) if txt_fora else []
+        st.session_state.ovrall_casa = ovrall_casa
+        st.session_state.ovrall_fora = ovrall_fora
+        st.session_state.ic_casa = ic_casa
+        st.session_state.ic_fora = ic_fora
+        st.session_state.media_gols_casa = media_gols_casa
+        st.session_state.media_gols_fora = media_gols_fora
+        st.session_state.media_ht_casa = media_ht_casa
+        st.session_state.media_ht_fora = media_ht_fora
+        st.session_state.media_esc_casa = media_esc_casa
+        st.session_state.media_esc_fora = media_esc_fora
+
+        dados_calc = {k: v for k, v in st.session_state.items() if k in [
+            'time_casa','time_fora','pos_casa','pos_fora','jogos_casa','jogos_fora',
+            'ovrall_casa','ovrall_fora','ic_casa','ic_fora','media_gols_casa','media_gols_fora',
+            'media_ht_casa','media_ht_fora','media_esc_casa','media_esc_fora','prateleiras_extra']}
+        res, err = executar_manual(dados_calc)
+        if err:
+            st.error(err)
+        else:
+            st.session_state.resultados = res
             st.rerun()
 
-    # Cálculo e resultados
-    if st.session_state.get('jogos_casa') and st.session_state.get('jogos_fora'):
-        st.markdown("---")
-        if st.button("🔥 GERAR MYPREDICT VALUE", use_container_width=True):
-            dados_calc = {k: v for k, v in st.session_state.items() if k in [
-                'time_casa','time_fora','pos_casa','pos_fora','jogos_casa','jogos_fora',
-                'ovrall_casa','ovrall_fora','ic_casa','ic_fora','media_gols_casa','media_gols_fora',
-                'media_ht_casa','media_ht_fora','media_esc_casa','media_esc_fora','prateleiras_extra']}
-            res, err = executar_manual(dados_calc)
-            if err:
-                st.error(err)
-            else:
-                st.session_state.resultados = res
-                st.rerun()
-
+    # Exibição de resultados (apenas se existirem)
     if 'resultados' in st.session_state:
         res = st.session_state.resultados
         st.markdown(f"<h2 style='text-align:center; color:#ffd700;'>{res['time_casa']} vs {res['time_fora']}</h2>", unsafe_allow_html=True)
