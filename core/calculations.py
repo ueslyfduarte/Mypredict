@@ -169,6 +169,21 @@ def executar_manual(dados):
     mpv_casa = calcular_mpv(ima_casa, ovrall_val_casa, ic_val_casa)
     mpv_fora = calcular_mpv(ima_fora, ovrall_val_fora, ic_val_fora)
 
+    # Integração ELO (opcional, mas recomendada)
+    from core.elo import calcular_elo, normalizar_elo
+    from config import ELO_WEIGHT, ELO_K
+
+    # Supondo que temos as prateleiras definidas (prateleiras já foram calculadas)
+    elo_casa = calcular_elo(dados['time_casa'], dados['jogos_casa'], prateleiras, k=ELO_K)
+    elo_fora = calcular_elo(dados['time_fora'], dados['jogos_fora'], prateleiras, k=ELO_K)
+    elos_liga = [elo_casa, elo_fora]
+    elo_norm_casa = normalizar_elo(elo_casa, elos_liga)
+    elo_norm_fora = normalizar_elo(elo_fora, elos_liga)
+
+    # Combinar MPV com ELO
+    mpv_casa = ELO_WEIGHT * elo_norm_casa + (1 - ELO_WEIGHT) * mpv_casa
+    mpv_fora = ELO_WEIGHT * elo_norm_fora + (1 - ELO_WEIGHT) * mpv_fora
+    
     # Mercados (versão enriquecida com IMA e IC)
     from core.market_engine import (
         prob_1x2_v2, prob_over25, prob_btts, prob_gol_ht_v2, prob_over_escanteios_v2
