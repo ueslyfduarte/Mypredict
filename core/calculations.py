@@ -1,3 +1,4 @@
+# core/calculations.py — Orquestração dos cálculos (automático e manual)
 import pickle
 import numpy as np
 from core.ratings import (
@@ -11,6 +12,7 @@ from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA, FATOR_SUPERACAO, 
 from core.tactical_dimensions import compute_all_dimensions, modulate_with_context, compute_mpv
 from core.market_engine_v2 import predict_over25, predict_1x2, predict_btts
 
+# Importação direta das funções ainda não calibradas (gol HT e escanteios)
 from core.markets import prob_gol_ht, prob_over_escanteios
 
 # Tentar importar o módulo de contraste – se não existir, as funções retornarão None
@@ -73,6 +75,7 @@ def executar_automatico(liga_nome, temporada, time_casa, time_fora, classificaca
     mpv_casa = calcular_mpv(ima_casa, 50.0, 50.0)
     mpv_fora = calcular_mpv(ima_fora, 50.0, 50.0)
 
+    # Nota: o código original usava core.markets.calcular_bonus_casa etc. Vou manter as chamadas originais.
     bonus_casa = core.markets.calcular_bonus_casa(dados_casa.get('diff_aprov_casa_fora'))
     p1, pX, p2 = core.markets.prob_1x2(mpv_casa, mpv_fora, bonus_casa)
     over25 = core.markets.prob_over_2_5(
@@ -106,9 +109,9 @@ def executar_automatico(liga_nome, temporada, time_casa, time_fora, classificaca
 
 
 # ============================================================
-# executar_manual (AGORA COM O NOVO MOTOR)
+# executar_manual (AGORA COM O NOVO MOTOR E PARÂMETRO PKL)
 # ============================================================
-def executar_manual(dados):
+def executar_manual(dados, pkl_path='calibration_params.pkl'):
     """Cálculo completo no modo manual, com modelo calibrado e mapa tático."""
     # --- Prateleiras REAIS (baseadas na posição) ---
     prat_real_casa = obter_prateleira(dados['pos_casa'])
@@ -249,7 +252,7 @@ def executar_manual(dados):
     # ================================================================
     # Carregar os parâmetros calibrados
     try:
-        with open('calibration_params.pkl', 'rb') as f:
+        with open(pkl_path, 'rb') as f:
             calib = pickle.load(f)
         benchmarks = calib['benchmarks']
         dimension_weights = calib['dimension_weights']
@@ -291,15 +294,14 @@ def executar_manual(dados):
     over25 = predict_over25(dims_casa_mod, dims_fora_mod)
     btts = predict_btts(dims_casa_mod, dims_fora_mod)
 
-    # Os mercados de gol HT e escanteios ainda não estão treinados no .pkl, então usaremos
-    # as funções antigas com os valores tradicionais (para não quebrar)
-    gol_ht = core.markets.prob_gol_ht(
+    # Os mercados de gol HT e escanteios ainda usam as funções originais
+    gol_ht = prob_gol_ht(
         dados.get('ovrall_casa', {}).get('gols_ht_media', 0.5) or 0.5,
         dados.get('ovrall_fora', {}).get('gols_ht_media', 0.5) or 0.5,
         dados.get('ovrall_casa', {}).get('gols_ht_sofridos_media', 0.5) or 0.5,
         dados.get('ovrall_fora', {}).get('gols_ht_sofridos_media', 0.5) or 0.5
     )
-    esc = core.markets.prob_over_escanteios(
+    esc = prob_over_escanteios(
         dados.get('ovrall_casa', {}).get('escanteios_media', 5.0) or 5.0,
         dados.get('ovrall_fora', {}).get('escanteios_media', 5.0) or 5.0,
         dados.get('ovrall_casa', {}).get('escanteios_sofridos_media', 5.0) or 5.0,
