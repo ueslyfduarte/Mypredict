@@ -1,4 +1,4 @@
-# interfaces.py — MyPredict 2.0 (campos preenchidos após colar IA)
+# interfaces.py — MyPredict 2.0 (chaves de widget corrigidas)
 import streamlit as st
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
 from manual import processar_texto_ia, executar_manual
@@ -124,7 +124,7 @@ def tela_manual():
     injetar_css()
     st.title("MyPredict 2.0 – Modo Manual")
 
-    # Chaves unificadas no estado
+    # Inicialização das chaves de estado
     if 'time_casa' not in st.session_state: st.session_state.time_casa = "Flamengo"
     if 'time_fora' not in st.session_state: st.session_state.time_fora = "Palmeiras"
     if 'pos_casa' not in st.session_state: st.session_state.pos_casa = 1
@@ -186,7 +186,6 @@ def tela_manual():
                                value="\n".join([f"{j['resultado']}, {j['adversario']}, {'S' if j['mandante'] else 'N'}" for j in st.session_state.jogos_fora]),
                                key="jogos_fora_input")
 
-    # Atualiza os jogos a partir do texto
     st.session_state.jogos_casa = extrair_jogos(txt_casa)
     st.session_state.jogos_fora = extrair_jogos(txt_fora)
 
@@ -194,8 +193,8 @@ def tela_manual():
     st.markdown("Deixe em branco se não souber (a métrica será ignorada). Use vírgula como separador decimal.")
     def metrica(label, key_casa, key_fora):
         c1, c2 = st.columns(2)
-        vc = para_float(c1.text_input(label, value=str(st.session_state.ovrall_casa.get(key_casa, '')), key=f"{key_casa}_input"))
-        vf = para_float(c2.text_input(label, value=str(st.session_state.ovrall_fora.get(key_fora, '')), key=f"{key_fora}_input"))
+        vc = para_float(c1.text_input(label, value=str(st.session_state.ovrall_casa.get(key_casa, '')), key=f"casa_{key_casa}_input"))
+        vf = para_float(c2.text_input(label, value=str(st.session_state.ovrall_fora.get(key_fora, '')), key=f"fora_{key_fora}_input"))
         return vc, vf
 
     ovrall_casa = {}
@@ -225,7 +224,7 @@ def tela_manual():
         ("Aproveitamento viradas a favor (%)", "aprov_viradas_favor"),
         ("Aproveitamento viradas contra (%)", "aprov_viradas_contra"),
     ]:
-        vc, vf = metrica(label, key, key)
+        vc, vf = metrica(label, key, key)   # Agora as chaves internas são "casa_gols_media_input" e "fora_gols_media_input"
         if vc is not None: ovrall_casa[key] = vc
         if vf is not None: ovrall_fora[key] = vf
     st.session_state.ovrall_casa = ovrall_casa
@@ -287,7 +286,6 @@ def tela_manual():
             st.session_state.resultados_manual = res
             st.rerun()
 
-    # --- EXIBIÇÃO DE RESULTADOS ---
     if st.session_state.get('resultados_manual'):
         res = st.session_state.resultados_manual
         st.subheader("📊 Resultados")
