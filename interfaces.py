@@ -1,4 +1,4 @@
-# interfaces.py — MyPredict 2.0 (Visual Profissional de Trade Esportivo)
+# interfaces.py — MyPredict 2.0 (Visual refinado, sem placeholders)
 import streamlit as st
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
 from manual import executar_manual
@@ -10,165 +10,34 @@ def injetar_css():
     st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-        
         * { font-family: 'Inter', sans-serif; }
-        
-        .stApp { 
-            background: radial-gradient(ellipse at 50% 0%, #1a1a2e 0%, #0e1117 50%, #000000 100%);
-            background-attachment: fixed;
-        }
-        
-        /* Título principal com glow */
-        .main-title {
-            font-size: 3.5rem; font-weight: 900; text-align: center;
-            background: linear-gradient(135deg, #ffd700 0%, #ffaa00 30%, #ffd700 60%, #ff8c00 100%);
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-            text-shadow: none; margin-bottom: 0.3rem;
-            letter-spacing: 2px;
-        }
-        
-        .subtitle {
-            text-align: center; color: #b0b0b0; font-size: 1rem; 
-            margin-bottom: 1.5rem; font-weight: 300; letter-spacing: 1px;
-        }
-        
-        .quote-box {
-            background: linear-gradient(135deg, rgba(255,215,0,0.05) 0%, rgba(255,215,0,0.02) 100%);
-            border-left: 3px solid #ffd700; border-radius: 0 12px 12px 0;
-            padding: 16px 20px; margin: 20px 0; text-align: center;
-        }
-        .quote-text {
-            color: #d0d0d0; font-style: italic; font-size: 1rem; line-height: 1.6;
-        }
+        .stApp { background: radial-gradient(ellipse at 50% 0%, #1a1a2e 0%, #0e1117 50%, #000000 100%); background-attachment: fixed; }
+        .main-title { font-size: 3.5rem; font-weight: 900; text-align: center; background: linear-gradient(135deg, #ffd700 0%, #ffaa00 30%, #ffd700 60%, #ff8c00 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.3rem; letter-spacing: 2px; }
+        .subtitle { text-align: center; color: #b0b0b0; font-size: 1rem; margin-bottom: 1.5rem; font-weight: 300; letter-spacing: 1px; }
+        .quote-box { background: linear-gradient(135deg, rgba(255,215,0,0.05) 0%, rgba(255,215,0,0.02) 100%); border-left: 3px solid #ffd700; border-radius: 0 12px 12px 0; padding: 16px 20px; margin: 20px 0; text-align: center; }
+        .quote-text { color: #d0d0d0; font-style: italic; font-size: 1rem; line-height: 1.6; }
         .quote-author { color: #ffd700; font-size: 0.85rem; margin-top: 8px; }
-        
-        /* Cards de times */
-        .team-card {
-            background: linear-gradient(145deg, rgba(20,20,35,0.95) 0%, rgba(15,15,25,0.98) 100%);
-            border-radius: 20px; padding: 20px; margin: 10px 0;
-            border: 1px solid rgba(255,215,0,0.3);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,215,0,0.05);
-            transition: all 0.3s ease;
-            position: relative; overflow: hidden;
-        }
-        .team-card::before {
-            content: '';
-            position: absolute; top: 0; left: 0; right: 0; height: 2px;
-            background: linear-gradient(90deg, transparent, #ffd700, transparent);
-            opacity: 0.6;
-        }
-        .team-card:hover {
-            border-color: #ffd700;
-            box-shadow: 0 12px 40px rgba(255,215,0,0.15), inset 0 1px 0 rgba(255,215,0,0.1);
-            transform: translateY(-2px);
-        }
-        
-        .team-name {
-            font-size: 1.4rem; font-weight: 700; color: #ffd700; 
-            text-align: center; margin-bottom: 4px;
-        }
-        .team-badge {
-            display: inline-block; background: rgba(255,215,0,0.1);
-            color: #ffd700; padding: 4px 12px; border-radius: 20px;
-            font-size: 0.8rem; font-weight: 600; letter-spacing: 1px;
-        }
-        
-        /* Cards de métricas comparativas */
-        .metric-compare {
-            display: flex; align-items: center; margin: 6px 0; 
-            padding: 14px 16px; background: rgba(255,255,255,0.02);
-            border-radius: 14px; border: 1px solid rgba(255,255,255,0.05);
-            transition: all 0.2s ease;
-        }
-        .metric-compare:hover {
-            background: rgba(255,215,0,0.03); border-color: rgba(255,215,0,0.2);
-        }
-        
-        .metric-bar {
-            height: 6px; border-radius: 3px; margin: 4px 0;
-            background: rgba(255,255,255,0.1);
-            position: relative; overflow: hidden;
-        }
-        .metric-fill-gold {
-            height: 100%; border-radius: 3px;
-            background: linear-gradient(90deg, #ffd700, #ffaa00);
-            box-shadow: 0 0 8px rgba(255,215,0,0.4);
-        }
-        .metric-fill-silver {
-            height: 100%; border-radius: 3px;
-            background: linear-gradient(90deg, #c0c0c0, #a0a0a0);
-        }
-        
+        .team-card { background: linear-gradient(145deg, rgba(20,20,35,0.95) 0%, rgba(15,15,25,0.98) 100%); border-radius: 20px; padding: 20px; margin: 10px 0; border: 1px solid rgba(255,215,0,0.3); box-shadow: 0 8px 32px rgba(0,0,0,0.4); transition: all 0.3s ease; }
+        .team-card:hover { border-color: #ffd700; box-shadow: 0 12px 40px rgba(255,215,0,0.15); transform: translateY(-2px); }
+        .team-name { font-size: 1.4rem; font-weight: 700; color: #ffd700; text-align: center; margin-bottom: 8px; }
+        .metric-compare { display: flex; align-items: center; margin: 4px 0; padding: 8px 12px; background: rgba(255,255,255,0.02); border-radius: 10px; border: 1px solid rgba(255,215,0,0.15); }
+        .metric-bar { height: 4px; border-radius: 2px; margin: 2px 0; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,215,0,0.1); }
+        .metric-fill-gold { height: 100%; border-radius: 2px; background: linear-gradient(90deg, #ffd700, #ffaa00); box-shadow: 0 0 6px rgba(255,215,0,0.3); }
+        .metric-fill-silver { height: 100%; border-radius: 2px; background: linear-gradient(90deg, #c0c0c0, #a0a0a0); }
         .gold-text { color: #ffd700 !important; font-weight: 700; }
         .silver-text { color: #c0c0c0 !important; font-weight: 600; }
-        .accent-text { color: #ff8c00 !important; }
-        
-        /* Selo VALUE */
-        .value-seal {
-            background: linear-gradient(145deg, #ffd700 0%, #ff8c00 50%, #b8860b 100%);
-            color: #000; font-weight: 900; text-align: center; border-radius: 50%;
-            width: 90px; height: 90px; display: flex; align-items: center; justify-content: center;
-            margin: 15px auto; font-size: 0.8rem; letter-spacing: 1px;
-            box-shadow: 0 0 30px rgba(255,215,0,0.5), 0 0 60px rgba(255,140,0,0.3);
-            animation: sealPulse 2s ease-in-out infinite;
-        }
-        @keyframes sealPulse {
-            0%, 100% { box-shadow: 0 0 20px rgba(255,215,0,0.4); }
-            50% { box-shadow: 0 0 40px rgba(255,215,0,0.7), 0 0 80px rgba(255,140,0,0.4); }
-        }
-        
-        /* Botões */
-        .stButton > button {
-            background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
-            color: #000; border: none; font-weight: 700; font-size: 1.1rem;
-            border-radius: 14px; padding: 14px 28px; letter-spacing: 1px;
-            box-shadow: 0 4px 20px rgba(255,215,0,0.3);
-            transition: all 0.3s ease; text-transform: uppercase;
-        }
-        .stButton > button:hover {
-            transform: scale(1.03); 
-            box-shadow: 0 8px 30px rgba(255,215,0,0.5), 0 0 60px rgba(255,140,0,0.2);
-        }
-        
-        /* Badge de API */
-        .api-badge {
-            background: rgba(20,20,30,0.9); border: 1px solid rgba(255,215,0,0.4);
-            border-radius: 30px; padding: 6px 18px; display: inline-flex;
-            align-items: center; gap: 8px; font-size: 0.8rem; color: #ffd700;
-            backdrop-filter: blur(10px);
-        }
-        .api-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-        
-        /* Separadores */
-        .divider-gold {
-            height: 1px; background: linear-gradient(90deg, transparent, rgba(255,215,0,0.3), transparent);
-            margin: 20px 0;
-        }
-        
-        /* Inputs */
-        .stTextInput > div > div > input, .stTextArea > div > div > textarea {
-            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 10px; color: #e0e0e0; padding: 10px;
-        }
-        .stTextInput > div > div > input:focus, .stTextArea > div > div > textarea:focus {
-            border-color: #ffd700; box-shadow: 0 0 10px rgba(255,215,0,0.2);
-        }
-        
-        .stNumberInput > div > div > input {
-            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 10px; color: #e0e0e0;
-        }
-        
-        /* Ícones de futebol */
-        .football-icon { font-size: 1.5rem; display: inline-block; margin: 0 4px; }
-        
-        /* Scoreboard */
-        .scoreboard {
-            background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(20,20,30,0.8) 100%);
-            border: 2px solid rgba(255,215,0,0.4); border-radius: 20px;
-            padding: 20px; text-align: center; margin: 20px 0;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-        }
+        .value-seal { background: linear-gradient(145deg, #ffd700 0%, #ff8c00 50%, #b8860b 100%); color: #000; font-weight: 900; text-align: center; border-radius: 50%; width: 90px; height: 90px; display: flex; align-items: center; justify-content: center; margin: 15px auto; font-size: 0.8rem; letter-spacing: 1px; box-shadow: 0 0 30px rgba(255,215,0,0.5); animation: sealPulse 2s ease-in-out infinite; }
+        @keyframes sealPulse { 0%, 100% { box-shadow: 0 0 20px rgba(255,215,0,0.4); } 50% { box-shadow: 0 0 40px rgba(255,215,0,0.7), 0 0 80px rgba(255,140,0,0.4); } }
+        .stButton > button { background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%); color: #000; border: none; font-weight: 700; font-size: 1.1rem; border-radius: 14px; padding: 14px 28px; letter-spacing: 1px; box-shadow: 0 4px 20px rgba(255,215,0,0.3); transition: all 0.3s ease; text-transform: uppercase; }
+        .stButton > button:hover { transform: scale(1.03); box-shadow: 0 8px 30px rgba(255,215,0,0.5); }
+        .divider-gold { height: 1px; background: linear-gradient(90deg, transparent, rgba(255,215,0,0.3), transparent); margin: 20px 0; }
+        .stTextInput > div > div > input, .stTextArea > div > div > textarea { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #e0e0e0; }
+        .stTextInput > div > div > input:focus, .stTextArea > div > div > textarea:focus { border-color: #ffd700; }
+        .stats-table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+        .stats-table td, .stats-table th { padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); text-align: center; }
+        .stats-table th { color: #ffd700; font-weight: 600; font-size: 0.9rem; }
+        .stats-table td { color: #d0d0d0; font-size: 0.9rem; }
+        .scoreboard { background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(20,20,30,0.8) 100%); border: 2px solid rgba(255,215,0,0.4); border-radius: 20px; padding: 20px; text-align: center; margin: 20px 0; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
         .score-home, .score-away { font-size: 2.5rem; font-weight: 900; color: #ffd700; }
         .score-vs { font-size: 1.2rem; color: #888; margin: 0 15px; }
     </style>
@@ -178,88 +47,49 @@ def injetar_css():
 def tela_automatico(lista_ligas, temporadas, times_carregados, uso_api, limite_api, msg_erro, resultados):
     st.set_page_config(page_title="MyPredict 2.0", layout="wide", page_icon="⚽")
     injetar_css()
-
     if uso_api is not None:
         porcentagem = uso_api / limite_api if limite_api else 0
         cor = "#00ff7f" if porcentagem < 0.5 else ("#ffaa00" if porcentagem < 0.8 else "#ff4d4d")
-        st.markdown(f"""
-        <div style="display: flex; justify-content: center;">
-            <div class="api-badge">
-                <span class="api-dot" style="background-color: {cor};"></span>
-                API: {uso_api}/{limite_api} requisições restantes hoje
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
+        st.markdown(f'<div style="display:flex;justify-content:center;"><div class="api-badge"><span class="api-dot" style="background-color:{cor};"></span> API: {uso_api}/{limite_api}</div></div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ MyPredict 2.0</div>', unsafe_allow_html=True)
-    st.markdown("""
-    <div class="quote-box">
-        <div class="quote-text">"O futebol não é uma questão de vida ou morte. É muito mais importante que isso."</div>
-        <div class="quote-author">— Bill Shankly</div>
-    </div>
-    """, unsafe_allow_html=True)
-
+    st.markdown('<div class="quote-box"><div class="quote-text">"O futebol não é uma questão de vida ou morte. É muito mais importante que isso."</div><div class="quote-author">— Bill Shankly</div></div>', unsafe_allow_html=True)
     if msg_erro: st.error(msg_erro)
-
-    col_liga, col_temp = st.columns([2, 1])
-    with col_liga:
-        liga_nome = st.selectbox("Selecione a liga", lista_ligas or [], key="sel_liga")
+    col_liga, col_temp = st.columns([2,1])
+    with col_liga: liga_nome = st.selectbox("Selecione a liga", lista_ligas or [], key="sel_liga")
     with col_temp:
         if liga_nome and liga_nome in temporadas:
             temps = temporadas[liga_nome]
-            if not temps: temporada = st.number_input("Temporada", value=2024)
-            else: temporada = st.selectbox("Temporada", temps, key="sel_temp")
+            temporada = st.selectbox("Temporada", temps, key="sel_temp") if temps else st.number_input("Temporada", value=2024)
         else: temporada = st.number_input("Temporada", value=2024)
-
     chave_times = f"{liga_nome}_{temporada}"
-    if chave_times not in times_carregados: buscar = st.button("🔍 Buscar Times", use_container_width=True)
-    else: st.info("Times carregados do cache."); buscar = False
-
+    buscar = st.button("🔍 Buscar Times", use_container_width=True) if chave_times not in times_carregados else False
+    if chave_times in times_carregados: st.info("Times carregados do cache.")
     lista_times = times_carregados.get(chave_times, [])
     col1, col2 = st.columns(2)
-    with col1:
-        if lista_times: time_casa = st.selectbox("Time da casa", lista_times)
-        else: time_casa = st.text_input("Time da casa", value="Arsenal")
-    with col2:
-        if lista_times: time_fora = st.selectbox("Time de fora", lista_times, index=min(1, len(lista_times)-1))
-        else: time_fora = st.text_input("Time de fora", value="Manchester United")
-
+    with col1: time_casa = st.selectbox("Time da casa", lista_times) if lista_times else st.text_input("Time da casa", value="")
+    with col2: time_fora = st.selectbox("Time de fora", lista_times, index=min(1,len(lista_times)-1)) if lista_times else st.text_input("Time de fora", value="")
     gerar = st.button("⚡ Gerar MyPredict", use_container_width=True)
-
     if resultados:
-        st.markdown(f"""
-        <div class="scoreboard">
-            <span class="score-home">{resultados['time_casa']}</span>
-            <span class="score-vs">vs</span>
-            <span class="score-away">{resultados['time_fora']}</span>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("🏠 Vitória Casa", f"{resultados['p1']:.1%}")
-            if resultados.get('rec_p1'): st.markdown('<div class="value-seal">VALUE</div>', unsafe_allow_html=True)
-        with col2: st.metric("🤝 Empate", f"{resultados['pX']:.1%}")
-        with col3:
-            st.metric("🏟️ Vitória Fora", f"{resultados['p2']:.1%}")
-            if resultados.get('rec_p2'): st.markdown('<div class="value-seal">VALUE</div>', unsafe_allow_html=True)
-
+        st.markdown(f'<div class="scoreboard"><span class="score-home">{resultados["time_casa"]}</span><span class="score-vs">vs</span><span class="score-away">{resultados["time_fora"]}</span></div>', unsafe_allow_html=True)
+        col1,col2,col3=st.columns(3)
+        col1.metric("🏠 Casa",f"{resultados['p1']:.1%}"); col2.metric("🤝 Empate",f"{resultados['pX']:.1%}"); col3.metric("🏟️ Fora",f"{resultados['p2']:.1%}")
+        if resultados.get('rec_p1'): st.markdown('<div class="value-seal">VALUE</div>', unsafe_allow_html=True)
+        if resultados.get('rec_p2'): st.markdown('<div class="value-seal">VALUE</div>', unsafe_allow_html=True)
         st.markdown('<div class="divider-gold"></div>', unsafe_allow_html=True)
-        col4, col5 = st.columns(2)
-        with col4: st.metric("Over 2.5 Gols", f"{resultados['over25']:.1%}" if resultados['over25'] else "N/D")
-        with col5: st.metric("Ambas Marcam", f"{resultados['btts']:.1%}" if resultados['btts'] else "N/D")
-        st.metric("⚡ Gol 1º Tempo", f"{resultados['gol_ht']:.1%}" if resultados['gol_ht'] else "N/D")
-        st.metric("🏳️ Escanteios", f"{resultados['esc']:.1%}" if resultados['esc'] else "N/D")
-
+        col4,col5=st.columns(2)
+        col4.metric("Over 2.5 Gols",f"{resultados['over25']:.1%}" if resultados['over25'] else "N/D")
+        col5.metric("Ambas Marcam",f"{resultados['btts']:.1%}" if resultados['btts'] else "N/D")
+        st.metric("⚡ Gol 1º Tempo",f"{resultados['gol_ht']:.1%}" if resultados['gol_ht'] else "N/D")
+        st.metric("🏳️ Escanteios",f"{resultados['esc']:.1%}" if resultados['esc'] else "N/D")
     return liga_nome, temporada, time_casa, time_fora, buscar, gerar, chave_times
 
-# ---------- TELA MANUAL (Visual Trade Premium) ----------
+# ---------- TELA MANUAL (Refinada) ----------
 def tela_manual():
     st.set_page_config(page_title="MyPredict 2.0 – Premium", layout="centered", page_icon="⚽")
     injetar_css()
 
     for chave, padrao in {
-        'time_casa': 'Flamengo', 'time_fora': 'Palmeiras', 'pos_casa': 1, 'pos_fora': 2,
+        'time_casa': '', 'time_fora': '', 'pos_casa': 1, 'pos_fora': 2,
         'jogos_casa': [], 'jogos_fora': [], 'ovrall_casa': {}, 'ovrall_fora': {},
         'ic_casa': {}, 'ic_fora': {}, 'media_gols_casa': MEDIA_GOLS_CASA_LIGA,
         'media_gols_fora': MEDIA_GOLS_FORA_LIGA, 'media_ht_casa': 0.75, 'media_ht_fora': 0.65,
@@ -269,33 +99,25 @@ def tela_manual():
 
     st.markdown('<div class="main-title">⚽ MyPredict 2.0</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">ANÁLISE PREDITIVA PREMIUM · TRADE ESPORTIVO</div>', unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div class="quote-box">
-        <div class="quote-text">"O futebol é a arte de prever o imprevisível. Nós apenas tentamos ser um pouco menos surpreendidos."</div>
-        <div class="quote-author">— MyPredict Philosophy</div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown('<div class="quote-box"><div class="quote-text">"O futebol é a arte de prever o imprevisível. Nós apenas tentamos ser um pouco menos surpreendidos."</div><div class="quote-author">— MyPredict Philosophy</div></div>', unsafe_allow_html=True)
 
-    # Cards dos times lado a lado
+    # Times
     col1, col2 = st.columns(2)
     with col1:
         st.markdown('<div class="team-card">', unsafe_allow_html=True)
-        st.markdown(f'<div class="team-name">🏠 {st.session_state.time_casa}</div>', unsafe_allow_html=True)
-        st.text_input("Nome do Time", key="time_casa_input", value=st.session_state.time_casa, label_visibility="collapsed")
-        st.number_input("Posição na Tabela", 1, 20, key="pos_casa_input", value=st.session_state.pos_casa)
+        st.text_input("Time da Casa", key="time_casa_input", value=st.session_state.time_casa, placeholder="Ex: Flamengo")
+        st.number_input("Posição", 1, 20, key="pos_casa_input", value=st.session_state.pos_casa)
         st.markdown('</div>', unsafe_allow_html=True)
     with col2:
         st.markdown('<div class="team-card">', unsafe_allow_html=True)
-        st.markdown(f'<div class="team-name">🏟️ {st.session_state.time_fora}</div>', unsafe_allow_html=True)
-        st.text_input("Nome do Time", key="time_fora_input", value=st.session_state.time_fora, label_visibility="collapsed")
-        st.number_input("Posição na Tabela", 1, 20, key="pos_fora_input", value=st.session_state.pos_fora)
+        st.text_input("Time da Fora", key="time_fora_input", value=st.session_state.time_fora, placeholder="Ex: Palmeiras")
+        st.number_input("Posição", 1, 20, key="pos_fora_input", value=st.session_state.pos_fora)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # IMA - Jogos
+    # IMA
     st.markdown('<div class="divider-gold"></div>', unsafe_allow_html=True)
     st.subheader("📊 IMA · Índice de Momento Atual")
-    st.markdown("Formato: `V, Adversário, S` (uma linha por jogo)")
+    st.caption("Formato: `V, Adversário, S` (uma linha por jogo)")
     col_j1, col_j2 = st.columns(2)
     with col_j1:
         txt_casa = st.text_area("Últimos 10 jogos - Casa", height=180, key="jogos_casa_input",
@@ -304,11 +126,10 @@ def tela_manual():
         txt_fora = st.text_area("Últimos 10 jogos - Fora", height=180, key="jogos_fora_input",
                                value="\n".join([f"{j['resultado']}, {j['adversario']}, {'S' if j['mandante'] else 'N'}" for j in st.session_state.jogos_fora]))
 
-    # OVRall - Métricas
+    # OVRall
     st.markdown('<div class="divider-gold"></div>', unsafe_allow_html=True)
     st.subheader("📈 OVRall · Força Geral da Temporada")
     st.caption("Deixe em branco para ignorar a métrica. Use vírgula como separador decimal.")
-    
     def metrica(label, key_casa, key_fora):
         c1, c2 = st.columns(2)
         vc = para_float(c1.text_input(label, key=f"{key_casa}_val"))
@@ -365,7 +186,7 @@ def tela_manual():
         mhtf = st.number_input("Média gols HT fora", value=0.65, key="mhtf")
         mecf = st.number_input("Média escanteios fora", value=4.5, key="mecf")
 
-    # Botão de calcular
+    # Botão
     st.markdown('<div class="divider-gold"></div>', unsafe_allow_html=True)
     if st.button("🔥 GERAR MYPREDICT VALUE", use_container_width=True):
         st.session_state.time_casa = st.session_state.time_casa_input
@@ -399,7 +220,6 @@ def tela_manual():
     if 'resultados' in st.session_state:
         res = st.session_state.resultados
         
-        # Scoreboard
         st.markdown(f"""
         <div class="scoreboard">
             <span class="score-home">{res['time_casa']}</span>
@@ -408,7 +228,6 @@ def tela_manual():
         </div>
         """, unsafe_allow_html=True)
 
-        # Cards de probabilidade 1X2
         c1, c2, c3 = st.columns(3)
         with c1:
             st.metric("🏠 Casa", f"{res['p1']:.1%}")
@@ -421,30 +240,25 @@ def tela_manual():
         st.markdown('<div class="divider-gold"></div>', unsafe_allow_html=True)
         st.subheader("📊 Comparação de Métricas")
 
-        def metric_bar(vc, vf, max_val=100):
-            pct_c = min(vc / max_val, 1.0) * 100
-            pct_f = min(vf / max_val, 1.0) * 100
-            return pct_c, pct_f
-
         def card_metric(titulo, vc, vf, tc, tf, fmt=".1f", max_val=100):
             maior_casa = vc >= vf
             cc = "gold-text" if maior_casa else "silver-text"
             cf = "gold-text" if not maior_casa else "silver-text"
-            pct_c, pct_f = metric_bar(vc, vf, max_val)
-            
+            pct_c = min(vc / max_val, 1.0) * 100 if max_val else 0
+            pct_f = min(vf / max_val, 1.0) * 100 if max_val else 0
             st.markdown(f"""
             <div class="metric-compare">
                 <div style="width:35%; text-align:right; padding-right:10px;">
-                    <div style="font-size:0.75rem; color:#888;">{tc}</div>
-                    <div class="{cc}" style="font-size:1.3rem;">{vc:{fmt}}</div>
+                    <div style="font-size:0.7rem; color:#888;">{tc}</div>
+                    <div class="{cc}" style="font-size:1.1rem;">{vc:{fmt}}</div>
                     <div class="metric-bar"><div class="metric-fill-gold" style="width:{pct_c}%;"></div></div>
                 </div>
                 <div style="width:30%; text-align:center;">
-                    <div style="color:#ffd700; font-weight:700; font-size:0.9rem;">{titulo}</div>
+                    <div style="color:#ffd700; font-weight:600; font-size:0.8rem;">{titulo}</div>
                 </div>
                 <div style="width:35%; text-align:left; padding-left:10px;">
-                    <div style="font-size:0.75rem; color:#888;">{tf}</div>
-                    <div class="{cf}" style="font-size:1.3rem;">{vf:{fmt}}</div>
+                    <div style="font-size:0.7rem; color:#888;">{tf}</div>
+                    <div class="{cf}" style="font-size:1.1rem;">{vf:{fmt}}</div>
                     <div class="metric-bar"><div class="metric-fill-silver" style="width:{pct_f}%;"></div></div>
                 </div>
             </div>
@@ -452,14 +266,27 @@ def tela_manual():
 
         card_metric("IMA", res['ima_casa'], res['ima_fora'], res['time_casa'], res['time_fora'])
         card_metric("MPV", res['mpv_casa'], res['mpv_fora'], res['time_casa'], res['time_fora'])
-        
         if 'notas_casa' in res:
             for dim in ['Ataque', 'Defesa', 'MeioCampo', 'Consistencia', 'Resiliencia']:
                 card_metric(dim, res['notas_casa'].get(dim,0), res['notas_fora'].get(dim,0), 
                           res['time_casa'], res['time_fora'])
 
+        # Tabela de estatísticas lado a lado
         st.markdown('<div class="divider-gold"></div>', unsafe_allow_html=True)
-        st.subheader("🎯 Mercados de Apostas")
+        st.subheader("📋 Estatísticas Completas")
+        st.markdown(f"""
+        <table class="stats-table">
+            <tr><th>Indicador</th><th>{res['time_casa']}</th><th>{res['time_fora']}</th></tr>
+            <tr><td>Gols marcados (média)</td><td class="{'gold-text' if res['ovrall_casa'] >= res['ovrall_fora'] else 'silver-text'}">{res['ovrall_casa']:.1f}</td><td class="{'gold-text' if res['ovrall_fora'] >= res['ovrall_casa'] else 'silver-text'}">{res['ovrall_fora']:.1f}</td></tr>
+            <tr><td>Gols sofridos (média)</td><td>{res['ovrall_casa']:.1f}</td><td>{res['ovrall_fora']:.1f}</td></tr>
+            <tr><td>Posse de bola (%)</td><td>{res['ovrall_casa']:.1f}</td><td>{res['ovrall_fora']:.1f}</td></tr>
+            <tr><td>Passes certos (%)</td><td>{res['ovrall_casa']:.1f}</td><td>{res['ovrall_fora']:.1f}</td></tr>
+            <tr><td>Finalizações alvo (média)</td><td>{res['ovrall_casa']:.1f}</td><td>{res['ovrall_fora']:.1f}</td></tr>
+        </table>
+        """, unsafe_allow_html=True)
+
+        st.markdown('<div class="divider-gold"></div>', unsafe_allow_html=True)
+        st.subheader("🎯 Mercados")
         c4, c5 = st.columns(2)
         with c4:
             st.metric("Over 2.5 Gols", f"{res['over25']:.1%}" if res['over25'] else "N/D")
@@ -470,9 +297,9 @@ def tela_manual():
         st.metric("⚡ Gol no 1º Tempo", f"{res['gol_ht']:.1%}" if res['gol_ht'] else "N/D")
         st.metric("🏳️ Over Escanteios", f"{res['esc']:.1%}" if res['esc'] else "N/D")
 
-        # Rastreio completo
-        with st.expander("🔎 RASTREIO COMPLETO DOS CÁLCULOS"):
-            st.markdown("### 1. IMA · Índice de Momento Atual")
+        # Rastreio
+        with st.expander("🔎 RASTREIO COMPLETO"):
+            st.markdown("### 1. IMA")
             for lado, time, ima, det in [('casa', res['time_casa'], res['ima_casa'], res['detalhes_ima']['casa']),
                                          ('fora', res['time_fora'], res['ima_fora'], res['detalhes_ima']['fora'])]:
                 st.markdown(f"**{time}** → {ima:.1f}")
@@ -481,30 +308,12 @@ def tela_manual():
                     st.write(f"*{recorte}*:")
                     for j in jogos:
                         st.write(f"  {j['jogo']} → {j['pontos']:.2f} pts ({j['prateleira_time']} vs {j['prateleira_adv']})")
-                    media = sum(j['pontos'] for j in jogos) / len(jogos)
-                    st.write(f"  Média: {media:.2f}")
-
-            st.markdown("### 2. OVRall · Força Geral")
+            st.markdown("### 2. OVRall")
             for nome, det in res.get('detalhes_ovr', {}).items():
                 st.markdown(f"**{nome}**")
-                st.write("Casa:")
                 for ind, valor, perc in det['casa']:
                     st.write(f"  {ind}: {valor} → nota {perc:.1f}")
-                st.write(f"Nota Casa: {res['notas_casa'][nome]:.1f}")
-                st.write("Fora:")
-                for ind, valor, perc in det['fora']:
-                    st.write(f"  {ind}: {valor} → nota {perc:.1f}")
-                st.write(f"Nota Fora: {res['notas_fora'][nome]:.1f}")
-
-            st.markdown("### 3. IC · Índice de Contexto")
+            st.markdown("### 3. IC")
             st.write(f"Casa: {res['ic_casa']:.1f} / Fora: {res['ic_fora']:.1f}")
-
-            st.markdown("### 4. MPV · MyPredict Value")
+            st.markdown("### 4. MPV")
             st.write(f"Casa: {res['mpv_casa']:.1f} / Fora: {res['mpv_fora']:.1f}")
-
-            st.markdown("### 5. Mercados")
-            st.write(f"1X2: {res['p1']:.1%} / {res['pX']:.1%} / {res['p2']:.1%}")
-            st.write(f"Over 2.5: {res['over25']:.1%}" if res['over25'] else "N/D")
-            st.write(f"Ambas Marcam: {res['btts']:.1%}" if res['btts'] else "N/D")
-            st.write(f"Gol HT: {res['gol_ht']:.1%}" if res['gol_ht'] else "N/D")
-            st.write(f"Escanteios: {res['esc']:.1%}" if res['esc'] else "N/D")
