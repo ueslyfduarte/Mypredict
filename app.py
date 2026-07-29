@@ -2,7 +2,6 @@
 import streamlit as st
 from interfaces import tela_automatico, tela_manual
 from automatico import inicializar_estado, carregar_ligas, buscar_temporadas, buscar_times, executar_automatico
-from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
 from data_source_api_football import get_api_usage
 
 with st.sidebar:
@@ -35,4 +34,4 @@ if modo == "Automático (API)":
             st.rerun()
 
 else:
-    tela_manual(st.session_state)
+    tela_manual()
