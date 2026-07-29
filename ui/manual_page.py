@@ -1,5 +1,7 @@
-# ui/manual_page.py — Painel EA Sports com Prateleira Projetada
+# ui/manual_page.py — Painel EA Sports completo com comparativos e alertas
 import streamlit as st
+import pandas as pd
+import math
 from ui.styles import injetar_css
 from ui.components import show_results_manual
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
@@ -13,7 +15,7 @@ def render_manual():
     st.markdown('<div class="main-title">⚽ MyPredict 2.0</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">Painel de Análise Tática</div>', unsafe_allow_html=True)
 
-    # Inicializar estado com TODAS as chaves que a interface usa
+    # Inicializar estado
     defaults = {
         'time_casa': '', 'time_fora': '',
         'time_casa_input': '', 'time_fora_input': '',
@@ -122,7 +124,173 @@ def render_manual():
                 </div>
                 ''', unsafe_allow_html=True)
 
-    # Edição detalhada OVRall
+    # ====================== NOVAS SEÇÕES ANALÍTICAS ======================
+
+    # 1. COMPARATIVO REAL (valores absolutos)
+    st.markdown('<div class="section-title">📋 COMPARATIVO REAL</div>', unsafe_allow_html=True)
+    col_r1, col_r2, col_r3 = st.columns(3)
+    metricas_reais = [
+        ("Gols Marcados (média)", "gols_media", 1.5),
+        ("Gols Sofridos (média)", "gols_sofridos_media", 1.2),
+        ("Posse de Bola (%)", "posse_media", 50.0),
+        ("Finalizações Alvo (média)", "finalizacoes_alvo_media", 4.0),
+        ("xG (média)", "xg_media", 1.2),
+        ("Chutes Totais (média)", "chutes_media", 12.0),
+    ]
+    for i, (label, chave, padrao) in enumerate(metricas_reais):
+        val_casa = pegar_valor(st.session_state.ovrall_casa, chave, padrao)
+        val_fora = pegar_valor(st.session_state.ovrall_fora, chave, padrao)
+        with col_r1 if i % 3 == 0 else (col_r2 if i % 3 == 1 else col_r3):
+            st.metric(label=label, value=f"{val_casa:.1f}" if val_casa is not None else "-", delta=f"vs {val_fora:.1f}" if val_fora is not None else None)
+
+    # 2. COMPARATIVOS DIRETOS (Ataque vs Defesa, etc.)
+    st.markdown('<div class="section-title">⚔️ CONFRONTOS DIRETOS DE FORÇA</div>', unsafe_allow_html=True)
+    def calc_confronto(nome, atk_casa, def_fora, atk_fora, def_casa):
+        casa_force = atk_casa * (def_fora / MEDIA_GOLS_FORA_LIGA) if def_fora else 0
+        fora_force = atk_fora * (def_casa / MEDIA_GOLS_CASA_LIGA) if def_casa else 0
+        return f"{casa_force:.2f} vs {fora_force:.2f}"
+
+    gols_casa = pegar_valor(st.session_state.ovrall_casa, 'gols_media', 1.5)
+    gols_sofridos_casa = pegar_valor(st.session_state.ovrall_casa, 'gols_sofridos_media', 1.2)
+    gols_fora = pegar_valor(st.session_state.ovrall_fora, 'gols_media', 1.2)
+    gols_sofridos_fora = pegar_valor(st.session_state.ovrall_fora, 'gols_sofridos_media', 1.5)
+
+    col_f1, col_f2, col_f3 = st.columns(3)
+    with col_f1:
+        st.markdown("**Ataque Casa vs Defesa Fora**")
+        st.metric("", calc_confronto("", gols_casa, gols_sofridos_fora, gols_fora, gols_sofridos_casa).split(" vs ")[0])
+    with col_f2:
+        st.markdown("**Defesa Casa vs Ataque Fora**")
+        st.metric("", calc_confronto("", gols_casa, gols_sofridos_fora, gols_fora, gols_sofridos_casa).split(" vs ")[1])
+    with col_f3:
+        st.markdown("**Meio‑Campo**")
+        posse_casa = pegar_valor(st.session_state.ovrall_casa, 'posse_media', 50)
+        posse_fora = pegar_valor(st.session_state.ovrall_fora, 'posse_media', 50)
+        st.metric("Posse", f"{posse_casa:.0f}%", delta=f"vs {posse_fora:.0f}%")
+
+    # 3. RESUMO ÚLTIMOS 5 JOGOS
+    st.markdown('<div class="section-title">⏳ ÚLTIMOS 5 JOGOS (Médias Móveis)</div>', unsafe_allow_html=True)
+    def resumo_ultimos_5(jogos, eh_mandante=True):
+        if len(jogos) < 5:
+            return None
+        ultimos = jogos[:5]
+        gols_pro = [j.get('gols_pro', 0) for j in ultimos]
+        gols_contra = [j.get('gols_contra', 0) for j in ultimos]
+        media_gols = sum(gols_pro) / 5
+        media_sofridos = sum(gols_contra) / 5
+        btts = sum(1 for gp, gc in zip(gols_pro, gols_contra) if gp > 0 and gc > 0) / 5
+        over25 = sum(1 for gp, gc in zip(gols_pro, gols_contra) if gp + gc > 2.5) / 5
+        pontos = sum(3 if gp > gc else (1 if gp == gc else 0) for gp, gc in zip(gols_pro, gols_contra))
+        aprov = pontos / 15 * 100
+        return {
+            'media_gols': media_gols,
+            'media_sofridos': media_sofridos,
+            'btts': btts,
+            'over25': over25,
+            'aproveitamento': aprov
+        }
+
+    resumo_casa = resumo_ultimos_5(st.session_state.jogos_casa)
+    resumo_fora = resumo_ultimos_5(st.session_state.jogos_fora)
+
+    col_u1, col_u2 = st.columns(2)
+    with col_u1:
+        st.markdown("**Casa**")
+        if resumo_casa:
+            st.metric("Gols Marcados", f"{resumo_casa['media_gols']:.2f}")
+            st.metric("Gols Sofridos", f"{resumo_casa['media_sofridos']:.2f}")
+            st.metric("BTTS %", f"{resumo_casa['btts']:.0%}")
+            st.metric("Over 2.5 %", f"{resumo_casa['over25']:.0%}")
+            st.metric("Aproveitamento", f"{resumo_casa['aproveitamento']:.0f}%")
+        else:
+            st.caption("Dados insuficientes.")
+    with col_u2:
+        st.markdown("**Fora**")
+        if resumo_fora:
+            st.metric("Gols Marcados", f"{resumo_fora['media_gols']:.2f}")
+            st.metric("Gols Sofridos", f"{resumo_fora['media_sofridos']:.2f}")
+            st.metric("BTTS %", f"{resumo_fora['btts']:.0%}")
+            st.metric("Over 2.5 %", f"{resumo_fora['over25']:.0%}")
+            st.metric("Aproveitamento", f"{resumo_fora['aproveitamento']:.0f}%")
+        else:
+            st.caption("Dados insuficientes.")
+
+    # 4. PLACAR PROVÁVEL
+    st.markdown('<div class="section-title">🎯 PLACAR PROVÁVEL</div>', unsafe_allow_html=True)
+    gols_esp_casa = gols_casa * (gols_sofridos_fora / MEDIA_GOLS_FORA_LIGA)
+    gols_esp_fora = gols_fora * (gols_sofridos_casa / MEDIA_GOLS_CASA_LIGA)
+    st.markdown(f"<h2 style='text-align:center; color:#ffd700;'>{gols_esp_casa:.2f} - {gols_esp_fora:.2f}</h2>", unsafe_allow_html=True)
+
+    # 5. INDICADORES DE CONSISTÊNCIA E RESILIÊNCIA
+    st.markdown('<div class="section-title">📈 CONSISTÊNCIA & RESILIÊNCIA</div>', unsafe_allow_html=True)
+    col_cons1, col_cons2 = st.columns(2)
+    with col_cons1:
+        desv_casa = pegar_valor(st.session_state.ovrall_casa, 'desvio_pontos', 0.5)
+        if desv_casa < 0.4:
+            st.success("Casa: muito consistente (desvio baixo)")
+        elif desv_casa < 0.8:
+            st.info("Casa: consistência moderada")
+        else:
+            st.warning("Casa: irregular (desvio alto)")
+        res_casa = pegar_valor(st.session_state.ovrall_casa, 'pontos_pos_desvantagem_media', 1.0)
+        if res_casa > 1.5:
+            st.success("Boa recuperação quando sai atrás")
+        elif res_casa < 0.5:
+            st.error("Dificuldade em reagir após desvantagem")
+    with col_cons2:
+        desv_fora = pegar_valor(st.session_state.ovrall_fora, 'desvio_pontos', 0.5)
+        if desv_fora < 0.4:
+            st.success("Fora: muito consistente")
+        elif desv_fora < 0.8:
+            st.info("Fora: consistência moderada")
+        else:
+            st.warning("Fora: irregular")
+        res_fora = pegar_valor(st.session_state.ovrall_fora, 'pontos_pos_desvantagem_media', 1.0)
+        if res_fora > 1.5:
+            st.success("Boa recuperação quando sai atrás")
+        elif res_fora < 0.5:
+            st.error("Dificuldade em reagir")
+
+    # 6. MOMENTUM (seta de evolução)
+    st.markdown('<div class="section-title">📈 MOMENTUM (IMA Recente)</div>', unsafe_allow_html=True)
+    # Nota: o IMA ainda não está calculado (só após GERAR). Podemos usar uma estimativa simples baseada nos últimos 3 jogos.
+    def momentum_simples(jogos):
+        if len(jogos) < 3:
+            return None
+        pts_ultimos3 = sum(3 if j['resultado']=='V' else (1 if j['resultado']=='E' else 0) for j in jogos[:3])
+        pts_anteriores3 = sum(3 if j['resultado']=='V' else (1 if j['resultado']=='E' else 0) for j in jogos[3:6]) if len(jogos)>=6 else 4.5
+        if pts_ultimos3 > pts_anteriores3 + 1:
+            return "⬆️ Em alta"
+        elif pts_ultimos3 < pts_anteriores3 - 1:
+            return "⬇️ Em queda"
+        else:
+            return "➡️ Estável"
+    mom_casa = momentum_simples(st.session_state.jogos_casa)
+    mom_fora = momentum_simples(st.session_state.jogos_fora)
+    col_mom1, col_mom2 = st.columns(2)
+    with col_mom1:
+        st.write(f"Casa: {mom_casa if mom_casa else 'Indisponível'}")
+    with col_mom2:
+        st.write(f"Fora: {mom_fora if mom_fora else 'Indisponível'}")
+
+    # 7. GRÁFICO RADAR (expandível)
+    with st.expander("📡 Gráfico Radar dos Atributos", expanded=False):
+        # Preparar dados para radar
+        categorias = list(atributos_casa.keys())
+        valores_casa = [atributos_casa[c] for c in categorias]
+        valores_fora = [atributos_fora[c] for c in categorias]
+        df_casa = pd.DataFrame({'Categoria': categorias, 'Valor': valores_casa, 'Time': 'Casa'})
+        df_fora = pd.DataFrame({'Categoria': categorias, 'Valor': valores_fora, 'Time': 'Fora'})
+        df_radar = pd.concat([df_casa, df_fora])
+        radar_chart = alt.Chart(df_radar).mark_line(point=True).encode(
+            theta=alt.Theta('Categoria:N', stack=True),
+            radius=alt.Radius('Valor:Q', scale=alt.Scale(zero=True, domain=[0,100])),
+            color='Time:N'
+        ).properties(width=200, height=200).facet(column='Time:N').resolve_scale(radius='independent')
+        st.altair_chart(radar_chart, use_container_width=True)
+        st.caption("Valores próximos a 100 indicam força máxima na categoria.")
+
+    # Edição detalhada OVRall (mantida)
     with st.expander("✏️ Ajustar Atributos Detalhados", expanded=False):
         dimensoes = {
             "⚔️ ATAQUE": [("Gols marcados", "gols_media", 1.5), ("xG", "xg_media", 1.2),
