@@ -1,5 +1,5 @@
-# manual.py — MyPredict 2.0 (parser adaptado ao formato real da IA)
-import streamlit as st
+# manual.py
+import re
 from ratings import calcular_ima, calcular_ovrall, calcular_ic, calcular_mpv, obter_prateleira
 from markets import (
     prob_1x2, prob_over_2_5, prob_ambas_marcam, prob_gol_ht,
@@ -9,9 +9,8 @@ from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
 from utils import extrair_jogos, para_float
 
 def processar_texto_ia(texto):
-    """Processa o texto corrido da IA e retorna um dicionário com os dados."""
     dados = {
-        'time_casa': "Flamengo", 'time_fora': "Palmeiras",
+        'time_casa': "", 'time_fora': "",
         'pos_casa': 1, 'pos_fora': 2,
         'jogos_casa': [], 'jogos_fora': [],
         'ovrall_casa': {}, 'ovrall_fora': {},
@@ -22,122 +21,75 @@ def processar_texto_ia(texto):
         'prateleiras_extra': {}
     }
 
-    # Remove quebras de linha e espaços extras
-    texto = texto.replace('\n', ' ').strip()
+    texto_limpo = texto.replace('\n', ' ').strip()
 
-    # Dividimos pelas seções usando palavras-chave
-    secoes = {
-        'Time da casa:': 'time_casa',
-        'Time da fora:': 'time_fora',
-        'Posições:': 'posicoes',
-        'Últimos 10 jogos do time da casa:': 'jogos_casa',
-        'Últimos 10 jogos do time da fora:': 'jogos_fora',
-        'Métricas OVRall do time da casa (23 valores em uma única linha, na ordem exata: gols_media, gols_sofridos_media, xg_media, xga_media, finalizacoes_alvo_media, finalizacoes_alvo_sofridas_media, chutes_media, desarmes_intercep_media, posse_media, passes_certos_pct, passes_chave_media, assistencias_media, conversao, clean_sheets_pct, desvio_pontos, desvio_gols_pro, desvio_gols_sofridos, pontos_pos_desvantagem_media, gols_ultimos_15min_media, pontos_apos_derrota_media, diff_aprov_casa_fora, aprov_viradas_favor, aprov_viradas_contra):': 'ovrall_casa',
-        'Métricas OVRall do time da fora (mesma ordem, 23 valores em uma linha):': 'ovrall_fora',
-        'Métricas IC do time da casa (5 valores em uma linha, ordem: confronto_direto, mesmo_escalao, contra_escalao_adversario, fator_casa, odds):': 'ic_casa',
-        'Métricas IC do time da fora (mesma ordem, 5 valores):': 'ic_fora',
-        'Médias da Liga:': 'medias_liga',
-        'Prateleiras (apenas se diferentes de "Media"):': 'prateleiras'
-    }
+    # 1. Times e posições
+    tc = re.search(r'Time da casa:\s*([^T]+)', texto_limpo)
+    tf = re.search(r'Time da fora:\s*([^P]+)', texto_limpo)
+    if tc: dados['time_casa'] = tc.group(1).strip().rstrip('Time da fora:').strip()
+    if tf: dados['time_fora'] = tf.group(1).strip().rstrip('Posições:').strip()
 
-    # Encontra as posições das seções no texto
-    posicoes = {}
-    for chave, nome in secoes.items():
-        idx = texto.find(chave)
-        if idx != -1:
-            posicoes[idx] = (nome, chave)
+    pos = re.search(r'Casa:\s*(\d+).*?Fora:\s*(\d+)', texto_limpo)
+    if pos:
+        dados['pos_casa'] = int(pos.group(1))
+        dados['pos_fora'] = int(pos.group(2))
 
-    # Ordena as seções pela posição no texto
-    ordenado = sorted(posicoes.items(), key=lambda x: x[0])
-    partes = {}
-    for i, (pos, (nome, chave)) in enumerate(ordenado):
-        inicio = pos + len(chave)
-        fim = ordenado[i+1][0] if i+1 < len(ordenado) else len(texto)
-        conteudo = texto[inicio:fim].strip()
-        # Remove o cabeçalho da próxima seção do conteúdo atual
-        if i+1 < len(ordenado):
-            prox_chave = ordenado[i+1][1][1]
-            conteudo = conteudo.replace(prox_chave, '').strip()
-        partes[nome] = conteudo
+    # 2. Jogos
+    jogos_casa_bloco = re.search(r'Últimos 10 jogos do time da casa:\s*(.*?)Métricas OVRall', texto_limpo)
+    if jogos_casa_bloco:
+        dados['jogos_casa'] = extrair_jogos(jogos_casa_bloco.group(1))
+    jogos_fora_bloco = re.search(r'Últimos 10 jogos do time da fora:\s*(.*?)Métricas OVRall', texto_limpo)
+    if jogos_fora_bloco:
+        dados['jogos_fora'] = extrair_jogos(jogos_fora_bloco.group(1))
 
-    # Processa cada parte
-    if 'time_casa' in partes:
-        dados['time_casa'] = partes['time_casa'].split(',')[0].strip()
-    if 'time_fora' in partes:
-        dados['time_fora'] = partes['time_fora'].split(',')[0].strip()
-
-    if 'posicoes' in partes:
-        # Extrai "Casa: X" e "Fora: Y"
-        p = partes['posicoes']
-        for item in p.split(' '):
-            if item.startswith('Casa:'):
-                try: dados['pos_casa'] = int(item.split(':')[1])
-                except: pass
-            elif item.startswith('Fora:'):
-                try: dados['pos_fora'] = int(item.split(':')[1])
-                except: pass
-
-    if 'jogos_casa' in partes:
-        dados['jogos_casa'] = extrair_jogos(partes['jogos_casa'])
-    if 'jogos_fora' in partes:
-        dados['jogos_fora'] = extrair_jogos(partes['jogos_fora'])
-
+    # 3. Métricas OVRall
     chaves_ovr = ["gols_media","gols_sofridos_media","xg_media","xga_media","finalizacoes_alvo_media","finalizacoes_alvo_sofridas_media","chutes_media","desarmes_intercep_media","posse_media","passes_certos_pct","passes_chave_media","assistencias_media","conversao","clean_sheets_pct","desvio_pontos","desvio_gols_pro","desvio_gols_sofridos","pontos_pos_desvantagem_media","gols_ultimos_15min_media","pontos_apos_derrota_media","diff_aprov_casa_fora","aprov_viradas_favor","aprov_viradas_contra"]
-    if 'ovrall_casa' in partes:
-        vals = [para_float(x) for x in partes['ovrall_casa'].split(',') if x.strip()]
-        if len(vals) >= 23:
-            for i in range(23): dados['ovrall_casa'][chaves_ovr[i]] = vals[i]
-    if 'ovrall_fora' in partes:
-        vals = [para_float(x) for x in partes['ovrall_fora'].split(',') if x.strip()]
-        if len(vals) >= 23:
-            for i in range(23): dados['ovrall_fora'][chaves_ovr[i]] = vals[i]
+    ovr_casa = re.search(r'Métricas OVRall do time da casa.*?:\s*([\d.,\-]+)', texto_limpo)
+    if ovr_casa:
+        vals = [para_float(x) for x in ovr_casa.group(1).split(',')]
+        for i, k in enumerate(chaves_ovr):
+            if i < len(vals): dados['ovrall_casa'][k] = vals[i]
+    ovr_fora = re.search(r'Métricas OVRall do time da fora.*?:\s*([\d.,\-]+)', texto_limpo)
+    if ovr_fora:
+        vals = [para_float(x) for x in ovr_fora.group(1).split(',')]
+        for i, k in enumerate(chaves_ovr):
+            if i < len(vals): dados['ovrall_fora'][k] = vals[i]
 
+    # 4. IC
     chaves_ic = ["confronto_direto","mesmo_escalao","contra_escalao_adversario","fator_casa","odds"]
-    if 'ic_casa' in partes:
-        vals = [para_float(x) for x in partes['ic_casa'].split(',') if x.strip()]
-        if len(vals) >= 5:
-            for i in range(5): dados['ic_casa'][chaves_ic[i]] = vals[i]
-    if 'ic_fora' in partes:
-        vals = [para_float(x) for x in partes['ic_fora'].split(',') if x.strip()]
-        if len(vals) >= 5:
-            for i in range(5): dados['ic_fora'][chaves_ic[i]] = vals[i]
+    ic_casa = re.search(r'Métricas IC do time da casa.*?:\s*([\d.,\-]+)', texto_limpo)
+    if ic_casa:
+        vals = [para_float(x) for x in ic_casa.group(1).split(',')]
+        for i, k in enumerate(chaves_ic):
+            if i < len(vals): dados['ic_casa'][k] = vals[i]
+    ic_fora = re.search(r'Métricas IC do time da fora.*?:\s*([\d.,\-]+)', texto_limpo)
+    if ic_fora:
+        vals = [para_float(x) for x in ic_fora.group(1).split(',')]
+        for i, k in enumerate(chaves_ic):
+            if i < len(vals): dados['ic_fora'][k] = vals[i]
 
-    if 'medias_liga' in partes:
-        m = partes['medias_liga']
-        for item in m.split(' '):
-            if item.startswith('Média gols casa:'):
-                dados['media_gols_casa'] = para_float(item.split(':')[1])
-            elif item.startswith('Média gols fora:'):
-                dados['media_gols_fora'] = para_float(item.split(':')[1])
-            elif item.startswith('Média gols 1º tempo casa:'):
-                dados['media_ht_casa'] = para_float(item.split(':')[1])
-            elif item.startswith('Média gols 1º tempo fora:'):
-                dados['media_ht_fora'] = para_float(item.split(':')[1])
-            elif item.startswith('Média escanteios casa:'):
-                dados['media_esc_casa'] = para_float(item.split(':')[1])
-            elif item.startswith('Média escanteios fora:'):
-                dados['media_esc_fora'] = para_float(item.split(':')[1])
+    # 5. Médias da Liga
+    medias = re.findall(r'Média\s+(\w[\w\sº]+?):\s*([\d.,]+)', texto_limpo)
+    mapa_medias = {
+        'gols casa': 'media_gols_casa', 'gols fora': 'media_gols_fora',
+        'gols 1º tempo casa': 'media_ht_casa', 'gols 1º tempo fora': 'media_ht_fora',
+        'escanteios casa': 'media_esc_casa', 'escanteios fora': 'media_esc_fora'
+    }
+    for nome, val in medias:
+        nome_limpo = nome.strip().lower()
+        if nome_limpo in mapa_medias:
+            dados[mapa_medias[nome_limpo]] = para_float(val)
 
-    if 'prateleiras' in partes:
-        prat_texto = partes['prateleiras']
-        for item in prat_texto.split(','):
-            item = item.strip()
-            if ':' in item:
-                adv, prat = item.split(':', 1)
-                dados['prateleiras_extra'][adv.strip()] = prat.strip()
-
-    # Fallback para jogos: se não encontrou, tenta extrair de todo o texto
-    if len(dados['jogos_casa']) < 10 or len(dados['jogos_fora']) < 10:
-        todos_jogos = extrair_jogos(texto.replace(' ', ','))
-        if len(todos_jogos) >= 20:
-            dados['jogos_casa'] = todos_jogos[:10]
-            dados['jogos_fora'] = todos_jogos[10:20]
+    # 6. Prateleiras
+    prat = re.findall(r'([A-Za-záéíóúâêôãõç\s]+?):\s*(Elite|Alta|Média|Baixa|Crítica)', texto_limpo)
+    for adv, p in prat:
+        dados['prateleiras_extra'][adv.strip()] = p
 
     return dados
 
 def executar_manual(dados):
-    if len(dados['jogos_casa']) < 10 or len(dados['jogos_fora']) < 10:
-        return None, "São necessários 10 jogos para cada time."
+    if len(dados['jogos_casa']) < 5 or len(dados['jogos_fora']) < 5:
+        return None, f"Poucos jogos encontrados: Casa={len(dados['jogos_casa'])}, Fora={len(dados['jogos_fora'])}"
     if not dados['ovrall_casa'] or not dados['ovrall_fora']:
         return None, "Métricas OVRall não encontradas."
 
@@ -170,6 +122,31 @@ def executar_manual(dados):
     dados_liga = {k: [dados['ovrall_casa'].get(k, 0) or 0, dados['ovrall_fora'].get(k, 0) or 0] for k in set(dados['ovrall_casa']) | set(dados['ovrall_fora'])}
     ovrall_val_casa = calcular_ovrall(dados['ovrall_casa'], dados_liga)
     ovrall_val_fora = calcular_ovrall(dados['ovrall_fora'], dados_liga)
+
+    # Extrair notas das dimensões para exibição
+    dims = {
+        'Ataque': [('gols_media', False), ('xg_media', False), ('finalizacoes_alvo_media', False), ('conversao', False)],
+        'Defesa': [('gols_sofridos_media', True), ('xga_media', True), ('finalizacoes_alvo_sofridas_media', True), ('desarmes_intercep_media', False)],
+        'MeioCampo': [('posse_media', False), ('passes_certos_pct', False), ('passes_chave_media', False), ('assistencias_media', False), ('chutes_media', False)],
+        'Consistencia': [('desvio_pontos', True), ('desvio_gols_pro', True), ('desvio_gols_sofridos', True), ('clean_sheets_pct', False)],
+        'Resiliencia': [('pontos_pos_desvantagem_media', False), ('gols_ultimos_15min_media', False), ('pontos_apos_derrota_media', False), ('diff_aprov_casa_fora', True), ('aprov_viradas_favor', False), ('aprov_viradas_contra', True)],
+    }
+    notas_casa = {}
+    notas_fora = {}
+    for nome, indicadores in dims.items():
+        vals_c = []
+        vals_f = []
+        for ind, menor in indicadores:
+            vc = dados['ovrall_casa'].get(ind)
+            vf = dados['ovrall_fora'].get(ind)
+            if vc is not None and vf is not None:
+                lista = [vc, vf]
+                from ratings import _percentil
+                vals_c.append(_percentil(vc, lista, menor))
+                vals_f.append(_percentil(vf, lista, menor))
+        if vals_c:
+            notas_casa[nome] = sum(vals_c) / len(vals_c)
+            notas_fora[nome] = sum(vals_f) / len(vals_f)
 
     ic_val_casa = calcular_ic(dados['ic_casa'])
     ic_val_fora = calcular_ic(dados['ic_fora'])
@@ -211,4 +188,5 @@ def executar_manual(dados):
         'mpv_casa': mpv_casa, 'mpv_fora': mpv_fora,
         'ovrall_casa': ovrall_val_casa, 'ovrall_fora': ovrall_val_fora,
         'ic_casa': ic_val_casa, 'ic_fora': ic_val_fora,
+        'notas_casa': notas_casa, 'notas_fora': notas_fora
     }, None
