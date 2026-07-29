@@ -1,3 +1,4 @@
+# core/ratings.py — Cálculos de IMA, OVRall, IC e MPV
 from config import (
     PRATELEIRAS, PONTOS_BASE,
     BONUS_SIMETRICOS, BONUS_VITORIA_ASSIM, BONUS_DERROTA_ASSIM, BONUS_EMPATE,
@@ -74,8 +75,9 @@ def calcular_ovrall(dados_time, dados_liga):
             val_liga = dados_liga.get(indicador)
             if val_time is not None and val_liga:
                 notas.append(_percentil(val_time, val_liga, menor_melhor))
-        notas_dimensoes[dimensao] = sum(notas)/len(notas) if notas else None
-    disponiveis = {d: v for d, v in notas_dimensoes.items() if v is not None}
+        if notas:
+            notas_dimensoes[dimensao] = sum(notas) / len(notas)
+    disponiveis = {d: v for d, v in notas_dimensoes.items()}
     if not disponiveis:
         return 45.0
     peso_total_disp = sum(PESOS_OVRALL[d] for d in disponiveis)
@@ -87,7 +89,8 @@ def calcular_ovrall(dados_time, dados_liga):
     return max(45.0, min(100.0, ovrall))
 
 def calcular_confronto_direto(time, adversario, jogos_historicos):
-    if not jogos_historicos: return 50.0
+    if not jogos_historicos:
+        return 50.0
     jogos = jogos_historicos[-JOGOS_CONFRONTO_DIRETO:]
     pontos = sum(PONTOS_BASE[j['resultado']] for j in jogos)
     max_possivel = len(jogos) * 3
@@ -95,18 +98,21 @@ def calcular_confronto_direto(time, adversario, jogos_historicos):
 
 def calcular_desempenho_contra_escalao(time, escalao_alvo, prateleiras, jogos_temporada):
     jogos_filtrados = [j for j in jogos_temporada if prateleiras.get(j['adversario']) == escalao_alvo]
-    if not jogos_filtrados: return 50.0
+    if not jogos_filtrados:
+        return 50.0
     pontos = sum(PONTOS_BASE[j['resultado']] for j in jogos_filtrados)
-    return (pontos / (len(jogos_filtrados)*3)) * 100
+    return (pontos / (len(jogos_filtrados) * 3)) * 100
 
 def calcular_fator_casa(time, mandante, jogos_temporada):
     jogos_filtrados = [j for j in jogos_temporada if j['mandante'] == mandante]
-    if not jogos_filtrados: return 50.0
+    if not jogos_filtrados:
+        return 50.0
     pontos = sum(PONTOS_BASE[j['resultado']] for j in jogos_filtrados)
-    return (pontos / (len(jogos_filtrados)*3)) * 100
+    return (pontos / (len(jogos_filtrados) * 3)) * 100
 
 def calcular_odds(odds_casa, odds_empate, odds_fora, mandante):
-    if None in (odds_casa, odds_empate, odds_fora): return None
+    if None in (odds_casa, odds_empate, odds_fora):
+        return None
     prob_casa = 1/odds_casa
     prob_empate = 1/odds_empate
     prob_fora = 1/odds_fora
@@ -120,9 +126,11 @@ def calcular_ic(fatores, pesos=None):
     if pesos is None:
         pesos = PESOS_IC
     disponiveis = {k: v for k, v in fatores.items() if v is not None}
-    if not disponiveis: return 50.0
+    if not disponiveis:
+        return 50.0
     peso_total = sum(pesos.get(k, 0) for k in disponiveis)
-    if peso_total == 0: return 50.0
+    if peso_total == 0:
+        return 50.0
     ic = sum((pesos.get(k, 0)/peso_total) * disponiveis[k] for k in disponiveis)
     return max(0.0, min(100.0, ic))
 
