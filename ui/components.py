@@ -10,7 +10,7 @@ import altair as alt
 from config import THRESHOLD_GOLD, THRESHOLD_VALUE, THRESHOLD_FAVORITO
 
 # ------------------------------------------------------------
-# GRÁFICOS
+# GRÁFICOS (mantidos)
 # ------------------------------------------------------------
 def radar_chart(casa_scores, fora_scores):
     labels = [dim for dim in casa_scores.keys() if dim in fora_scores.keys()]
@@ -322,7 +322,7 @@ def show_results_manual(res):
         else:
             st.info("Dados táticos indisponíveis. Verifique o modelo calibrado.")
 
-    # ====================== ABA 3: CENÁRIOS & ESTILOS (ATUALIZADA) ======================
+    # ====================== ABA 3: CENÁRIOS & ESTILOS (COM IMPACTO QUANTITATIVO) ======================
     with tabs[2]:
         st.markdown("## 🔮 Cenários & Estilos de Jogo")
         if res.get('estilo_casa') and res.get('estilo_fora'):
@@ -336,11 +336,9 @@ def show_results_manual(res):
                 st.markdown(f"- Eficiência de Finalização: {estilo_casa['eficiencia_finalizacao']:.2f}")
                 st.markdown(f"- Vulnerabilidade em Transição: {estilo_casa['vulnerabilidade_transicao']:.2f}")
                 st.markdown(f"- Dependência de Bola Parada: {estilo_casa['dependencia_bola_parada']:.2%}")
-                # Confidence Score
                 conf = res.get('confianca_casa', 50)
                 st.markdown(f"**🔒 Confiança do Modelo:** {conf:.0f}/100")
                 st.progress(conf / 100)
-                # Curva de Momentum
                 if res.get('curva_casa'):
                     st.markdown("**📈 Evolução do IMA (últimos recortes)**")
                     curva = res['curva_casa']
@@ -361,6 +359,22 @@ def show_results_manual(res):
                     curva = res['curva_fora']
                     df_curva = pd.DataFrame({'Recorte': ['10J', '5J', '3J'], 'Pontuação': curva})
                     st.line_chart(df_curva.set_index('Recorte'), use_container_width=True)
+
+            st.markdown("---")
+            st.markdown("### 📊 Impacto dos Estilos nos Mercados")
+            impact = res.get('style_impact', {})
+            if impact:
+                impact_df = pd.DataFrame({
+                    'Mercado': ['Over 2.5', 'BTTS', 'Gol 1º Tempo', 'Escanteios'],
+                    'Ajuste': [
+                        f"{impact.get('over25', 0)*100:+.0f}%",
+                        f"{impact.get('btts', 0)*100:+.0f}%",
+                        f"{impact.get('gol_ht', 0)*100:+.0f}%",
+                        f"{impact.get('esc', 0)*100:+.0f}%"
+                    ]
+                })
+                st.dataframe(impact_df, use_container_width=True, hide_index=True)
+                st.markdown(res.get('style_impact_text', ''))
 
             st.markdown("---")
             st.markdown(res.get('cenario', 'Análise de cenário indisponível.'))
@@ -399,10 +413,10 @@ def show_results_manual(res):
                 st.write(f"Gols Sofridos: {stats_fora.get('gols_sofridos_media', 0):.1f} (Liga: {bm.get('gols_sofridos_media', {}).get('mean', 0):.1f})")
                 st.write(f"Posse: {stats_fora.get('posse_media', 0):.1f}% (Liga: {bm.get('posse_media', {}).get('mean', 50):.0f}%)")
 
-    # ====================== ABA 5: MERCADOS ======================
+    # ====================== ABA 5: MERCADOS (COM PROBABILIDADES AJUSTADAS) ======================
     with tabs[4]:
         st.markdown("## 🎯 Probabilidades de Mercado")
-        st.caption("Média entre modelo original e avançado")
+        st.caption("Média entre modelo original e avançado | (↑↓) impacto do estilo")
 
         probs_1x2 = {'Casa': res['p1'], 'Empate': res['pX'], 'Fora': res['p2']}
         max_key = max(probs_1x2, key=probs_1x2.get)
@@ -431,14 +445,14 @@ def show_results_manual(res):
 
         st.markdown("### 🎲 Mercados Especiais")
         mercados = [
-            ("Over 2.5 Gols", res['over25'], edges.get('edge_over')),
-            ("Ambas Marcam", res['btts'], edges.get('edge_btts')),
-            ("Gol 1º Tempo", res['gol_ht'], edges.get('edge_ht')),
-            ("Over 8.5 Escanteios", res['esc'], edges.get('edge_esc')),
+            ("Over 2.5 Gols", res['over25'], res.get('adj_over25', res['over25']), res.get('style_impact', {}).get('over25', 0), edges.get('edge_over')),
+            ("Ambas Marcam", res['btts'], res.get('adj_btts', res['btts']), res.get('style_impact', {}).get('btts', 0), edges.get('edge_btts')),
+            ("Gol 1º Tempo", res['gol_ht'], res.get('adj_gol_ht', res['gol_ht']), res.get('style_impact', {}).get('gol_ht', 0), edges.get('edge_ht')),
+            ("Over 8.5 Escanteios", res['esc'], res.get('adj_esc', res['esc']), res.get('style_impact', {}).get('esc', 0), edges.get('edge_esc')),
         ]
         cols_m = st.columns(4)
         max_prob = max([m[1] for m in mercados])
-        for i, (nome, prob, edge_val) in enumerate(mercados):
+        for i, (nome, prob, adj_prob, impacto, edge_val) in enumerate(mercados):
             selo = ""
             if prob >= 0.70: selo = "🥇 GOLD"
             elif prob >= 0.60: selo = "✅ Value"
@@ -450,12 +464,20 @@ def show_results_manual(res):
                     edge_html = f"<div class='selo-badge' style='background:#FFD700; color:#000;'>🟢 MyPredict Edge ({edge_val:+.1%})</div>"
                 elif edge_val > 0:
                     edge_html = f"<div class='selo-badge' style='background:#00FF7F; color:#000;'>🟢 Value ({edge_val:+.1%})</div>"
+            # Indicador de ajuste de estilo
+            if impacto > 0:
+                estilo_badge = f" <span style='color:#00FF7F;'>↑{impacto*100:+.0f}%</span>"
+            elif impacto < 0:
+                estilo_badge = f" <span style='color:#FF4D4D;'>↓{impacto*100:+.0f}%</span>"
+            else:
+                estilo_badge = ""
             card_class = "card-winner" if prob == max_prob else "card-loser"
             with cols_m[i]:
                 st.markdown(f"""
                 <div class="{card_class}">
                     <div style="font-size:0.9rem;">{nome}</div>
-                    <div class="big-number">{prob:.1%}</div>
+                    <div class="big-number">{prob:.1%}{estilo_badge}</div>
+                    <div style="font-size:0.8rem; color:#aaa;">Ajustado: {adj_prob:.1%}</div>
                     <div class="selo-badge" style="background:{bg}; color:#000;">{selo if selo else '⚪'}</div>
                     {edge_html}
                 </div>
