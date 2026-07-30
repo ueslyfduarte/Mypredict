@@ -6,10 +6,11 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from io import BytesIO
 import base64
+import altair as alt
 from config import THRESHOLD_GOLD, THRESHOLD_VALUE, THRESHOLD_FAVORITO
 
 # ------------------------------------------------------------
-# GRÁFICOS
+# GRÁFICOS (mantidos)
 # ------------------------------------------------------------
 def radar_chart(casa_scores, fora_scores):
     labels = [dim for dim in casa_scores.keys() if dim in fora_scores.keys()]
@@ -76,7 +77,7 @@ def field_heatmap_annotated(dimensions_casa, dimensions_fora, deltas):
     return base64.b64encode(buf.read()).decode()
 
 # ------------------------------------------------------------
-# ANÁLISE DESCRITIVA AUTOMÁTICA
+# ANÁLISE DESCRITIVA AUTOMÁTICA (mantida)
 # ------------------------------------------------------------
 def gerar_analise_descritiva(res):
     nome_casa = res['time_casa']
@@ -265,6 +266,7 @@ def show_results_manual(res):
                 if heat_img:
                     st.image(f"data:image/png;base64,{heat_img}", use_container_width=True, caption="Azul: vantagem casa, Vermelho: vantagem fora")
 
+            # NOVO: gráfico de barras LADO A LADO com Altair
             st.markdown("### ⚖️ Força Estrutural (OVRall) por Setor")
             if res.get('notas_casa') and res.get('notas_fora'):
                 dims_ovr = ['Ataque', 'Defesa', 'MeioCampo', 'Consistencia', 'Resiliencia']
@@ -274,8 +276,15 @@ def show_results_manual(res):
                     'Setor': dims_ovr,
                     nome_casa: notas_c,
                     nome_fora: notas_f
-                }).set_index('Setor')
-                st.bar_chart(df_ovr, use_container_width=True)
+                })
+                df_long = df_ovr.melt('Setor', var_name='Time', value_name='Nota')
+                chart = alt.Chart(df_long).mark_bar().encode(
+                    x=alt.X('Setor:N', title=None),
+                    y=alt.Y('Nota:Q', title='Nota (0-100)'),
+                    color=alt.Color('Time:N', scale=alt.Scale(range=['#FFD700', '#00B4D8']), legend=alt.Legend(title=None)),
+                    xOffset='Time:N'
+                ).properties(width='container', height=300)
+                st.altair_chart(chart, use_container_width=True)
 
             st.markdown("### 📊 Diferencial por Dimensão")
             deltas = tac['deltas']
