@@ -47,12 +47,28 @@ def render_manual():
         if st.session_state.get('liga_ativa'):
             st.info(f"🏟️ Liga atual: **{st.session_state.liga_ativa}**")
 
-        with st.expander("📊 Médias da Liga (personalize)", expanded=False):
-            ml_col1, ml_col2 = st.columns(2)
-            media_gols_casa_liga = ml_col1.number_input("Média Gols Casa (liga)", 0.0, 5.0, MEDIA_GOLS_CASA_LIGA, key="ml_casa")
-            media_gols_fora_liga = ml_col2.number_input("Média Gols Fora (liga)", 0.0, 5.0, MEDIA_GOLS_FORA_LIGA, key="ml_fora")
-            st.session_state.media_gols_casa_liga = media_gols_casa_liga
-            st.session_state.media_gols_fora_liga = media_gols_fora_liga
+        with st.expander("📊 Parâmetros da Liga (personalize)", expanded=False):
+            st.caption("Defina os valores de referência da competição. Eles serão usados nos cálculos de OVRall e dimensões táticas.")
+            col_bench1, col_bench2, col_bench3 = st.columns(3)
+            bench_gols_casa = col_bench1.number_input("Média Gols Casa", 0.0, 5.0, MEDIA_GOLS_CASA_LIGA, key="bench_gols_casa")
+            bench_gols_fora = col_bench2.number_input("Média Gols Fora", 0.0, 5.0, MEDIA_GOLS_FORA_LIGA, key="bench_gols_fora")
+            bench_posse = col_bench3.number_input("Posse Média (%)", 0.0, 100.0, 50.0, key="bench_posse")
+            bench_fin_alvo = col_bench1.number_input("Finalizações Alvo (média)", 0.0, 15.0, 4.0, key="bench_fin_alvo")
+            bench_xg = col_bench2.number_input("xG Médio", 0.0, 5.0, 1.3, key="bench_xg")
+            bench_esc = col_bench3.number_input("Escanteios Médios", 0.0, 15.0, 5.0, key="bench_esc")
+            bench_ht = col_bench1.number_input("Média Gols HT", 0.0, 5.0, 0.7, key="bench_ht")
+            bench_btts = col_bench2.number_input("BTTS Médio (%)", 0.0, 100.0, 48.0, key="bench_btts")
+
+            st.session_state.benchmarks_usr = {
+                'gols_media': bench_gols_casa,
+                'gols_sofridos_media': bench_gols_fora,
+                'posse_media': bench_posse,
+                'finalizacoes_alvo_media': bench_fin_alvo,
+                'xg_media': bench_xg,
+                'escanteios_media': bench_esc,
+                'gols_ht_media': bench_ht,
+                'btts_pct': bench_btts / 100.0,
+            }
 
     # ---------- Aba ANALISAR ----------
     with tab_analise:
@@ -163,10 +179,11 @@ def render_manual():
             col_odds4, col_odds5, col_odds6 = st.columns(3)
             odd_over = col_odds4.number_input("Odd Over 2.5", 1.0, 50.0, 1.9, 0.01, key="odd_over")
             odd_btts = col_odds5.number_input("Odd BTTS", 1.0, 50.0, 1.8, 0.01, key="odd_btts")
-            odd_esc = col_odds6.number_input("Odd Over 8.5 Esc.", 1.0, 50.0, 2.0, 0.01, key="odd_esc")
+            odd_ht = col_odds6.number_input("Odd Gol 1º Tempo", 1.0, 50.0, 1.9, 0.01, key="odd_ht")
+            odd_esc = st.number_input("Odd Over 8.5 Escanteios", 1.0, 50.0, 2.0, 0.01, key="odd_esc")
             odds_dict = {
                 'odd_casa': odd_casa, 'odd_empate': odd_empate, 'odd_fora': odd_fora,
-                'odd_over': odd_over, 'odd_btts': odd_btts, 'odd_esc': odd_esc,
+                'odd_over': odd_over, 'odd_btts': odd_btts, 'odd_ht': odd_ht, 'odd_esc': odd_esc,
             }
 
         if st.button("⚡ Calcular Análise Completa", use_container_width=True, type="primary"):
@@ -183,6 +200,7 @@ def render_manual():
                 'media_ht_casa': 0.75, 'media_ht_fora': 0.65,
                 'media_esc_casa': 5.0, 'media_esc_fora': 4.5,
                 'prateleiras_extra': {},
+                'benchmarks_usr': st.session_state.get('benchmarks_usr', None),
             }
             pkl_path = st.session_state.get('pkl_path', 'calibration_params.pkl')
             res, err = executar_manual(dados, pkl_path)
