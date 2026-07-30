@@ -9,7 +9,7 @@ from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA, FATOR_SUPERACAO, 
 
 from core.tactical_dimensions import compute_all_dimensions, modulate_with_context, compute_mpv
 from core.market_engine_v2 import (
-    predict_over25, predict_btts, predict_1x2, predict_ht_goal, predict_corners, get_mp_weights
+    predict_over25, predict_btts, predict_1x2, predict_ht_goal, predict_corners
 )
 from core.markets import (
     prob_1x2, prob_over_2_5, prob_ambas_marcam, prob_gol_ht, prob_over_escanteios,
@@ -21,11 +21,6 @@ try:
     CONTRAST_AVAILABLE = True
 except ImportError:
     CONTRAST_AVAILABLE = False
-
-def executar_automatico(liga_nome, temporada, time_casa, time_fora, classificacao_ant, prateleiras,
-                        dados_casa, dados_fora, jogos_casa, jogos_fora):
-    # (mantido o original, não é o foco agora)
-    pass
 
 def _build_stats_for_dimensions(ovrall_dict):
     return {
@@ -168,12 +163,12 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
     elo_norm_casa = normalizar_elo(elo_casa, elos_liga)
     elo_norm_fora = normalizar_elo(elo_fora, elos_liga)
 
-    # MPV original (tradicional)
-    mpv_original_casa = ELO_WEIGHT * elo_norm_casa + (1 - ELO_WEIGHT) * mpv_base_casa
-    mpv_original_fora = ELO_WEIGHT * elo_norm_fora + (1 - ELO_WEIGHT) * mpv_base_fora
+    # MPV final (tradicional)
+    mpv_casa = ELO_WEIGHT * elo_norm_casa + (1 - ELO_WEIGHT) * mpv_base_casa
+    mpv_fora = ELO_WEIGHT * elo_norm_fora + (1 - ELO_WEIGHT) * mpv_base_fora
 
     # ================================================================
-    # PROBABILIDADES ORIGINAIS (FÓRMULAS ANTIGAS)
+    # PROBABILIDADES ORIGINAIS
     # ================================================================
     bonus_casa = calcular_bonus_casa(dados.get('ovrall_casa', {}).get('diff_aprov_casa_fora', 0))
     p1_orig, pX_orig, p2_orig = prob_1x2(mpv_base_casa, mpv_base_fora, bonus_casa)
@@ -204,7 +199,7 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
     )
 
     # ================================================================
-    # CARREGAR MODELO CALIBRADO E DIMENSÕES TÁTICAS
+    # MODELO CALIBRADO E DIMENSÕES TÁTICAS
     # ================================================================
     try:
         with open(pkl_path, 'rb') as f:
@@ -239,9 +234,6 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
     mpv_tactical_casa = compute_mpv(dims_casa_mod, dimension_weights) if dimension_weights else 50.0
     mpv_tactical_fora = compute_mpv(dims_fora_mod, dimension_weights) if dimension_weights else 50.0
 
-    # ================================================================
-    # PROBABILIDADES AVANÇADAS (MODELO CALIBRADO)
-    # ================================================================
     ovr_casa = ovrall_val_casa
     ovr_fora = ovrall_val_fora
     ic_casa = ic_val_casa
@@ -268,6 +260,22 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
                               dados.get('ovrall_fora', {}).get('escanteios_sofridos_media', 5.0) or 5.0)
 
     # ================================================================
+    # PROBABILIDADES MÉDIAS (MÉDIA ENTRE ORIGINAL E AVANÇADO)
+    # ================================================================
+    def media_prob(orig, adv):
+        if adv is None:
+            return orig
+        return (orig + adv) / 2.0
+
+    p1 = media_prob(p1_orig, adv_probs_1x2['casa'])
+    pX = media_prob(pX_orig, adv_probs_1x2['empate'])
+    p2 = media_prob(p2_orig, adv_probs_1x2['fora'])
+    over25 = media_prob(over25_orig, adv_over25)
+    btts = media_prob(btts_orig, adv_btts)
+    gol_ht = media_prob(gol_ht_orig, adv_ht)
+    esc = media_prob(esc_orig, adv_esc)
+
+    # ================================================================
     # CONTRASTE TÁTICO
     # ================================================================
     deltas = {}
@@ -279,21 +287,24 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
         heatmap_img = generate_heatmap(deltas)
 
     # ================================================================
-    # MONTAGEM DO RESULTADO
+    # RESULTADO
     # ================================================================
     res = {
         'time_casa': dados['time_casa'], 'time_fora': dados['time_fora'],
-        # Originais
+        # Probabilidades médias (principais)
+        'p1': p1, 'pX': pX, 'p2': p2,
+        'over25': over25, 'btts': btts, 'gol_ht': gol_ht, 'esc': esc,
+        # Valores originais (para referência)
         'p1_orig': p1_orig, 'pX_orig': pX_orig, 'p2_orig': p2_orig,
         'over25_orig': over25_orig, 'btts_orig': btts_orig,
         'gol_ht_orig': gol_ht_orig, 'esc_orig': esc_orig,
-        # Avançadas
+        # Avançados (para referência)
         'p1_adv': adv_probs_1x2['casa'], 'pX_adv': adv_probs_1x2['empate'], 'p2_adv': adv_probs_1x2['fora'],
         'over25_adv': adv_over25, 'btts_adv': adv_btts,
         'gol_ht_adv': adv_ht, 'esc_adv': adv_esc,
-        # Métricas tradicionais
+        # Métricas
         'ima_casa': ima_casa, 'ima_fora': ima_fora,
-        'mpv_casa': mpv_original_casa, 'mpv_fora': mpv_original_fora,
+        'mpv_casa': mpv_casa, 'mpv_fora': mpv_fora,
         'ovrall_casa': ovrall_val_casa, 'ovrall_fora': ovrall_val_fora,
         'ic_casa': ic_val_casa, 'ic_fora': ic_val_fora,
         'notas_casa': notas_casa, 'notas_fora': notas_fora,
@@ -305,7 +316,6 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
         'prat_proj_casa': dados.get('prat_casa', 'Media'),
         'prat_proj_fora': dados.get('prat_fora', 'Media'),
         'elo_norm_casa': elo_norm_casa, 'elo_norm_fora': elo_norm_fora,
-        # Tático
         'mpv_tactical_casa': mpv_tactical_casa, 'mpv_tactical_fora': mpv_tactical_fora,
         'tactical': {
             'dimensions_casa': dims_casa_mod,
