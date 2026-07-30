@@ -389,55 +389,52 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
     )
 
     # ================================================================
-    # MODELO CALIBRADO E DIMENSÕES TÁTICAS (SÓ SE NÃO MODO LIVRE)
+    # DIMENSÕES TÁTICAS (SEMPRE CALCULADAS, USANDO BENCHMARKS DISPONÍVEIS)
+    # ================================================================
+    dimension_weights = {}
+    if not modo_livre and not dados.get('benchmarks_usr'):
+        try:
+            with open(pkl_path, 'rb') as f:
+                calib = pickle.load(f)
+            benchmarks = calib.get('benchmarks', benchmarks)
+            dimension_weights = calib.get('dimension_weights', {})
+        except:
+            pass
+
+    stats_casa = _build_stats_for_dimensions(dados.get('ovrall_casa', {}))
+    stats_fora = _build_stats_for_dimensions(dados.get('ovrall_fora', {}))
+
+    INDICATORS_MAP = {
+        'ataque_posicional': ['gols_media', 'chutes_alvo_media', 'conversao'],
+        'ataque_transicao': [],
+        'defesa_organizada': ['gols_sofridos_media', 'chutes_alvo_sofridos_media'],
+        'defesa_transicao': [],
+        'bola_parada_ofensiva': ['gols_escanteio'],
+        'bola_parada_defensiva': ['gols_sofridos_escanteio'],
+        'controle_meio_campo': ['posse_media'],
+        'pressao_alta': [],
+        'resistencia_pressao': [],
+    }
+
+    dims_casa_raw = compute_all_dimensions(stats_casa, INDICATORS_MAP, benchmarks)
+    dims_fora_raw = compute_all_dimensions(stats_fora, INDICATORS_MAP, benchmarks)
+
+    dims_casa_mod = modulate_with_context(dims_casa_raw, ima_casa, ic_val_casa)
+    dims_fora_mod = modulate_with_context(dims_fora_raw, ima_fora, ic_val_fora)
+
+    mpv_tactical_casa = compute_mpv(dims_casa_mod, dimension_weights) if dimension_weights else 50.0
+    mpv_tactical_fora = compute_mpv(dims_fora_mod, dimension_weights) if dimension_weights else 50.0
+
+    # ================================================================
+    # MODELO CALIBRADO (SÓ SE NÃO MODO LIVRE)
     # ================================================================
     adv_probs_1x2 = None
     adv_over25 = None
     adv_btts = None
     adv_ht = None
     adv_esc = None
-    dimension_weights = {}
-    mpv_tactical_casa = 50.0
-    mpv_tactical_fora = 50.0
-    dims_casa_mod = {}
-    dims_fora_mod = {}
 
     if not modo_livre:
-        try:
-            if not dados.get('benchmarks_usr'):
-                with open(pkl_path, 'rb') as f:
-                    calib = pickle.load(f)
-                benchmarks = calib.get('benchmarks', benchmarks)
-                dimension_weights = calib.get('dimension_weights', {})
-            else:
-                dimension_weights = {}
-        except:
-            dimension_weights = {}
-
-        stats_casa = _build_stats_for_dimensions(dados.get('ovrall_casa', {}))
-        stats_fora = _build_stats_for_dimensions(dados.get('ovrall_fora', {}))
-
-        INDICATORS_MAP = {
-            'ataque_posicional': ['gols_media', 'chutes_alvo_media', 'conversao'],
-            'ataque_transicao': [],
-            'defesa_organizada': ['gols_sofridos_media', 'chutes_alvo_sofridos_media'],
-            'defesa_transicao': [],
-            'bola_parada_ofensiva': ['gols_escanteio'],
-            'bola_parada_defensiva': ['gols_sofridos_escanteio'],
-            'controle_meio_campo': ['posse_media'],
-            'pressao_alta': [],
-            'resistencia_pressao': [],
-        }
-
-        dims_casa_raw = compute_all_dimensions(stats_casa, INDICATORS_MAP, benchmarks)
-        dims_fora_raw = compute_all_dimensions(stats_fora, INDICATORS_MAP, benchmarks)
-
-        dims_casa_mod = modulate_with_context(dims_casa_raw, ima_casa, ic_val_casa)
-        dims_fora_mod = modulate_with_context(dims_fora_raw, ima_fora, ic_val_fora)
-
-        mpv_tactical_casa = compute_mpv(dims_casa_mod, dimension_weights) if dimension_weights else 50.0
-        mpv_tactical_fora = compute_mpv(dims_fora_mod, dimension_weights) if dimension_weights else 50.0
-
         ovr_casa = ovrall_val_casa
         ovr_fora = ovrall_val_fora
         ic_casa = ic_val_casa
@@ -480,7 +477,7 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
     esc = media_prob(esc_orig, adv_esc)
 
     # ================================================================
-    # CONTRASTE TÁTICO (SÓ SE DIMENSÕES FORAM CALCULADAS)
+    # CONTRASTE TÁTICO
     # ================================================================
     deltas = {}
     routes = []
