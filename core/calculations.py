@@ -163,15 +163,7 @@ def preparar_curva_momentum(detalhes_ima):
             curva[i] = curva[i-1] if i > 0 else 0
     return curva
 
-# ================================================================
-# NOVA FUNÇÃO: IMPACTO DOS ESTILOS NOS MERCADOS
-# ================================================================
 def compute_style_impact(estilo_casa, estilo_fora):
-    """
-    Retorna um dicionário com ajustes (em probabilidade) para cada mercado,
-    baseado nos estilos de jogo. Valores podem ser positivos ou negativos.
-    """
-    # Mapeamento de ajustes (heurístico, pode ser refinado com dados históricos)
     impact_map = {
         ('Posse & Pressão', 'Posse & Pressão'): {'over25': 0.05, 'btts': 0.04, 'gol_ht': 0.03, 'esc': 0.08},
         ('Posse & Pressão', 'Contra‑Ataque'): {'over25': 0.08, 'btts': 0.07, 'gol_ht': 0.04, 'esc': 0.03},
@@ -200,16 +192,12 @@ def compute_style_impact(estilo_casa, estilo_fora):
         ('Defensivo / Reativo', 'Defensivo / Reativo'): {'over25': -0.08, 'btts': -0.07, 'gol_ht': -0.04, 'esc': -0.06},
         ('Equilibrado', 'Equilibrado'): {'over25': 0.0, 'btts': 0.0, 'gol_ht': 0.0, 'esc': 0.0},
     }
-
-    # Fallback para combinações não mapeadas (usa ajuste neutro)
     key = (estilo_casa, estilo_fora)
     if key not in impact_map:
-        # Inverte se um dos estilos for desconhecido
         impact = {'over25': 0.0, 'btts': 0.0, 'gol_ht': 0.0, 'esc': 0.0}
     else:
         impact = impact_map[key]
 
-    # Texto explicativo
     text = f"**Impacto dos Estilos:**\n"
     for mercado, ajuste in impact.items():
         if ajuste > 0:
@@ -221,16 +209,19 @@ def compute_style_impact(estilo_casa, estilo_fora):
 
     return impact, text
 
-def executar_manual(dados, pkl_path='calibration_params.pkl'):
+def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
     # --- Benchmarks ---
     if dados.get('benchmarks_usr'):
         benchmarks = dados['benchmarks_usr']
     else:
-        try:
-            with open(pkl_path, 'rb') as f:
-                calib = pickle.load(f)
-            benchmarks = calib['benchmarks']
-        except:
+        if not modo_livre:
+            try:
+                with open(pkl_path, 'rb') as f:
+                    calib = pickle.load(f)
+                benchmarks = calib['benchmarks']
+            except:
+                benchmarks = {}
+        else:
             benchmarks = {}
 
     # --- Prateleiras ---
@@ -398,90 +389,103 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
     )
 
     # ================================================================
-    # MODELO CALIBRADO E DIMENSÕES TÁTICAS
+    # MODELO CALIBRADO E DIMENSÕES TÁTICAS (SÓ SE NÃO MODO LIVRE)
     # ================================================================
-    try:
-        if not dados.get('benchmarks_usr'):
-            with open(pkl_path, 'rb') as f:
-                calib = pickle.load(f)
-            benchmarks = calib.get('benchmarks', benchmarks)
-            dimension_weights = calib.get('dimension_weights', {})
-        else:
+    adv_probs_1x2 = None
+    adv_over25 = None
+    adv_btts = None
+    adv_ht = None
+    adv_esc = None
+    dimension_weights = {}
+    mpv_tactical_casa = 50.0
+    mpv_tactical_fora = 50.0
+    dims_casa_mod = {}
+    dims_fora_mod = {}
+
+    if not modo_livre:
+        try:
+            if not dados.get('benchmarks_usr'):
+                with open(pkl_path, 'rb') as f:
+                    calib = pickle.load(f)
+                benchmarks = calib.get('benchmarks', benchmarks)
+                dimension_weights = calib.get('dimension_weights', {})
+            else:
+                dimension_weights = {}
+        except:
             dimension_weights = {}
-    except:
-        dimension_weights = {}
 
-    stats_casa = _build_stats_for_dimensions(dados.get('ovrall_casa', {}))
-    stats_fora = _build_stats_for_dimensions(dados.get('ovrall_fora', {}))
+        stats_casa = _build_stats_for_dimensions(dados.get('ovrall_casa', {}))
+        stats_fora = _build_stats_for_dimensions(dados.get('ovrall_fora', {}))
 
-    INDICATORS_MAP = {
-        'ataque_posicional': ['gols_media', 'chutes_alvo_media', 'conversao'],
-        'ataque_transicao': [],
-        'defesa_organizada': ['gols_sofridos_media', 'chutes_alvo_sofridos_media'],
-        'defesa_transicao': [],
-        'bola_parada_ofensiva': ['gols_escanteio'],
-        'bola_parada_defensiva': ['gols_sofridos_escanteio'],
-        'controle_meio_campo': ['posse_media'],
-        'pressao_alta': [],
-        'resistencia_pressao': [],
-    }
+        INDICATORS_MAP = {
+            'ataque_posicional': ['gols_media', 'chutes_alvo_media', 'conversao'],
+            'ataque_transicao': [],
+            'defesa_organizada': ['gols_sofridos_media', 'chutes_alvo_sofridos_media'],
+            'defesa_transicao': [],
+            'bola_parada_ofensiva': ['gols_escanteio'],
+            'bola_parada_defensiva': ['gols_sofridos_escanteio'],
+            'controle_meio_campo': ['posse_media'],
+            'pressao_alta': [],
+            'resistencia_pressao': [],
+        }
 
-    dims_casa_raw = compute_all_dimensions(stats_casa, INDICATORS_MAP, benchmarks)
-    dims_fora_raw = compute_all_dimensions(stats_fora, INDICATORS_MAP, benchmarks)
+        dims_casa_raw = compute_all_dimensions(stats_casa, INDICATORS_MAP, benchmarks)
+        dims_fora_raw = compute_all_dimensions(stats_fora, INDICATORS_MAP, benchmarks)
 
-    dims_casa_mod = modulate_with_context(dims_casa_raw, ima_casa, ic_val_casa)
-    dims_fora_mod = modulate_with_context(dims_fora_raw, ima_fora, ic_val_fora)
+        dims_casa_mod = modulate_with_context(dims_casa_raw, ima_casa, ic_val_casa)
+        dims_fora_mod = modulate_with_context(dims_fora_raw, ima_fora, ic_val_fora)
 
-    mpv_tactical_casa = compute_mpv(dims_casa_mod, dimension_weights) if dimension_weights else 50.0
-    mpv_tactical_fora = compute_mpv(dims_fora_mod, dimension_weights) if dimension_weights else 50.0
+        mpv_tactical_casa = compute_mpv(dims_casa_mod, dimension_weights) if dimension_weights else 50.0
+        mpv_tactical_fora = compute_mpv(dims_fora_mod, dimension_weights) if dimension_weights else 50.0
 
-    ovr_casa = ovrall_val_casa
-    ovr_fora = ovrall_val_fora
-    ic_casa = ic_val_casa
-    ic_fora = ic_val_fora
-    elo_casa = elo_norm_casa
-    elo_fora = elo_norm_fora
-    super_casa = superacao_casa
-    super_fora = superacao_fora
+        ovr_casa = ovrall_val_casa
+        ovr_fora = ovrall_val_fora
+        ic_casa = ic_val_casa
+        ic_fora = ic_val_fora
+        elo_casa = elo_norm_casa
+        elo_fora = elo_norm_fora
+        super_casa = superacao_casa
+        super_fora = superacao_fora
 
-    adv_probs_1x2 = predict_1x2(mpv_tactical_casa, mpv_tactical_fora, ovr_casa, ovr_fora, ic_casa, ic_fora, elo_casa, elo_fora, super_casa, super_fora)
-    adv_over25 = predict_over25(dims_casa_mod, dims_fora_mod, ovr_casa, ovr_fora, ic_casa, ic_fora, elo_casa, elo_fora, super_casa, super_fora,
+        adv_probs_1x2 = predict_1x2(mpv_tactical_casa, mpv_tactical_fora, ovr_casa, ovr_fora, ic_casa, ic_fora, elo_casa, elo_fora, super_casa, super_fora)
+        adv_over25 = predict_over25(dims_casa_mod, dims_fora_mod, ovr_casa, ovr_fora, ic_casa, ic_fora, elo_casa, elo_fora, super_casa, super_fora,
+                                    gols_media_casa, gols_media_fora, gols_sofridos_casa, gols_sofridos_fora, media_gols_casa_liga, media_gols_fora_liga)
+        adv_btts = predict_btts(dims_casa_mod, dims_fora_mod, ovr_casa, ovr_fora, ic_casa, ic_fora, elo_casa, elo_fora, super_casa, super_fora,
                                 gols_media_casa, gols_media_fora, gols_sofridos_casa, gols_sofridos_fora, media_gols_casa_liga, media_gols_fora_liga)
-    adv_btts = predict_btts(dims_casa_mod, dims_fora_mod, ovr_casa, ovr_fora, ic_casa, ic_fora, elo_casa, elo_fora, super_casa, super_fora,
-                            gols_media_casa, gols_media_fora, gols_sofridos_casa, gols_sofridos_fora, media_gols_casa_liga, media_gols_fora_liga)
-    adv_ht = predict_ht_goal(dims_casa_mod, dims_fora_mod, ovr_casa, ovr_fora, ic_casa, ic_fora, elo_casa, elo_fora, super_casa, super_fora,
-                             dados.get('ovrall_casa', {}).get('gols_ht_media', 0.5) or 0.5,
-                             dados.get('ovrall_fora', {}).get('gols_ht_media', 0.5) or 0.5,
-                             dados.get('ovrall_casa', {}).get('gols_ht_sofridos_media', 0.5) or 0.5,
-                             dados.get('ovrall_fora', {}).get('gols_ht_sofridos_media', 0.5) or 0.5)
-    adv_esc = predict_corners(dims_casa_mod, dims_fora_mod, ovr_casa, ovr_fora, ic_casa, ic_fora, elo_casa, elo_fora, super_casa, super_fora,
-                              dados.get('ovrall_casa', {}).get('escanteios_media', 5.0) or 5.0,
-                              dados.get('ovrall_fora', {}).get('escanteios_media', 5.0) or 5.0,
-                              dados.get('ovrall_casa', {}).get('escanteios_sofridos_media', 5.0) or 5.0,
-                              dados.get('ovrall_fora', {}).get('escanteios_sofridos_media', 5.0) or 5.0)
+        adv_ht = predict_ht_goal(dims_casa_mod, dims_fora_mod, ovr_casa, ovr_fora, ic_casa, ic_fora, elo_casa, elo_fora, super_casa, super_fora,
+                                 dados.get('ovrall_casa', {}).get('gols_ht_media', 0.5) or 0.5,
+                                 dados.get('ovrall_fora', {}).get('gols_ht_media', 0.5) or 0.5,
+                                 dados.get('ovrall_casa', {}).get('gols_ht_sofridos_media', 0.5) or 0.5,
+                                 dados.get('ovrall_fora', {}).get('gols_ht_sofridos_media', 0.5) or 0.5)
+        adv_esc = predict_corners(dims_casa_mod, dims_fora_mod, ovr_casa, ovr_fora, ic_casa, ic_fora, elo_casa, elo_fora, super_casa, super_fora,
+                                  dados.get('ovrall_casa', {}).get('escanteios_media', 5.0) or 5.0,
+                                  dados.get('ovrall_fora', {}).get('escanteios_media', 5.0) or 5.0,
+                                  dados.get('ovrall_casa', {}).get('escanteios_sofridos_media', 5.0) or 5.0,
+                                  dados.get('ovrall_fora', {}).get('escanteios_sofridos_media', 5.0) or 5.0)
 
     # ================================================================
-    # PROBABILIDADES MÉDIAS
+    # PROBABILIDADES MÉDIAS (OU APENAS ORIGINAIS SE MODO LIVRE)
     # ================================================================
     def media_prob(orig, adv):
-        if adv is None: return orig
+        if modo_livre or adv is None:
+            return orig
         return (orig + adv) / 2.0
 
-    p1 = media_prob(p1_orig, adv_probs_1x2['casa'])
-    pX = media_prob(pX_orig, adv_probs_1x2['empate'])
-    p2 = media_prob(p2_orig, adv_probs_1x2['fora'])
+    p1 = media_prob(p1_orig, adv_probs_1x2['casa'] if adv_probs_1x2 else None)
+    pX = media_prob(pX_orig, adv_probs_1x2['empate'] if adv_probs_1x2 else None)
+    p2 = media_prob(p2_orig, adv_probs_1x2['fora'] if adv_probs_1x2 else None)
     over25 = media_prob(over25_orig, adv_over25)
     btts = media_prob(btts_orig, adv_btts)
     gol_ht = media_prob(gol_ht_orig, adv_ht)
     esc = media_prob(esc_orig, adv_esc)
 
     # ================================================================
-    # CONTRASTE TÁTICO
+    # CONTRASTE TÁTICO (SÓ SE DIMENSÕES FORAM CALCULADAS)
     # ================================================================
     deltas = {}
     routes = []
     heatmap_img = None
-    if CONTRAST_AVAILABLE:
+    if CONTRAST_AVAILABLE and dims_casa_mod and dims_fora_mod:
         deltas = contrast_vector(dims_casa_mod, dims_fora_mod)
         routes = critical_routes(deltas)
         heatmap_img = generate_heatmap(deltas)
@@ -509,7 +513,7 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
         edges['edge_esc'] = esc - (1 / odds['odd_esc'])
 
     # ================================================================
-    # CLASSIFICAÇÃO DE ESTILOS, CENÁRIO E IMPACTO
+    # CLASSIFICAÇÃO DE ESTILOS E CENÁRIO
     # ================================================================
     estilo_casa = classificar_estilo(dados.get('ovrall_casa', {}), benchmarks)
     estilo_fora = classificar_estilo(dados.get('ovrall_fora', {}), benchmarks)
@@ -529,14 +533,12 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
     }
     texto_cenario = gerar_cenario(estilo_casa['estilo'], estilo_fora['estilo'], dados_cenario)
 
-    # Impacto dos estilos nos mercados
     style_impact, style_impact_text = compute_style_impact(estilo_casa['estilo'], estilo_fora['estilo'])
     adj_over25 = max(0, min(1, over25 + style_impact.get('over25', 0)))
     adj_btts = max(0, min(1, btts + style_impact.get('btts', 0)))
     adj_gol_ht = max(0, min(1, gol_ht + style_impact.get('gol_ht', 0)))
     adj_esc = max(0, min(1, esc + style_impact.get('esc', 0)))
 
-    # Confiança e curva
     confianca_casa = calcular_confianca(dados.get('ovrall_casa', {}), ima_casa, edges)
     confianca_fora = calcular_confianca(dados.get('ovrall_fora', {}), ima_fora, edges)
     curva_casa = preparar_curva_momentum(ima_det_casa.get('3G', []))
@@ -550,12 +552,13 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
         'p1': p1, 'pX': pX, 'p2': p2,
         'over25': over25, 'btts': btts, 'gol_ht': gol_ht, 'esc': esc,
         'adj_over25': adj_over25, 'adj_btts': adj_btts, 'adj_gol_ht': adj_gol_ht, 'adj_esc': adj_esc,
-        'style_impact': style_impact,
-        'style_impact_text': style_impact_text,
+        'style_impact': style_impact, 'style_impact_text': style_impact_text,
         'p1_orig': p1_orig, 'pX_orig': pX_orig, 'p2_orig': p2_orig,
         'over25_orig': over25_orig, 'btts_orig': btts_orig,
         'gol_ht_orig': gol_ht_orig, 'esc_orig': esc_orig,
-        'p1_adv': adv_probs_1x2['casa'], 'pX_adv': adv_probs_1x2['empate'], 'p2_adv': adv_probs_1x2['fora'],
+        'p1_adv': adv_probs_1x2['casa'] if adv_probs_1x2 else None,
+        'pX_adv': adv_probs_1x2['empate'] if adv_probs_1x2 else None,
+        'p2_adv': adv_probs_1x2['fora'] if adv_probs_1x2 else None,
         'over25_adv': adv_over25, 'btts_adv': adv_btts,
         'gol_ht_adv': adv_ht, 'esc_adv': adv_esc,
         'ima_casa': ima_casa, 'ima_fora': ima_fora,
@@ -578,7 +581,7 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
             'deltas': deltas,
             'critical_routes': routes,
             'heatmap': heatmap_img,
-        } if CONTRAST_AVAILABLE else None,
+        } if (CONTRAST_AVAILABLE and dims_casa_mod and dims_fora_mod) else None,
         'edges': edges,
         'benchmarks': benchmarks,
         'stats_casa': dados.get('ovrall_casa', {}),
