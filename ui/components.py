@@ -61,7 +61,6 @@ def field_heatmap_annotated(dimensions_casa, dimensions_fora, deltas):
         ax.add_patch(rect)
         ax.text(x + w/2, y + h/2, f"{label}\n{delta:+.1f}", ha='center', va='center', fontsize=7, color='white', fontweight='bold')
 
-    # Linhas do campo por cima
     for line in [
         [(0,0),(0,68)], [(0,68),(100,68)], [(100,68),(100,0)], [(100,0),(0,0)],
         [(50,0),(50,68)], [(0,16.5),(16.5,16.5)], [(16.5,16.5),(16.5,51.5)], [(0,51.5),(16.5,51.5)],
@@ -201,7 +200,6 @@ def show_results_manual(res):
             card_class = "card-winner" if nome_fora == winner_ovr else "card-loser"
             st.markdown(f"<div class='{card_class}'><span class='big-number'>{res['ovrall_fora']:.1f}</span><br><small>{nome_fora}</small></div>", unsafe_allow_html=True)
 
-        # Detalhamento OVRall sempre visível (sem expander)
         st.markdown("#### 📈 Detalhamento do OVRall (subníveis)")
         if res.get('detalhes_ovr'):
             for dim in ['Ataque', 'Defesa', 'MeioCampo', 'Consistencia', 'Resiliencia']:
@@ -267,7 +265,6 @@ def show_results_manual(res):
                 if heat_img:
                     st.image(f"data:image/png;base64,{heat_img}", use_container_width=True, caption="Azul: vantagem casa, Vermelho: vantagem fora")
 
-            # NOVO: gráfico comparativo de OVRall por setor
             st.markdown("### ⚖️ Força Estrutural (OVRall) por Setor")
             if res.get('notas_casa') and res.get('notas_fora'):
                 dims_ovr = ['Ataque', 'Defesa', 'MeioCampo', 'Consistencia', 'Resiliencia']
@@ -394,19 +391,17 @@ def show_results_manual(res):
 
         st.markdown(gerar_analise_descritiva(res))
 
-        # Comparação com as médias da liga
         if res.get('benchmarks'):
             st.markdown("### 📊 Comparativo com a Liga")
             bm = res['benchmarks']
-            # Usamos os primeiros valores disponíveis nos benchmarks
             col_comp1, col_comp2 = st.columns(2)
             with col_comp1:
                 st.write(f"**{nome_casa}**")
-                st.write(f"Gols Marcados: {res.get('ovrall_casa', 0):.1f} (Liga: {bm.get('gols_media', 0):.1f})")
-                st.write(f"Gols Sofridos: {res.get('ovrall_casa', 0):.1f} (Liga: {bm.get('gols_sofridos_media', 0):.1f})")
-                st.write(f"Posse: {res.get('ovrall_casa', 0):.1f}% (Liga: {bm.get('posse_media', 50):.0f}%)")
+                st.write(f"Gols Marcados: {res.get('ovrall_casa', 0):.1f} (Liga: {bm.get('gols_media', {}).get('mean', 0):.1f})")
+                st.write(f"Gols Sofridos: {res.get('ovrall_casa', 0):.1f} (Liga: {bm.get('gols_sofridos_media', {}).get('mean', 0):.1f})")
+                st.write(f"Posse: {res.get('ovrall_casa', 0):.1f}% (Liga: {bm.get('posse_media', {}).get('mean', 50):.0f}%)")
             with col_comp2:
                 st.write(f"**{nome_fora}**")
-                st.write(f"Gols Marcados: {res.get('ovrall_fora', 0):.1f} (Liga: {bm.get('gols_media', 0):.1f})")
-                st.write(f"Gols Sofridos: {res.get('ovrall_fora', 0):.1f} (Liga: {bm.get('gols_sofridos_media', 0):.1f})")
-                st.write(f"Posse: {res.get('ovrall_fora', 0):.1f}% (Liga: {bm.get('posse_media', 50):.0f}%)")
+                st.write(f"Gols Marcados: {res.get('ovrall_fora', 0):.1f} (Liga: {bm.get('gols_media', {}).get('mean', 0):.1f})")
+                st.write(f"Gols Sofridos: {res.get('ovrall_fora', 0):.1f} (Liga: {bm.get('gols_sofridos_media', {}).get('mean', 0):.1f})")
+                st.write(f"Posse: {res.get('ovrall_fora', 0):.1f}% (Liga: {bm.get('posse_media', {}).get('mean', 50):.0f}%)")
