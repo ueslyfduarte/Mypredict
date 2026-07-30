@@ -161,7 +161,7 @@ def show_results_manual(res):
     </style>
     """, unsafe_allow_html=True)
 
-    tabs = st.tabs(["🔬 Pilares", "🧪 Contraste Tático", "📋 Resumo & Análise", "🎯 Mercados"])
+    tabs = st.tabs(["🔬 Pilares", "🧪 Contraste Tático", "🔮 Cenários & Estilos", "📋 Resumo & Análise", "🎯 Mercados"])
 
     # ====================== ABA 1: PILARES ======================
     with tabs[0]:
@@ -322,8 +322,35 @@ def show_results_manual(res):
         else:
             st.info("Dados táticos indisponíveis. Verifique o modelo calibrado.")
 
-    # ====================== ABA 3: RESUMO & ANÁLISE ======================
+    # ====================== ABA 3: CENÁRIOS & ESTILOS ======================
     with tabs[2]:
+        st.markdown("## 🔮 Cenários & Estilos de Jogo")
+        if res.get('estilo_casa') and res.get('estilo_fora'):
+            estilo_casa = res['estilo_casa']
+            estilo_fora = res['estilo_fora']
+            col_estilo1, col_estilo2 = st.columns(2)
+            with col_estilo1:
+                st.markdown(f"### 🏠 {nome_casa}")
+                st.markdown(f"**Estilo:** {estilo_casa['estilo']}")
+                st.markdown(f"- Posse Efetiva: {estilo_casa['posse_efetiva']:.2f} gols/%posse")
+                st.markdown(f"- Eficiência de Finalização: {estilo_casa['eficiencia_finalizacao']:.2f}")
+                st.markdown(f"- Vulnerabilidade em Transição: {estilo_casa['vulnerabilidade_transicao']:.2f}")
+                st.markdown(f"- Dependência de Bola Parada: {estilo_casa['dependencia_bola_parada']:.2%}")
+            with col_estilo2:
+                st.markdown(f"### 🏟️ {nome_fora}")
+                st.markdown(f"**Estilo:** {estilo_fora['estilo']}")
+                st.markdown(f"- Posse Efetiva: {estilo_fora['posse_efetiva']:.2f} gols/%posse")
+                st.markdown(f"- Eficiência de Finalização: {estilo_fora['eficiencia_finalizacao']:.2f}")
+                st.markdown(f"- Vulnerabilidade em Transição: {estilo_fora['vulnerabilidade_transicao']:.2f}")
+                st.markdown(f"- Dependência de Bola Parada: {estilo_fora['dependencia_bola_parada']:.2%}")
+
+            st.markdown("---")
+            st.markdown(res.get('cenario', 'Análise de cenário indisponível.'))
+        else:
+            st.info("Dados insuficientes para classificar os estilos de jogo.")
+
+    # ====================== ABA 4: RESUMO & ANÁLISE ======================
+    with tabs[3]:
         st.markdown(f"<h1 style='text-align:center;'>{nome_casa} vs {nome_fora}</h1>", unsafe_allow_html=True)
         mpv_casa, mpv_fora = res['mpv_casa'], res['mpv_fora']
         winner_mpv = nome_casa if mpv_casa >= mpv_fora else nome_fora
@@ -354,8 +381,8 @@ def show_results_manual(res):
                 st.write(f"Gols Sofridos: {stats_fora.get('gols_sofridos_media', 0):.1f} (Liga: {bm.get('gols_sofridos_media', {}).get('mean', 0):.1f})")
                 st.write(f"Posse: {stats_fora.get('posse_media', 0):.1f}% (Liga: {bm.get('posse_media', {}).get('mean', 50):.0f}%)")
 
-    # ====================== ABA 4: MERCADOS ======================
-    with tabs[3]:
+    # ====================== ABA 5: MERCADOS ======================
+    with tabs[4]:
         st.markdown("## 🎯 Probabilidades de Mercado")
         st.caption("Média entre modelo original e avançado")
 
