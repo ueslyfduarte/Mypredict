@@ -12,7 +12,7 @@ from core.market_engine_v2 import (
     predict_over25, predict_btts, predict_1x2, predict_ht_goal, predict_corners
 )
 from core.markets import (
-    prob_1x2, prob_over_2_5, prob_ambas_marcam, prob_gol_ht, prob_over_escanteios,
+    prob_over_2_5, prob_ambas_marcam, prob_gol_ht, prob_over_escanteios,
     calcular_bonus_casa, _gols_esperados
 )
 
@@ -56,6 +56,9 @@ def classificar_estilo(stats, benchmarks):
     escanteios = stats.get('escanteios_media', 5.0)
     gols_esc = stats.get('gols_escanteio', 0.36)
     conversao = stats.get('conversao', 0.25)
+    passes_certos = stats.get('passes_certos_pct', 78)
+    passes_chave = stats.get('passes_chave_media', 2)
+    assistencias = stats.get('assistencias_media', 1.2)
 
     posse_efetiva = (gols / posse) * 100 if posse > 0 else 0
     eficiencia = gols / finalizacoes if finalizacoes > 0 else 0
@@ -63,14 +66,14 @@ def classificar_estilo(stats, benchmarks):
     dependencia_bp = gols_esc / gols if gols > 0 else 0
 
     estilo = "Equilibrado"
-    if posse > 55 and finalizacoes > 5.5:
+    if posse > 55 and finalizacoes > 5 and passes_certos > 80:
         estilo = "Posse & Pressão"
+    elif posse > 52 and passes_certos > 82 and passes_chave > 2.5 and assistencias > 1.5:
+        estilo = "Controle de Meio‑Campo"
     elif posse < 45 and posse_efetiva > 0.07:
         estilo = "Contra‑Ataque"
     elif dependencia_bp > 0.25:
         estilo = "Aéreo / Bola Parada"
-    elif 45 <= posse <= 55 and eficiencia > 0.35:
-        estilo = "Transição Rápida"
     elif posse < 40 and gols_sofridos < 1.0:
         estilo = "Defensivo / Reativo"
 
@@ -93,10 +96,15 @@ def gerar_cenario(estilo_casa, estilo_fora, res_mercados):
     p2 = res_mercados['p2']
 
     texto = f"**🔮 Cenário Tático:** {nome_casa} ({estilo_casa}) vs {nome_fora} ({estilo_fora})\n\n"
+
     if estilo_casa == "Posse & Pressão" and estilo_fora == "Contra‑Ataque":
         texto += (f"⚽ O {nome_casa} deve controlar a posse e pressionar, enquanto o {nome_fora} aposta em transições. ")
         if btts >= 0.55: texto += "**Ambas Marcam** e **Over 2.5 Gols** são favorecidos."
         else: texto += "O **Over 2.5 Gols** pode ter valor."
+    elif estilo_casa == "Controle de Meio‑Campo" and estilo_fora == "Posse & Pressão":
+        texto += (f"🧠 O {nome_casa} tentará controlar o meio‑campo, enquanto o {nome_fora} pressiona alto. ")
+        if esc >= 0.55: texto += "**Over 8.5 Escanteios** pode ser interessante. "
+        if over < 0.50: texto += "O jogo pode ter menos gols que o esperado (**Under 2.5**)."
     elif estilo_casa == "Contra‑Ataque" and estilo_fora == "Posse & Pressão":
         texto += (f"🔄 Situação inversa: o {nome_fora} terá a posse, o {nome_casa} será perigoso nos contra‑ataques. ")
         if over >= 0.60: texto += "**Over 2.5 Gols** surge como opção. "
@@ -131,27 +139,27 @@ def compute_style_impact(estilo_casa, estilo_fora):
         ('Posse & Pressão', 'Posse & Pressão'): {'over25': 0.05, 'btts': 0.04, 'gol_ht': 0.03, 'esc': 0.08},
         ('Posse & Pressão', 'Contra‑Ataque'): {'over25': 0.08, 'btts': 0.07, 'gol_ht': 0.04, 'esc': 0.03},
         ('Posse & Pressão', 'Aéreo / Bola Parada'): {'over25': 0.04, 'btts': 0.03, 'gol_ht': 0.02, 'esc': 0.07},
-        ('Posse & Pressão', 'Transição Rápida'): {'over25': 0.06, 'btts': 0.05, 'gol_ht': 0.03, 'esc': 0.04},
+        ('Posse & Pressão', 'Controle de Meio‑Campo'): {'over25': 0.03, 'btts': 0.02, 'gol_ht': 0.02, 'esc': 0.05},
         ('Posse & Pressão', 'Defensivo / Reativo'): {'over25': -0.05, 'btts': -0.04, 'gol_ht': -0.02, 'esc': -0.04},
         ('Contra‑Ataque', 'Posse & Pressão'): {'over25': 0.08, 'btts': 0.07, 'gol_ht': 0.04, 'esc': 0.03},
         ('Contra‑Ataque', 'Contra‑Ataque'): {'over25': 0.10, 'btts': 0.09, 'gol_ht': 0.05, 'esc': 0.02},
         ('Contra‑Ataque', 'Aéreo / Bola Parada'): {'over25': 0.06, 'btts': 0.05, 'gol_ht': 0.03, 'esc': 0.06},
-        ('Contra‑Ataque', 'Transição Rápida'): {'over25': 0.09, 'btts': 0.08, 'gol_ht': 0.04, 'esc': 0.03},
+        ('Contra‑Ataque', 'Controle de Meio‑Campo'): {'over25': 0.07, 'btts': 0.06, 'gol_ht': 0.03, 'esc': 0.04},
         ('Contra‑Ataque', 'Defensivo / Reativo'): {'over25': 0.02, 'btts': 0.01, 'gol_ht': 0.01, 'esc': -0.05},
         ('Aéreo / Bola Parada', 'Posse & Pressão'): {'over25': 0.04, 'btts': 0.03, 'gol_ht': 0.02, 'esc': 0.07},
         ('Aéreo / Bola Parada', 'Contra‑Ataque'): {'over25': 0.06, 'btts': 0.05, 'gol_ht': 0.03, 'esc': 0.06},
         ('Aéreo / Bola Parada', 'Aéreo / Bola Parada'): {'over25': 0.05, 'btts': 0.04, 'gol_ht': 0.02, 'esc': 0.12},
-        ('Aéreo / Bola Parada', 'Transição Rápida'): {'over25': 0.05, 'btts': 0.04, 'gol_ht': 0.02, 'esc': 0.06},
+        ('Aéreo / Bola Parada', 'Controle de Meio‑Campo'): {'over25': 0.03, 'btts': 0.02, 'gol_ht': 0.02, 'esc': 0.08},
         ('Aéreo / Bola Parada', 'Defensivo / Reativo'): {'over25': -0.02, 'btts': -0.02, 'gol_ht': -0.01, 'esc': 0.04},
-        ('Transição Rápida', 'Posse & Pressão'): {'over25': 0.06, 'btts': 0.05, 'gol_ht': 0.03, 'esc': 0.04},
-        ('Transição Rápida', 'Contra‑Ataque'): {'over25': 0.09, 'btts': 0.08, 'gol_ht': 0.04, 'esc': 0.03},
-        ('Transição Rápida', 'Aéreo / Bola Parada'): {'over25': 0.05, 'btts': 0.04, 'gol_ht': 0.02, 'esc': 0.06},
-        ('Transição Rápida', 'Transição Rápida'): {'over25': 0.08, 'btts': 0.07, 'gol_ht': 0.04, 'esc': 0.03},
-        ('Transição Rápida', 'Defensivo / Reativo'): {'over25': -0.03, 'btts': -0.03, 'gol_ht': -0.01, 'esc': -0.03},
+        ('Controle de Meio‑Campo', 'Posse & Pressão'): {'over25': 0.03, 'btts': 0.02, 'gol_ht': 0.02, 'esc': 0.05},
+        ('Controle de Meio‑Campo', 'Contra‑Ataque'): {'over25': 0.07, 'btts': 0.06, 'gol_ht': 0.03, 'esc': 0.04},
+        ('Controle de Meio‑Campo', 'Aéreo / Bola Parada'): {'over25': 0.03, 'btts': 0.02, 'gol_ht': 0.02, 'esc': 0.08},
+        ('Controle de Meio‑Campo', 'Controle de Meio‑Campo'): {'over25': 0.02, 'btts': 0.02, 'gol_ht': 0.01, 'esc': 0.05},
+        ('Controle de Meio‑Campo', 'Defensivo / Reativo'): {'over25': -0.04, 'btts': -0.03, 'gol_ht': -0.02, 'esc': 0.02},
         ('Defensivo / Reativo', 'Posse & Pressão'): {'over25': -0.05, 'btts': -0.04, 'gol_ht': -0.02, 'esc': -0.04},
         ('Defensivo / Reativo', 'Contra‑Ataque'): {'over25': 0.02, 'btts': 0.01, 'gol_ht': 0.01, 'esc': -0.05},
         ('Defensivo / Reativo', 'Aéreo / Bola Parada'): {'over25': -0.02, 'btts': -0.02, 'gol_ht': -0.01, 'esc': 0.04},
-        ('Defensivo / Reativo', 'Transição Rápida'): {'over25': -0.03, 'btts': -0.03, 'gol_ht': -0.01, 'esc': -0.03},
+        ('Defensivo / Reativo', 'Controle de Meio‑Campo'): {'over25': -0.04, 'btts': -0.03, 'gol_ht': -0.02, 'esc': 0.02},
         ('Defensivo / Reativo', 'Defensivo / Reativo'): {'over25': -0.08, 'btts': -0.07, 'gol_ht': -0.04, 'esc': -0.06},
         ('Equilibrado', 'Equilibrado'): {'over25': 0.0, 'btts': 0.0, 'gol_ht': 0.0, 'esc': 0.0},
     }
@@ -179,7 +187,7 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
         else:
             benchmarks = {}
 
-    # --- Prateleiras ---
+    # --- Prateleiras (projetada para o time nos bônus do IMA) ---
     prat_proj_casa = dados.get('prat_casa', 'Media')
     prat_proj_fora = dados.get('prat_fora', 'Media')
     prat_real_casa = obter_prateleira(dados['pos_casa'])
@@ -192,7 +200,7 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
     for adv, prat in dados.get('prateleiras_extra', {}).items():
         if adv not in prateleiras: prateleiras[adv] = prat
 
-    # --- IMA ---
+    # --- IMA (usando jogos separados por mandante) ---
     if len(dados.get('jogos_casa', [])) >= 5 and len(dados.get('jogos_fora', [])) >= 5:
         def separar_mandante(jogos):
             mand = [j for j in jogos if j.get('mandante', True)]
@@ -235,7 +243,6 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
     # --- OVRall (com todos os indicadores, via defaults ou fornecidos) ---
     ovr_casa = dados.get('ovrall_casa', {}).copy()
     ovr_fora = dados.get('ovrall_fora', {}).copy()
-    # Lista completa de indicadores com seus valores padrão e flag menor_melhor
     indicadores_ovr = [
         ('gols_media', 1.4, False), ('xg_media', 1.3, False), ('finalizacoes_alvo_media', 4.0, False),
         ('conversao', 0.25, False),
@@ -288,7 +295,6 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
             notas_casa[nome] = sum(x[2] for x in det_casa) / len(det_casa)
             notas_fora[nome] = sum(x[2] for x in det_fora) / len(det_fora)
             detalhes_ovr[nome] = {'casa': det_casa, 'fora': det_fora}
-    # Garante que as 5 dimensões existam
     for dim_name in ['Ataque', 'Defesa', 'MeioCampo', 'Consistencia', 'Resiliencia']:
         if dim_name not in notas_casa: notas_casa[dim_name] = 50.0
         if dim_name not in notas_fora: notas_fora[dim_name] = 50.0
@@ -325,10 +331,27 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
     mpv_casa = ELO_WEIGHT * elo_norm_casa + (1 - ELO_WEIGHT) * mpv_base_casa
     mpv_fora = ELO_WEIGHT * elo_norm_fora + (1 - ELO_WEIGHT) * mpv_base_fora
 
-    # --- Probabilidades originais ---
-    bonus_casa = calcular_bonus_casa(ovr_casa.get('diff_aprov_casa_fora', 0))
-    p1_orig, pX_orig, p2_orig = prob_1x2(mpv_base_casa, mpv_base_fora, bonus_casa)
+    # ================================================================
+    # PROBABILIDADES 1X2 (CORRIGIDAS)
+    # ================================================================
+    # Bônus de casa limitado a ±5%
+    bonus_casa = max(-0.05, min(0.05, calcular_bonus_casa(ovr_casa.get('diff_aprov_casa_fora', 0)) / 100.0))
+    # Usa MPV final (com ELO) para a sigmoide
+    delta = mpv_casa - mpv_fora
+    # Coeficiente 0.15 para maior sensibilidade
+    p_casa = 1.0 / (1.0 + np.exp(-0.15 * delta))
+    # Aplica bônus de casa
+    p_casa += bonus_casa
+    # Estima empate baseado na diferença absoluta
+    p_empate = 0.28 * np.exp(- (abs(delta) / 15.0) ** 2)
+    # Ajusta para que a soma seja 1
+    p_fora = 1.0 - p_casa - p_empate
+    # Garante limites
+    p1_orig = max(0.01, min(0.99, p_casa))
+    pX_orig = max(0.01, min(0.99, p_empate))
+    p2_orig = max(0.01, min(0.99, p_fora))
 
+    # --- Demais probabilidades originais ---
     gols_media_casa = ovr_casa.get('gols_media', 1.5)
     gols_media_fora = ovr_fora.get('gols_media', 1.2)
     gols_sofridos_casa = ovr_casa.get('gols_sofridos_media', 1.2)
