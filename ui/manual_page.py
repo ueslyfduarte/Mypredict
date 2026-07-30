@@ -30,7 +30,7 @@ FRASES_RESULTADOS = [
 # ============================================================
 LIGAS_DISPONIVEIS = {
     "Premier League": "calibration_premier.pkl",
-    "La Liga": "calibration_laliga.pkl",
+    "La Liga": "calibration_params.pkl",
     "Brasileirão": "calibration_brasileirao.pkl",
 }
 
