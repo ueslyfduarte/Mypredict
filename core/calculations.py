@@ -139,25 +139,18 @@ def gerar_cenario(estilo_casa, estilo_fora, res_mercados):
     return texto
 
 def calcular_confianca(stats, ima, edges=None):
-    """Calcula um score de confiança (0-100) baseado na consistência e nos dados disponíveis."""
     desvio = stats.get('desvio_pontos', 0.5)
     n_jogos = min(len(stats.get('jogos', [])), 10) if 'jogos' in stats else 5
-    # Consistência: quanto menor o desvio, maior a confiança
     conf_consistencia = max(0, 100 - (desvio * 60))
-    # Tamanho da amostra: mais jogos, mais confiança
     conf_amostra = min(100, n_jogos * 10)
-    # Edge médio (se disponível): maior edge, mais convicção
     edge_abs = np.mean([abs(v) for v in edges.values()]) if edges else 0
     conf_edge = min(100, edge_abs * 200)
-    # Média ponderada
     score = (0.5 * conf_consistencia + 0.3 * conf_amostra + 0.2 * conf_edge)
     return round(min(100, max(0, score)), 1)
 
 def preparar_curva_momentum(detalhes_ima):
-    """Extrai a evolução da pontuação do IMA nos últimos 5 jogos para o gráfico."""
     if not detalhes_ima:
         return []
-    # Usamos o recorte '3G' (últimos 3 jogos) e '5G' para construir uma série
     curva = []
     for recorte in ['10G', '5G', '3G']:
         if recorte in detalhes_ima and detalhes_ima[recorte]:
@@ -165,11 +158,68 @@ def preparar_curva_momentum(detalhes_ima):
             curva.append(media)
         else:
             curva.append(None)
-    # Preenche valores ausentes com o último disponível
     for i in range(len(curva)):
         if curva[i] is None:
             curva[i] = curva[i-1] if i > 0 else 0
     return curva
+
+# ================================================================
+# NOVA FUNÇÃO: IMPACTO DOS ESTILOS NOS MERCADOS
+# ================================================================
+def compute_style_impact(estilo_casa, estilo_fora):
+    """
+    Retorna um dicionário com ajustes (em probabilidade) para cada mercado,
+    baseado nos estilos de jogo. Valores podem ser positivos ou negativos.
+    """
+    # Mapeamento de ajustes (heurístico, pode ser refinado com dados históricos)
+    impact_map = {
+        ('Posse & Pressão', 'Posse & Pressão'): {'over25': 0.05, 'btts': 0.04, 'gol_ht': 0.03, 'esc': 0.08},
+        ('Posse & Pressão', 'Contra‑Ataque'): {'over25': 0.08, 'btts': 0.07, 'gol_ht': 0.04, 'esc': 0.03},
+        ('Posse & Pressão', 'Aéreo / Bola Parada'): {'over25': 0.04, 'btts': 0.03, 'gol_ht': 0.02, 'esc': 0.07},
+        ('Posse & Pressão', 'Transição Rápida'): {'over25': 0.06, 'btts': 0.05, 'gol_ht': 0.03, 'esc': 0.04},
+        ('Posse & Pressão', 'Defensivo / Reativo'): {'over25': -0.05, 'btts': -0.04, 'gol_ht': -0.02, 'esc': -0.04},
+        ('Contra‑Ataque', 'Posse & Pressão'): {'over25': 0.08, 'btts': 0.07, 'gol_ht': 0.04, 'esc': 0.03},
+        ('Contra‑Ataque', 'Contra‑Ataque'): {'over25': 0.10, 'btts': 0.09, 'gol_ht': 0.05, 'esc': 0.02},
+        ('Contra‑Ataque', 'Aéreo / Bola Parada'): {'over25': 0.06, 'btts': 0.05, 'gol_ht': 0.03, 'esc': 0.06},
+        ('Contra‑Ataque', 'Transição Rápida'): {'over25': 0.09, 'btts': 0.08, 'gol_ht': 0.04, 'esc': 0.03},
+        ('Contra‑Ataque', 'Defensivo / Reativo'): {'over25': 0.02, 'btts': 0.01, 'gol_ht': 0.01, 'esc': -0.05},
+        ('Aéreo / Bola Parada', 'Posse & Pressão'): {'over25': 0.04, 'btts': 0.03, 'gol_ht': 0.02, 'esc': 0.07},
+        ('Aéreo / Bola Parada', 'Contra‑Ataque'): {'over25': 0.06, 'btts': 0.05, 'gol_ht': 0.03, 'esc': 0.06},
+        ('Aéreo / Bola Parada', 'Aéreo / Bola Parada'): {'over25': 0.05, 'btts': 0.04, 'gol_ht': 0.02, 'esc': 0.12},
+        ('Aéreo / Bola Parada', 'Transição Rápida'): {'over25': 0.05, 'btts': 0.04, 'gol_ht': 0.02, 'esc': 0.06},
+        ('Aéreo / Bola Parada', 'Defensivo / Reativo'): {'over25': -0.02, 'btts': -0.02, 'gol_ht': -0.01, 'esc': 0.04},
+        ('Transição Rápida', 'Posse & Pressão'): {'over25': 0.06, 'btts': 0.05, 'gol_ht': 0.03, 'esc': 0.04},
+        ('Transição Rápida', 'Contra‑Ataque'): {'over25': 0.09, 'btts': 0.08, 'gol_ht': 0.04, 'esc': 0.03},
+        ('Transição Rápida', 'Aéreo / Bola Parada'): {'over25': 0.05, 'btts': 0.04, 'gol_ht': 0.02, 'esc': 0.06},
+        ('Transição Rápida', 'Transição Rápida'): {'over25': 0.08, 'btts': 0.07, 'gol_ht': 0.04, 'esc': 0.03},
+        ('Transição Rápida', 'Defensivo / Reativo'): {'over25': -0.03, 'btts': -0.03, 'gol_ht': -0.01, 'esc': -0.03},
+        ('Defensivo / Reativo', 'Posse & Pressão'): {'over25': -0.05, 'btts': -0.04, 'gol_ht': -0.02, 'esc': -0.04},
+        ('Defensivo / Reativo', 'Contra‑Ataque'): {'over25': 0.02, 'btts': 0.01, 'gol_ht': 0.01, 'esc': -0.05},
+        ('Defensivo / Reativo', 'Aéreo / Bola Parada'): {'over25': -0.02, 'btts': -0.02, 'gol_ht': -0.01, 'esc': 0.04},
+        ('Defensivo / Reativo', 'Transição Rápida'): {'over25': -0.03, 'btts': -0.03, 'gol_ht': -0.01, 'esc': -0.03},
+        ('Defensivo / Reativo', 'Defensivo / Reativo'): {'over25': -0.08, 'btts': -0.07, 'gol_ht': -0.04, 'esc': -0.06},
+        ('Equilibrado', 'Equilibrado'): {'over25': 0.0, 'btts': 0.0, 'gol_ht': 0.0, 'esc': 0.0},
+    }
+
+    # Fallback para combinações não mapeadas (usa ajuste neutro)
+    key = (estilo_casa, estilo_fora)
+    if key not in impact_map:
+        # Inverte se um dos estilos for desconhecido
+        impact = {'over25': 0.0, 'btts': 0.0, 'gol_ht': 0.0, 'esc': 0.0}
+    else:
+        impact = impact_map[key]
+
+    # Texto explicativo
+    text = f"**Impacto dos Estilos:**\n"
+    for mercado, ajuste in impact.items():
+        if ajuste > 0:
+            text += f"- {mercado}: +{ajuste*100:.0f}% (favorecido pelo confronto de estilos)\n"
+        elif ajuste < 0:
+            text += f"- {mercado}: {ajuste*100:.0f}% (desfavorecido pelo confronto de estilos)\n"
+        else:
+            text += f"- {mercado}: sem influência significativa\n"
+
+    return impact, text
 
 def executar_manual(dados, pkl_path='calibration_params.pkl'):
     # --- Benchmarks ---
@@ -459,7 +509,7 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
         edges['edge_esc'] = esc - (1 / odds['odd_esc'])
 
     # ================================================================
-    # CLASSIFICAÇÃO DE ESTILOS E CENÁRIO
+    # CLASSIFICAÇÃO DE ESTILOS, CENÁRIO E IMPACTO
     # ================================================================
     estilo_casa = classificar_estilo(dados.get('ovrall_casa', {}), benchmarks)
     estilo_fora = classificar_estilo(dados.get('ovrall_fora', {}), benchmarks)
@@ -479,9 +529,14 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
     }
     texto_cenario = gerar_cenario(estilo_casa['estilo'], estilo_fora['estilo'], dados_cenario)
 
-    # ================================================================
-    # CONFIANÇA E CURVA DE MOMENTUM
-    # ================================================================
+    # Impacto dos estilos nos mercados
+    style_impact, style_impact_text = compute_style_impact(estilo_casa['estilo'], estilo_fora['estilo'])
+    adj_over25 = max(0, min(1, over25 + style_impact.get('over25', 0)))
+    adj_btts = max(0, min(1, btts + style_impact.get('btts', 0)))
+    adj_gol_ht = max(0, min(1, gol_ht + style_impact.get('gol_ht', 0)))
+    adj_esc = max(0, min(1, esc + style_impact.get('esc', 0)))
+
+    # Confiança e curva
     confianca_casa = calcular_confianca(dados.get('ovrall_casa', {}), ima_casa, edges)
     confianca_fora = calcular_confianca(dados.get('ovrall_fora', {}), ima_fora, edges)
     curva_casa = preparar_curva_momentum(ima_det_casa.get('3G', []))
@@ -494,6 +549,9 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
         'time_casa': dados['time_casa'], 'time_fora': dados['time_fora'],
         'p1': p1, 'pX': pX, 'p2': p2,
         'over25': over25, 'btts': btts, 'gol_ht': gol_ht, 'esc': esc,
+        'adj_over25': adj_over25, 'adj_btts': adj_btts, 'adj_gol_ht': adj_gol_ht, 'adj_esc': adj_esc,
+        'style_impact': style_impact,
+        'style_impact_text': style_impact_text,
         'p1_orig': p1_orig, 'pX_orig': pX_orig, 'p2_orig': p2_orig,
         'over25_orig': over25_orig, 'btts_orig': btts_orig,
         'gol_ht_orig': gol_ht_orig, 'esc_orig': esc_orig,
