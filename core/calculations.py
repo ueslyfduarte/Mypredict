@@ -62,14 +62,15 @@ def classificar_estilo(stats, benchmarks):
     vulnerabilidade = (gols_sofridos / (100 - posse)) * 100 if (100 - posse) > 0 else 0
     dependencia_bp = gols_esc / gols if gols > 0 else 0
 
+    # Ajuste nos limiares
     estilo = "Equilibrado"
-    if posse > 55 and finalizacoes > 5:
+    if posse > 55 and finalizacoes > 5.5:
         estilo = "Posse & Pressão"
-    elif posse < 45 and posse_efetiva > 0.06:
+    elif posse < 45 and posse_efetiva > 0.07:
         estilo = "Contra‑Ataque"
-    elif dependencia_bp > 0.2:
+    elif dependencia_bp > 0.25:
         estilo = "Aéreo / Bola Parada"
-    elif 45 <= posse <= 55 and eficiencia > 0.4:
+    elif 45 <= posse <= 55 and eficiencia > 0.35:
         estilo = "Transição Rápida"
     elif posse < 40 and gols_sofridos < 1.0:
         estilo = "Defensivo / Reativo"
@@ -127,41 +128,16 @@ def gerar_cenario(estilo_casa, estilo_fora, res_mercados):
                   f"🏠 {p1:.1%}, 🤝 {res_mercados['pX']:.1%}, 🏟️ {p2:.1%}. ")
 
     texto += "\n\n**📊 Indicadores Derivados:**\n"
-    texto += f"- {nome_casa}: Posse Efetiva {res_mercados['estilo_casa']['posse_efetiva']:.2f}, "
-    texto += f"Eficiência {res_mercados['estilo_casa']['eficiencia_finalizacao']:.2f}, "
-    texto += f"Vulnerabilidade {res_mercados['estilo_casa']['vulnerabilidade_transicao']:.2f}, "
-    texto += f"Dep. Bola Parada {res_mercados['estilo_casa']['dependencia_bola_parada']:.2%}\n"
+    texto += f"- {nome_casa}: Posse Efetiva {res_mercados['estilo_casa']['posse_efetiva']:.2f} (gols por % de posse), "
+    texto += f"Eficiência de Finalização {res_mercados['estilo_casa']['eficiencia_finalizacao']:.2f} (gols / finalizações alvo), "
+    texto += f"Vulnerabilidade em Transição {res_mercados['estilo_casa']['vulnerabilidade_transicao']:.2f} (gols sofridos por % sem posse), "
+    texto += f"Dependência de Bola Parada {res_mercados['estilo_casa']['dependencia_bola_parada']:.2%} (gols de escanteio / total de gols)\n"
     texto += f"- {nome_fora}: Posse Efetiva {res_mercados['estilo_fora']['posse_efetiva']:.2f}, "
-    texto += f"Eficiência {res_mercados['estilo_fora']['eficiencia_finalizacao']:.2f}, "
-    texto += f"Vulnerabilidade {res_mercados['estilo_fora']['vulnerabilidade_transicao']:.2f}, "
-    texto += f"Dep. Bola Parada {res_mercados['estilo_fora']['dependencia_bola_parada']:.2%}"
+    texto += f"Eficiência de Finalização {res_mercados['estilo_fora']['eficiencia_finalizacao']:.2f}, "
+    texto += f"Vulnerabilidade em Transição {res_mercados['estilo_fora']['vulnerabilidade_transicao']:.2f}, "
+    texto += f"Dependência de Bola Parada {res_mercados['estilo_fora']['dependencia_bola_parada']:.2%}"
 
     return texto
-
-def calcular_confianca(stats, ima, edges=None):
-    desvio = stats.get('desvio_pontos', 0.5)
-    n_jogos = min(len(stats.get('jogos', [])), 10) if 'jogos' in stats else 5
-    conf_consistencia = max(0, 100 - (desvio * 60))
-    conf_amostra = min(100, n_jogos * 10)
-    edge_abs = np.mean([abs(v) for v in edges.values()]) if edges else 0
-    conf_edge = min(100, edge_abs * 200)
-    score = (0.5 * conf_consistencia + 0.3 * conf_amostra + 0.2 * conf_edge)
-    return round(min(100, max(0, score)), 1)
-
-def preparar_curva_momentum(detalhes_ima):
-    if not detalhes_ima:
-        return []
-    curva = []
-    for recorte in ['10G', '5G', '3G']:
-        if recorte in detalhes_ima and detalhes_ima[recorte]:
-            media = np.mean([j['pontos'] for j in detalhes_ima[recorte]])
-            curva.append(media)
-        else:
-            curva.append(None)
-    for i in range(len(curva)):
-        if curva[i] is None:
-            curva[i] = curva[i-1] if i > 0 else 0
-    return curva
 
 def compute_style_impact(estilo_casa, estilo_fora):
     impact_map = {
@@ -224,13 +200,16 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
         else:
             benchmarks = {}
 
-    # --- Prateleiras ---
+    # --- Prateleiras (projetada para o time nos bônus do IMA) ---
+    prat_proj_casa = dados.get('prat_casa', 'Media')
+    prat_proj_fora = dados.get('prat_fora', 'Media')
     prat_real_casa = obter_prateleira(dados['pos_casa'])
     prat_real_fora = obter_prateleira(dados['pos_fora'])
     prateleiras = {
-        dados['time_casa']: prat_real_casa,
-        dados['time_fora']: prat_real_fora
+        dados['time_casa']: prat_proj_casa,   # usa projetada para cálculo do IMA
+        dados['time_fora']: prat_proj_fora
     }
+    # os adversários mantêm a prateleira real informada
     for j in dados.get('jogos_casa', []) + dados.get('jogos_fora', []):
         prat_adv = j.get('prateleira_adv', 'Media')
         nome_adv = j.get('adversario', '')
@@ -240,17 +219,30 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
         if adv not in prateleiras:
             prateleiras[adv] = prat
 
-    # --- IMA ---
+    # --- IMA (usando jogos separados por mandante) ---
     if len(dados.get('jogos_casa', [])) >= 5 and len(dados.get('jogos_fora', [])) >= 5:
+        # separa jogos como mandante e visitante para cada time
+        def separar_mandante(jogos):
+            mand = [j for j in jogos if j.get('mandante', True)]
+            visit = [j for j in jogos if not j.get('mandante', False)]
+            return mand, visit
+
+        mand_casa, visit_casa = separar_mandante(dados['jogos_casa'])
+        mand_fora, visit_fora = separar_mandante(dados['jogos_fora'])
+
         rec_casa = {
-            '10G': dados['jogos_casa'][:10], '5G': dados['jogos_casa'][:5], '3G': dados['jogos_casa'][:3],
-            '5CF': [j for j in dados['jogos_casa'] if j['mandante']][:5],
-            '3CF': [j for j in dados['jogos_casa'] if j['mandante']][:3],
+            '10G': dados['jogos_casa'][:10],
+            '5G': dados['jogos_casa'][:5],
+            '3G': dados['jogos_casa'][:3],
+            '5CF': mand_casa[:5],
+            '3CF': mand_casa[:3],
         }
         rec_fora = {
-            '10G': dados['jogos_fora'][:10], '5G': dados['jogos_fora'][:5], '3G': dados['jogos_fora'][:3],
-            '5CF': [j for j in dados['jogos_fora'] if not j['mandante']][:5],
-            '3CF': [j for j in dados['jogos_fora'] if not j['mandante']][:3],
+            '10G': dados['jogos_fora'][:10],
+            '5G': dados['jogos_fora'][:5],
+            '3G': dados['jogos_fora'][:3],
+            '5CF': visit_fora[:5],
+            '3CF': visit_fora[:3],
         }
         ima_casa = calcular_ima(dados['time_casa'], rec_casa['10G'], rec_casa['5G'], rec_casa['3G'],
                                 rec_casa['5CF'], rec_casa['3CF'], prateleiras)
@@ -285,18 +277,32 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
         ima_det_casa = {}
         ima_det_fora = {}
 
-    # --- OVRall ---
+    # --- OVRall (com valores padrão para evitar zeros) ---
+    ovr_casa = dados.get('ovrall_casa', {})
+    ovr_fora = dados.get('ovrall_fora', {})
+    # preenche faltantes com neutros
+    for key, default in [('desvio_pontos', 0.5), ('desvio_gols_pro', 0.4), ('desvio_gols_sofridos', 0.4),
+                         ('clean_sheets_pct', 30), ('pontos_pos_desvantagem_media', 1.0),
+                         ('gols_ultimos_15min_media', 0.3), ('pontos_apos_derrota_media', 1.0),
+                         ('diff_aprov_casa_fora', 5), ('aprov_viradas_favor', 30), ('aprov_viradas_contra', 30),
+                         ('xga_media', 1.2), ('finalizacoes_alvo_sofridas_media', 4.0), ('desarmes_intercep_media', 15),
+                         ('passes_certos_pct', 78), ('passes_chave_media', 2), ('assistencias_media', 1.2), ('chutes_media', 12)]:
+        if key not in ovr_casa:
+            ovr_casa[key] = default
+        if key not in ovr_fora:
+            ovr_fora[key] = default
+
     dados_liga = {}
-    todas_chaves = set(dados.get('ovrall_casa', {}).keys()) | set(dados.get('ovrall_fora', {}).keys())
+    todas_chaves = set(ovr_casa.keys()) | set(ovr_fora.keys())
     for k in todas_chaves:
-        vc = dados.get('ovrall_casa', {}).get(k)
-        vf = dados.get('ovrall_fora', {}).get(k)
+        vc = ovr_casa.get(k)
+        vf = ovr_fora.get(k)
         valores = []
         if vc is not None: valores.append(vc)
         if vf is not None: valores.append(vf)
         if valores: dados_liga[k] = valores
-    ovrall_val_casa = calcular_ovrall(dados.get('ovrall_casa', {}), dados_liga)
-    ovrall_val_fora = calcular_ovrall(dados.get('ovrall_fora', {}), dados_liga)
+    ovrall_val_casa = calcular_ovrall(ovr_casa, dados_liga)
+    ovrall_val_fora = calcular_ovrall(ovr_fora, dados_liga)
 
     dims = {
         'Ataque': [('gols_media', False), ('xg_media', False), ('finalizacoes_alvo_media', False), ('conversao', False)],
@@ -312,8 +318,8 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
         det_casa = []
         det_fora = []
         for ind, menor in indicadores:
-            vc = dados.get('ovrall_casa', {}).get(ind)
-            vf = dados.get('ovrall_fora', {}).get(ind)
+            vc = ovr_casa.get(ind)
+            vf = ovr_fora.get(ind)
             if vc is not None and vf is not None and dados_liga.get(ind):
                 lista = dados_liga[ind]
                 perc_c = _percentil(vc, lista, menor)
@@ -337,13 +343,13 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
     mpv_base_casa = calcular_mpv(ima_casa, ovrall_val_casa, ic_val_casa)
     mpv_base_fora = calcular_mpv(ima_fora, ovrall_val_fora, ic_val_fora)
 
-    # --- Superação ---
+    # --- Superação (usando projeção vs real) ---
     niveis = {'Elite':5, 'Alta':4, 'Media':3, 'Baixa':2, 'Critica':1}
     def fator_superacao(prat_real, prat_projetada):
         diff = niveis.get(prat_real, 3) - niveis.get(prat_projetada, 3)
         return diff * FATOR_SUPERACAO
-    superacao_casa = fator_superacao(prat_real_casa, dados.get('prat_casa', 'Media'))
-    superacao_fora = fator_superacao(prat_real_fora, dados.get('prat_fora', 'Media'))
+    superacao_casa = fator_superacao(prat_real_casa, prat_proj_casa)
+    superacao_fora = fator_superacao(prat_real_fora, prat_proj_fora)
     mpv_base_casa += max(-10.0, min(10.0, superacao_casa))
     mpv_base_fora += max(-10.0, min(10.0, superacao_fora))
 
@@ -360,13 +366,13 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
     # ================================================================
     # PROBABILIDADES ORIGINAIS
     # ================================================================
-    bonus_casa = calcular_bonus_casa(dados.get('ovrall_casa', {}).get('diff_aprov_casa_fora', 0))
+    bonus_casa = calcular_bonus_casa(ovr_casa.get('diff_aprov_casa_fora', 0))
     p1_orig, pX_orig, p2_orig = prob_1x2(mpv_base_casa, mpv_base_fora, bonus_casa)
 
-    gols_media_casa = dados.get('ovrall_casa', {}).get('gols_media', 1.5)
-    gols_media_fora = dados.get('ovrall_fora', {}).get('gols_media', 1.2)
-    gols_sofridos_casa = dados.get('ovrall_casa', {}).get('gols_sofridos_media', 1.2)
-    gols_sofridos_fora = dados.get('ovrall_fora', {}).get('gols_sofridos_media', 1.5)
+    gols_media_casa = ovr_casa.get('gols_media', 1.5)
+    gols_media_fora = ovr_fora.get('gols_media', 1.2)
+    gols_sofridos_casa = ovr_casa.get('gols_sofridos_media', 1.2)
+    gols_sofridos_fora = ovr_fora.get('gols_sofridos_media', 1.5)
     over25_orig = prob_over_2_5(gols_media_casa, gols_media_fora, gols_sofridos_casa, gols_sofridos_fora)
 
     media_gols_casa_liga = dados.get('media_gols_casa', MEDIA_GOLS_CASA_LIGA)
@@ -376,20 +382,20 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
     btts_orig = prob_ambas_marcam(gols_esp_casa, gols_esp_fora)
 
     gol_ht_orig = prob_gol_ht(
-        dados.get('ovrall_casa', {}).get('gols_ht_media', 0.5) or 0.5,
-        dados.get('ovrall_fora', {}).get('gols_ht_media', 0.5) or 0.5,
-        dados.get('ovrall_casa', {}).get('gols_ht_sofridos_media', 0.5) or 0.5,
-        dados.get('ovrall_fora', {}).get('gols_ht_sofridos_media', 0.5) or 0.5
+        ovr_casa.get('gols_ht_media', 0.5) or 0.5,
+        ovr_fora.get('gols_ht_media', 0.5) or 0.5,
+        ovr_casa.get('gols_ht_sofridos_media', 0.5) or 0.5,
+        ovr_fora.get('gols_ht_sofridos_media', 0.5) or 0.5
     )
     esc_orig = prob_over_escanteios(
-        dados.get('ovrall_casa', {}).get('escanteios_media', 5.0) or 5.0,
-        dados.get('ovrall_fora', {}).get('escanteios_media', 5.0) or 5.0,
-        dados.get('ovrall_casa', {}).get('escanteios_sofridos_media', 5.0) or 5.0,
-        dados.get('ovrall_fora', {}).get('escanteios_sofridos_media', 5.0) or 5.0
+        ovr_casa.get('escanteios_media', 5.0) or 5.0,
+        ovr_fora.get('escanteios_media', 5.0) or 5.0,
+        ovr_casa.get('escanteios_sofridos_media', 5.0) or 5.0,
+        ovr_fora.get('escanteios_sofridos_media', 5.0) or 5.0
     )
 
     # ================================================================
-    # DIMENSÕES TÁTICAS (SEMPRE CALCULADAS, USANDO BENCHMARKS DISPONÍVEIS)
+    # DIMENSÕES TÁTICAS (SEMPRE CALCULADAS)
     # ================================================================
     dimension_weights = {}
     if not modo_livre and not dados.get('benchmarks_usr'):
@@ -401,8 +407,8 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
         except:
             pass
 
-    stats_casa = _build_stats_for_dimensions(dados.get('ovrall_casa', {}))
-    stats_fora = _build_stats_for_dimensions(dados.get('ovrall_fora', {}))
+    stats_casa = _build_stats_for_dimensions(ovr_casa)
+    stats_fora = _build_stats_for_dimensions(ovr_fora)
 
     INDICATORS_MAP = {
         'ataque_posicional': ['gols_media', 'chutes_alvo_media', 'conversao'],
@@ -435,30 +441,30 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
     adv_esc = None
 
     if not modo_livre:
-        ovr_casa = ovrall_val_casa
-        ovr_fora = ovrall_val_fora
-        ic_casa = ic_val_casa
-        ic_fora = ic_val_fora
-        elo_casa = elo_norm_casa
-        elo_fora = elo_norm_fora
-        super_casa = superacao_casa
-        super_fora = superacao_fora
+        ovr_casa_val = ovrall_val_casa
+        ovr_fora_val = ovrall_val_fora
+        ic_casa_val = ic_val_casa
+        ic_fora_val = ic_val_fora
+        elo_casa_val = elo_norm_casa
+        elo_fora_val = elo_norm_fora
+        super_casa_val = superacao_casa
+        super_fora_val = superacao_fora
 
-        adv_probs_1x2 = predict_1x2(mpv_tactical_casa, mpv_tactical_fora, ovr_casa, ovr_fora, ic_casa, ic_fora, elo_casa, elo_fora, super_casa, super_fora)
-        adv_over25 = predict_over25(dims_casa_mod, dims_fora_mod, ovr_casa, ovr_fora, ic_casa, ic_fora, elo_casa, elo_fora, super_casa, super_fora,
+        adv_probs_1x2 = predict_1x2(mpv_tactical_casa, mpv_tactical_fora, ovr_casa_val, ovr_fora_val, ic_casa_val, ic_fora_val, elo_casa_val, elo_fora_val, super_casa_val, super_fora_val)
+        adv_over25 = predict_over25(dims_casa_mod, dims_fora_mod, ovr_casa_val, ovr_fora_val, ic_casa_val, ic_fora_val, elo_casa_val, elo_fora_val, super_casa_val, super_fora_val,
                                     gols_media_casa, gols_media_fora, gols_sofridos_casa, gols_sofridos_fora, media_gols_casa_liga, media_gols_fora_liga)
-        adv_btts = predict_btts(dims_casa_mod, dims_fora_mod, ovr_casa, ovr_fora, ic_casa, ic_fora, elo_casa, elo_fora, super_casa, super_fora,
+        adv_btts = predict_btts(dims_casa_mod, dims_fora_mod, ovr_casa_val, ovr_fora_val, ic_casa_val, ic_fora_val, elo_casa_val, elo_fora_val, super_casa_val, super_fora_val,
                                 gols_media_casa, gols_media_fora, gols_sofridos_casa, gols_sofridos_fora, media_gols_casa_liga, media_gols_fora_liga)
-        adv_ht = predict_ht_goal(dims_casa_mod, dims_fora_mod, ovr_casa, ovr_fora, ic_casa, ic_fora, elo_casa, elo_fora, super_casa, super_fora,
-                                 dados.get('ovrall_casa', {}).get('gols_ht_media', 0.5) or 0.5,
-                                 dados.get('ovrall_fora', {}).get('gols_ht_media', 0.5) or 0.5,
-                                 dados.get('ovrall_casa', {}).get('gols_ht_sofridos_media', 0.5) or 0.5,
-                                 dados.get('ovrall_fora', {}).get('gols_ht_sofridos_media', 0.5) or 0.5)
-        adv_esc = predict_corners(dims_casa_mod, dims_fora_mod, ovr_casa, ovr_fora, ic_casa, ic_fora, elo_casa, elo_fora, super_casa, super_fora,
-                                  dados.get('ovrall_casa', {}).get('escanteios_media', 5.0) or 5.0,
-                                  dados.get('ovrall_fora', {}).get('escanteios_media', 5.0) or 5.0,
-                                  dados.get('ovrall_casa', {}).get('escanteios_sofridos_media', 5.0) or 5.0,
-                                  dados.get('ovrall_fora', {}).get('escanteios_sofridos_media', 5.0) or 5.0)
+        adv_ht = predict_ht_goal(dims_casa_mod, dims_fora_mod, ovr_casa_val, ovr_fora_val, ic_casa_val, ic_fora_val, elo_casa_val, elo_fora_val, super_casa_val, super_fora_val,
+                                 ovr_casa.get('gols_ht_media', 0.5) or 0.5,
+                                 ovr_fora.get('gols_ht_media', 0.5) or 0.5,
+                                 ovr_casa.get('gols_ht_sofridos_media', 0.5) or 0.5,
+                                 ovr_fora.get('gols_ht_sofridos_media', 0.5) or 0.5)
+        adv_esc = predict_corners(dims_casa_mod, dims_fora_mod, ovr_casa_val, ovr_fora_val, ic_casa_val, ic_fora_val, elo_casa_val, elo_fora_val, super_casa_val, super_fora_val,
+                                  ovr_casa.get('escanteios_media', 5.0) or 5.0,
+                                  ovr_fora.get('escanteios_media', 5.0) or 5.0,
+                                  ovr_casa.get('escanteios_sofridos_media', 5.0) or 5.0,
+                                  ovr_fora.get('escanteios_sofridos_media', 5.0) or 5.0)
 
     # ================================================================
     # PROBABILIDADES MÉDIAS (OU APENAS ORIGINAIS SE MODO LIVRE)
@@ -512,8 +518,8 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
     # ================================================================
     # CLASSIFICAÇÃO DE ESTILOS E CENÁRIO
     # ================================================================
-    estilo_casa = classificar_estilo(dados.get('ovrall_casa', {}), benchmarks)
-    estilo_fora = classificar_estilo(dados.get('ovrall_fora', {}), benchmarks)
+    estilo_casa = classificar_estilo(ovr_casa, benchmarks)
+    estilo_fora = classificar_estilo(ovr_fora, benchmarks)
 
     dados_cenario = {
         'time_casa': dados['time_casa'],
@@ -535,11 +541,6 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
     adj_btts = max(0, min(1, btts + style_impact.get('btts', 0)))
     adj_gol_ht = max(0, min(1, gol_ht + style_impact.get('gol_ht', 0)))
     adj_esc = max(0, min(1, esc + style_impact.get('esc', 0)))
-
-    confianca_casa = calcular_confianca(dados.get('ovrall_casa', {}), ima_casa, edges)
-    confianca_fora = calcular_confianca(dados.get('ovrall_fora', {}), ima_fora, edges)
-    curva_casa = preparar_curva_momentum(ima_det_casa.get('3G', []))
-    curva_fora = preparar_curva_momentum(ima_det_fora.get('3G', []))
 
     # ================================================================
     # RESULTADO
@@ -568,8 +569,7 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
         'prateleiras': prateleiras,
         'superacao_casa': superacao_casa, 'superacao_fora': superacao_fora,
         'prat_real_casa': prat_real_casa, 'prat_real_fora': prat_real_fora,
-        'prat_proj_casa': dados.get('prat_casa', 'Media'),
-        'prat_proj_fora': dados.get('prat_fora', 'Media'),
+        'prat_proj_casa': prat_proj_casa, 'prat_proj_fora': prat_proj_fora,
         'elo_norm_casa': elo_norm_casa, 'elo_norm_fora': elo_norm_fora,
         'mpv_tactical_casa': mpv_tactical_casa, 'mpv_tactical_fora': mpv_tactical_fora,
         'tactical': {
@@ -581,14 +581,10 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
         } if (CONTRAST_AVAILABLE and dims_casa_mod and dims_fora_mod) else None,
         'edges': edges,
         'benchmarks': benchmarks,
-        'stats_casa': dados.get('ovrall_casa', {}),
-        'stats_fora': dados.get('ovrall_fora', {}),
+        'stats_casa': ovr_casa,
+        'stats_fora': ovr_fora,
         'estilo_casa': estilo_casa,
         'estilo_fora': estilo_fora,
         'cenario': texto_cenario,
-        'confianca_casa': confianca_casa,
-        'confianca_fora': confianca_fora,
-        'curva_casa': curva_casa,
-        'curva_fora': curva_fora,
     }
     return res, None
