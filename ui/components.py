@@ -201,28 +201,29 @@ def show_results_manual(res):
             card_class = "card-winner" if nome_fora == winner_ovr else "card-loser"
             st.markdown(f"<div class='{card_class}'><span class='big-number'>{res['ovrall_fora']:.1f}</span><br><small>{nome_fora}</small></div>", unsafe_allow_html=True)
 
-        with st.expander("📈 Detalhamento do OVRall (subníveis)"):
-            if res.get('detalhes_ovr'):
-                for dim in ['Ataque', 'Defesa', 'MeioCampo', 'Consistencia', 'Resiliencia']:
-                    nota_c = res['notas_casa'].get(dim, 0)
-                    nota_f = res['notas_fora'].get(dim, 0)
-                    st.markdown(f"**{dim}**")
-                    col_bar1, col_bar2, col_bar3 = st.columns([1, 3, 1])
-                    with col_bar1: st.markdown(f"<span class='gold'>{nota_c:.1f}</span>", unsafe_allow_html=True)
-                    with col_bar2:
-                        st.markdown(f"""
-                        <div style="display:flex; align-items:center; height:20px; background:#2d3242; border-radius:10px; overflow:hidden;">
-                            <div style="width:50%; height:100%; display:flex; justify-content:flex-end;">
-                                <div style="height:100%; background:linear-gradient(90deg, #FFD700, #FFA500); width:{nota_c}%; border-radius:10px 0 0 10px;"></div>
-                            </div>
-                            <div style="width:50%; height:100%; display:flex;">
-                                <div style="height:100%; background:linear-gradient(90deg, #0096c7, #00B4D8); width:{nota_f}%; border-radius:0 10px 10px 0;"></div>
-                            </div>
+        # Detalhamento OVRall sempre visível (sem expander)
+        st.markdown("#### 📈 Detalhamento do OVRall (subníveis)")
+        if res.get('detalhes_ovr'):
+            for dim in ['Ataque', 'Defesa', 'MeioCampo', 'Consistencia', 'Resiliencia']:
+                nota_c = res['notas_casa'].get(dim, 0)
+                nota_f = res['notas_fora'].get(dim, 0)
+                st.markdown(f"**{dim}**")
+                col_bar1, col_bar2, col_bar3 = st.columns([1, 3, 1])
+                with col_bar1: st.markdown(f"<span class='gold'>{nota_c:.1f}</span>", unsafe_allow_html=True)
+                with col_bar2:
+                    st.markdown(f"""
+                    <div style="display:flex; align-items:center; height:20px; background:#2d3242; border-radius:10px; overflow:hidden;">
+                        <div style="width:50%; height:100%; display:flex; justify-content:flex-end;">
+                            <div style="height:100%; background:linear-gradient(90deg, #FFD700, #FFA500); width:{nota_c}%; border-radius:10px 0 0 10px;"></div>
                         </div>
-                        """, unsafe_allow_html=True)
-                    with col_bar3: st.markdown(f"<span class='silver'>{nota_f:.1f}</span>", unsafe_allow_html=True)
-            else:
-                st.info("Detalhamento OVRall indisponível.")
+                        <div style="width:50%; height:100%; display:flex;">
+                            <div style="height:100%; background:linear-gradient(90deg, #0096c7, #00B4D8); width:{nota_f}%; border-radius:0 10px 10px 0;"></div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col_bar3: st.markdown(f"<span class='silver'>{nota_f:.1f}</span>", unsafe_allow_html=True)
+        else:
+            st.info("Detalhamento OVRall indisponível.")
 
         st.markdown("### 🧠 IC – Índice de Contexto")
         col_ic1, col_ic2 = st.columns(2)
@@ -265,6 +266,19 @@ def show_results_manual(res):
                 heat_img = field_heatmap_annotated(tac['dimensions_casa'], tac['dimensions_fora'], tac['deltas'])
                 if heat_img:
                     st.image(f"data:image/png;base64,{heat_img}", use_container_width=True, caption="Azul: vantagem casa, Vermelho: vantagem fora")
+
+            # NOVO: gráfico comparativo de OVRall por setor
+            st.markdown("### ⚖️ Força Estrutural (OVRall) por Setor")
+            if res.get('notas_casa') and res.get('notas_fora'):
+                dims_ovr = ['Ataque', 'Defesa', 'MeioCampo', 'Consistencia', 'Resiliencia']
+                notas_c = [res['notas_casa'].get(d, 0) for d in dims_ovr]
+                notas_f = [res['notas_fora'].get(d, 0) for d in dims_ovr]
+                df_ovr = pd.DataFrame({
+                    'Setor': dims_ovr,
+                    nome_casa: notas_c,
+                    nome_fora: notas_f
+                }).set_index('Setor')
+                st.bar_chart(df_ovr, use_container_width=True)
 
             st.markdown("### 📊 Diferencial por Dimensão")
             deltas = tac['deltas']
@@ -337,7 +351,7 @@ def show_results_manual(res):
         mercados = [
             ("Over 2.5 Gols", res['over25'], edges.get('edge_over')),
             ("Ambas Marcam", res['btts'], edges.get('edge_btts')),
-            ("Gol 1º Tempo", res['gol_ht'], None),
+            ("Gol 1º Tempo", res['gol_ht'], edges.get('edge_ht')),
             ("Over 8.5 Escanteios", res['esc'], edges.get('edge_esc')),
         ]
         cols_m = st.columns(4)
@@ -379,3 +393,20 @@ def show_results_manual(res):
             st.markdown(f"<div class='{card_class}'><span class='big-number'>{mpv_fora:.1f}</span><br><small>{nome_fora}</small></div>", unsafe_allow_html=True)
 
         st.markdown(gerar_analise_descritiva(res))
+
+        # Comparação com as médias da liga
+        if res.get('benchmarks'):
+            st.markdown("### 📊 Comparativo com a Liga")
+            bm = res['benchmarks']
+            # Usamos os primeiros valores disponíveis nos benchmarks
+            col_comp1, col_comp2 = st.columns(2)
+            with col_comp1:
+                st.write(f"**{nome_casa}**")
+                st.write(f"Gols Marcados: {res.get('ovrall_casa', 0):.1f} (Liga: {bm.get('gols_media', 0):.1f})")
+                st.write(f"Gols Sofridos: {res.get('ovrall_casa', 0):.1f} (Liga: {bm.get('gols_sofridos_media', 0):.1f})")
+                st.write(f"Posse: {res.get('ovrall_casa', 0):.1f}% (Liga: {bm.get('posse_media', 50):.0f}%)")
+            with col_comp2:
+                st.write(f"**{nome_fora}**")
+                st.write(f"Gols Marcados: {res.get('ovrall_fora', 0):.1f} (Liga: {bm.get('gols_media', 0):.1f})")
+                st.write(f"Gols Sofridos: {res.get('ovrall_fora', 0):.1f} (Liga: {bm.get('gols_sofridos_media', 0):.1f})")
+                st.write(f"Posse: {res.get('ovrall_fora', 0):.1f}% (Liga: {bm.get('posse_media', 50):.0f}%)")
