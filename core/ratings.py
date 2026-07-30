@@ -15,6 +15,9 @@ def obter_prateleira(posicao):
 def _percentil(valor, lista, menor_melhor=False):
     if not lista:
         return 50.0
+    # Se todos os valores são iguais, retorna neutro (evita extremos artificiais)
+    if len(set(lista)) == 1:
+        return 50.0
     ordenado = sorted(lista)
     n = len(ordenado)
     pos = sum(1 for x in ordenado if x < valor)
@@ -45,7 +48,6 @@ def calcular_ima(time, jogos_10G, jogos_5G, jogos_3G, jogos_5CF, jogos_3CF, prat
         pts = []
         for j in jogos:
             prat_time = prateleiras[time]
-            # Usa prateleira direta se disponível (modo manual), senão busca pelo nome
             prat_adv = j.get('prateleira_adv', prateleiras.get(j['adversario'], 'Media'))
             pts.append(calcular_pontuacao_jogo(j['resultado'], prat_time, prat_adv))
         return sum(pts) / len(pts)
