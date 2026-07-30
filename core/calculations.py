@@ -48,14 +48,7 @@ def aproveitamento_contra_prateleira(jogos, prateleira_alvo):
         pontos = sum(3 if j['resultado'] == 'V' else 1 if j['resultado'] == 'E' else 0 for j in total)
         return (pontos / (len(total) * 3)) * 100 if total else 50.0
 
-# ================================================================
-# NOVAS FUNÇÕES: CLASSIFICAÇÃO DE ESTILO E SIMULAÇÃO DE CENÁRIO
-# ================================================================
 def classificar_estilo(stats, benchmarks):
-    """
-    Classifica o estilo de jogo de um time com base em suas estatísticas.
-    Retorna um dicionário com o estilo principal, os indicadores derivados e a confiança.
-    """
     posse = stats.get('posse_media', 50)
     gols = stats.get('gols_media', 1.4)
     gols_sofridos = stats.get('gols_sofridos_media', 1.4)
@@ -64,13 +57,11 @@ def classificar_estilo(stats, benchmarks):
     gols_esc = stats.get('gols_escanteio', 0.36)
     conversao = stats.get('conversao', 0.25)
 
-    # Indicadores derivados
     posse_efetiva = (gols / posse) * 100 if posse > 0 else 0
     eficiencia = gols / finalizacoes if finalizacoes > 0 else 0
     vulnerabilidade = (gols_sofridos / (100 - posse)) * 100 if (100 - posse) > 0 else 0
     dependencia_bp = gols_esc / gols if gols > 0 else 0
 
-    # Classificação
     estilo = "Equilibrado"
     if posse > 55 and finalizacoes > 5:
         estilo = "Posse & Pressão"
@@ -92,9 +83,6 @@ def classificar_estilo(stats, benchmarks):
     }
 
 def gerar_cenario(estilo_casa, estilo_fora, res_mercados):
-    """
-    Gera um texto narrativo sobre o confronto baseado nos estilos e nas probabilidades.
-    """
     nome_casa = res_mercados['time_casa']
     nome_fora = res_mercados['time_fora']
     over = res_mercados['over25']
@@ -106,59 +94,82 @@ def gerar_cenario(estilo_casa, estilo_fora, res_mercados):
 
     texto = f"**🔮 Cenário Tático:** {nome_casa} ({estilo_casa}) vs {nome_fora} ({estilo_fora})\n\n"
 
-    # Combinações de estilos
     if estilo_casa == "Posse & Pressão" and estilo_fora == "Contra‑Ataque":
         texto += (f"⚽ O {nome_casa} deve controlar a posse e pressionar, enquanto o {nome_fora} "
-                  f"apostará em transições rápidas. Espere um jogo de ataque contra defesa, com "
-                  f"chances para ambos os lados. ")
+                  f"apostará em transições rápidas. ")
         if btts >= 0.55:
-            texto += "O mercado de **Ambas Marcam** é favorecido, assim como **Over 2.5 Gols** "
+            texto += "**Ambas Marcam** é favorecido, assim como **Over 2.5 Gols**."
         else:
-            texto += "O **Over 2.5 Gols** pode ter valor, especialmente se o {nome_casa} converter sua pressão. "
+            texto += "O **Over 2.5 Gols** pode ter valor."
     elif estilo_casa == "Contra‑Ataque" and estilo_fora == "Posse & Pressão":
         texto += (f"🔄 Situação inversa: o {nome_fora} terá a posse, mas o {nome_casa} "
                   f"será perigoso nos contra‑ataques. ")
         if over >= 0.60:
-            texto += "O **Over 2.5 Gols** surge como boa opção. "
+            texto += "**Over 2.5 Gols** surge como boa opção. "
         if gol_ht >= 0.50:
-            texto += "O **Gol no 1º Tempo** também merece atenção, pois transições rápidas podem gerar gols cedo. "
+            texto += "**Gol no 1º Tempo** também merece atenção. "
     elif estilo_casa == "Posse & Pressão" and estilo_fora == "Posse & Pressão":
-        texto += (f"🔥 Ambos os times gostam de ter a bola. O meio‑campo será muito disputado, "
-                  f"com muitos escanteios. ")
+        texto += (f"🔥 Ambos gostam de ter a bola. O meio‑campo será muito disputado. ")
         if esc >= 0.55:
-            texto += f"O **Over 8.5 Escanteios** é uma opção interessante. "
+            texto += f"O **Over 8.5 Escanteios** é interessante. "
         if over < 0.50:
-            texto += "Como as defesas tendem a se anular, o **Under 2.5 Gols** pode ter valor. "
+            texto += "O **Under 2.5 Gols** pode ter valor. "
     elif estilo_casa == "Contra‑Ataque" and estilo_fora == "Contra‑Ataque":
-        texto += (f"⚡ Jogo de transições rápidas! Ambos os times cedem a posse e apostam na velocidade. "
-                  f"O número de finalizações pode ser alto. ")
+        texto += (f"⚡ Jogo de transições rápidas! ")
         if over >= 0.60 and btts >= 0.60:
             texto += "**Over 2.5 Gols** e **BTTS** são fortemente favorecidos. "
-        else:
-            texto += "A eficiência decidirá: **Over 2.5 Gols** ou **Ambas Marcam** podem ser boas opções. "
     elif estilo_casa == "Aéreo / Bola Parada" or estilo_fora == "Aéreo / Bola Parada":
-        texto += (f"🎯 Pelo menos um dos times depende de jogadas aéreas. ")
+        texto += (f"🎯 Pelo menos um time depende de jogadas aéreas. ")
         if esc >= 0.55:
-            texto += f"O mercado de **Over 8.5 Escanteios** ganha destaque. "
-        if btts >= 0.50:
-            texto += "Como bolas paradas são uma arma, **Ambas Marcam** também pode acontecer. "
+            texto += f"**Over 8.5 Escanteios** ganha destaque. "
     else:
-        texto += (f"⚖️ Confronto equilibrado, com estilos complementares ou similares. "
-                  f"As probabilidades calculadas refletem o equilíbrio: "
+        texto += (f"⚖️ Confronto equilibrado. As probabilidades: "
                   f"🏠 {p1:.1%}, 🤝 {res_mercados['pX']:.1%}, 🏟️ {p2:.1%}. ")
 
-    # Adiciona resumo dos indicadores derivados
     texto += "\n\n**📊 Indicadores Derivados:**\n"
-    texto += f"- {nome_casa}: Posse Efetiva {res_mercados.get('estilo_casa', {}).get('posse_efetiva', '?')}, "
-    texto += f"Eficiência de Finalização {res_mercados.get('estilo_casa', {}).get('eficiencia_finalizacao', '?')}, "
-    texto += f"Vulnerabilidade em Transição {res_mercados.get('estilo_casa', {}).get('vulnerabilidade_transicao', '?')}, "
-    texto += f"Dependência de Bola Parada {res_mercados.get('estilo_casa', {}).get('dependencia_bola_parada', '?')}\n"
-    texto += f"- {nome_fora}: Posse Efetiva {res_mercados.get('estilo_fora', {}).get('posse_efetiva', '?')}, "
-    texto += f"Eficiência de Finalização {res_mercados.get('estilo_fora', {}).get('eficiencia_finalizacao', '?')}, "
-    texto += f"Vulnerabilidade em Transição {res_mercados.get('estilo_fora', {}).get('vulnerabilidade_transicao', '?')}, "
-    texto += f"Dependência de Bola Parada {res_mercados.get('estilo_fora', {}).get('dependencia_bola_parada', '?')}"
+    texto += f"- {nome_casa}: Posse Efetiva {res_mercados['estilo_casa']['posse_efetiva']:.2f}, "
+    texto += f"Eficiência {res_mercados['estilo_casa']['eficiencia_finalizacao']:.2f}, "
+    texto += f"Vulnerabilidade {res_mercados['estilo_casa']['vulnerabilidade_transicao']:.2f}, "
+    texto += f"Dep. Bola Parada {res_mercados['estilo_casa']['dependencia_bola_parada']:.2%}\n"
+    texto += f"- {nome_fora}: Posse Efetiva {res_mercados['estilo_fora']['posse_efetiva']:.2f}, "
+    texto += f"Eficiência {res_mercados['estilo_fora']['eficiencia_finalizacao']:.2f}, "
+    texto += f"Vulnerabilidade {res_mercados['estilo_fora']['vulnerabilidade_transicao']:.2f}, "
+    texto += f"Dep. Bola Parada {res_mercados['estilo_fora']['dependencia_bola_parada']:.2%}"
 
     return texto
+
+def calcular_confianca(stats, ima, edges=None):
+    """Calcula um score de confiança (0-100) baseado na consistência e nos dados disponíveis."""
+    desvio = stats.get('desvio_pontos', 0.5)
+    n_jogos = min(len(stats.get('jogos', [])), 10) if 'jogos' in stats else 5
+    # Consistência: quanto menor o desvio, maior a confiança
+    conf_consistencia = max(0, 100 - (desvio * 60))
+    # Tamanho da amostra: mais jogos, mais confiança
+    conf_amostra = min(100, n_jogos * 10)
+    # Edge médio (se disponível): maior edge, mais convicção
+    edge_abs = np.mean([abs(v) for v in edges.values()]) if edges else 0
+    conf_edge = min(100, edge_abs * 200)
+    # Média ponderada
+    score = (0.5 * conf_consistencia + 0.3 * conf_amostra + 0.2 * conf_edge)
+    return round(min(100, max(0, score)), 1)
+
+def preparar_curva_momentum(detalhes_ima):
+    """Extrai a evolução da pontuação do IMA nos últimos 5 jogos para o gráfico."""
+    if not detalhes_ima:
+        return []
+    # Usamos o recorte '3G' (últimos 3 jogos) e '5G' para construir uma série
+    curva = []
+    for recorte in ['10G', '5G', '3G']:
+        if recorte in detalhes_ima and detalhes_ima[recorte]:
+            media = np.mean([j['pontos'] for j in detalhes_ima[recorte]])
+            curva.append(media)
+        else:
+            curva.append(None)
+    # Preenche valores ausentes com o último disponível
+    for i in range(len(curva)):
+        if curva[i] is None:
+            curva[i] = curva[i-1] if i > 0 else 0
+    return curva
 
 def executar_manual(dados, pkl_path='calibration_params.pkl'):
     # --- Benchmarks ---
@@ -453,7 +464,6 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
     estilo_casa = classificar_estilo(dados.get('ovrall_casa', {}), benchmarks)
     estilo_fora = classificar_estilo(dados.get('ovrall_fora', {}), benchmarks)
 
-    # Prepara dados para o cenário
     dados_cenario = {
         'time_casa': dados['time_casa'],
         'time_fora': dados['time_fora'],
@@ -468,6 +478,14 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
         'estilo_fora': estilo_fora,
     }
     texto_cenario = gerar_cenario(estilo_casa['estilo'], estilo_fora['estilo'], dados_cenario)
+
+    # ================================================================
+    # CONFIANÇA E CURVA DE MOMENTUM
+    # ================================================================
+    confianca_casa = calcular_confianca(dados.get('ovrall_casa', {}), ima_casa, edges)
+    confianca_fora = calcular_confianca(dados.get('ovrall_fora', {}), ima_fora, edges)
+    curva_casa = preparar_curva_momentum(ima_det_casa.get('3G', []))
+    curva_fora = preparar_curva_momentum(ima_det_fora.get('3G', []))
 
     # ================================================================
     # RESULTADO
@@ -510,5 +528,9 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
         'estilo_casa': estilo_casa,
         'estilo_fora': estilo_fora,
         'cenario': texto_cenario,
+        'confianca_casa': confianca_casa,
+        'confianca_fora': confianca_fora,
+        'curva_casa': curva_casa,
+        'curva_fora': curva_fora,
     }
     return res, None
