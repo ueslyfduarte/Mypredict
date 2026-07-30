@@ -322,7 +322,7 @@ def show_results_manual(res):
         else:
             st.info("Dados táticos indisponíveis. Verifique o modelo calibrado.")
 
-    # ====================== ABA 3: CENÁRIOS & ESTILOS ======================
+    # ====================== ABA 3: CENÁRIOS & ESTILOS (ATUALIZADA) ======================
     with tabs[2]:
         st.markdown("## 🔮 Cenários & Estilos de Jogo")
         if res.get('estilo_casa') and res.get('estilo_fora'):
@@ -336,6 +336,16 @@ def show_results_manual(res):
                 st.markdown(f"- Eficiência de Finalização: {estilo_casa['eficiencia_finalizacao']:.2f}")
                 st.markdown(f"- Vulnerabilidade em Transição: {estilo_casa['vulnerabilidade_transicao']:.2f}")
                 st.markdown(f"- Dependência de Bola Parada: {estilo_casa['dependencia_bola_parada']:.2%}")
+                # Confidence Score
+                conf = res.get('confianca_casa', 50)
+                st.markdown(f"**🔒 Confiança do Modelo:** {conf:.0f}/100")
+                st.progress(conf / 100)
+                # Curva de Momentum
+                if res.get('curva_casa'):
+                    st.markdown("**📈 Evolução do IMA (últimos recortes)**")
+                    curva = res['curva_casa']
+                    df_curva = pd.DataFrame({'Recorte': ['10J', '5J', '3J'], 'Pontuação': curva})
+                    st.line_chart(df_curva.set_index('Recorte'), use_container_width=True)
             with col_estilo2:
                 st.markdown(f"### 🏟️ {nome_fora}")
                 st.markdown(f"**Estilo:** {estilo_fora['estilo']}")
@@ -343,6 +353,14 @@ def show_results_manual(res):
                 st.markdown(f"- Eficiência de Finalização: {estilo_fora['eficiencia_finalizacao']:.2f}")
                 st.markdown(f"- Vulnerabilidade em Transição: {estilo_fora['vulnerabilidade_transicao']:.2f}")
                 st.markdown(f"- Dependência de Bola Parada: {estilo_fora['dependencia_bola_parada']:.2%}")
+                conf = res.get('confianca_fora', 50)
+                st.markdown(f"**🔒 Confiança do Modelo:** {conf:.0f}/100")
+                st.progress(conf / 100)
+                if res.get('curva_fora'):
+                    st.markdown("**📈 Evolução do IMA (últimos recortes)**")
+                    curva = res['curva_fora']
+                    df_curva = pd.DataFrame({'Recorte': ['10J', '5J', '3J'], 'Pontuação': curva})
+                    st.line_chart(df_curva.set_index('Recorte'), use_container_width=True)
 
             st.markdown("---")
             st.markdown(res.get('cenario', 'Análise de cenário indisponível.'))
