@@ -10,7 +10,7 @@ import altair as alt
 from config import THRESHOLD_GOLD, THRESHOLD_VALUE, THRESHOLD_FAVORITO
 
 # ------------------------------------------------------------
-# GRÁFICOS (mantidos)
+# GRÁFICOS
 # ------------------------------------------------------------
 def radar_chart(casa_scores, fora_scores):
     labels = [dim for dim in casa_scores.keys() if dim in fora_scores.keys()]
@@ -77,7 +77,7 @@ def field_heatmap_annotated(dimensions_casa, dimensions_fora, deltas):
     return base64.b64encode(buf.read()).decode()
 
 # ------------------------------------------------------------
-# ANÁLISE DESCRITIVA AUTOMÁTICA (mantida)
+# ANÁLISE DESCRITIVA AUTOMÁTICA
 # ------------------------------------------------------------
 def gerar_analise_descritiva(res):
     nome_casa = res['time_casa']
@@ -161,7 +161,7 @@ def show_results_manual(res):
     </style>
     """, unsafe_allow_html=True)
 
-    tabs = st.tabs(["🔬 Pilares", "🧪 Contraste Tático", "🎯 Mercados", "📋 Resumo & Análise"])
+    tabs = st.tabs(["🔬 Pilares", "🧪 Contraste Tático", "📋 Resumo & Análise", "🎯 Mercados"])
 
     # ====================== ABA 1: PILARES ======================
     with tabs[0]:
@@ -266,7 +266,6 @@ def show_results_manual(res):
                 if heat_img:
                     st.image(f"data:image/png;base64,{heat_img}", use_container_width=True, caption="Azul: vantagem casa, Vermelho: vantagem fora")
 
-            # NOVO: gráfico de barras LADO A LADO com Altair
             st.markdown("### ⚖️ Força Estrutural (OVRall) por Setor")
             if res.get('notas_casa') and res.get('notas_fora'):
                 dims_ovr = ['Ataque', 'Defesa', 'MeioCampo', 'Consistencia', 'Resiliencia']
@@ -323,8 +322,40 @@ def show_results_manual(res):
         else:
             st.info("Dados táticos indisponíveis. Verifique o modelo calibrado.")
 
-    # ====================== ABA 3: MERCADOS ======================
+    # ====================== ABA 3: RESUMO & ANÁLISE ======================
     with tabs[2]:
+        st.markdown(f"<h1 style='text-align:center;'>{nome_casa} vs {nome_fora}</h1>", unsafe_allow_html=True)
+        mpv_casa, mpv_fora = res['mpv_casa'], res['mpv_fora']
+        winner_mpv = nome_casa if mpv_casa >= mpv_fora else nome_fora
+        col_mpv1, col_mpv2 = st.columns(2)
+        with col_mpv1:
+            card_class = "card-winner" if nome_casa == winner_mpv else "card-loser"
+            st.markdown(f"<div class='{card_class}'><span class='big-number'>{mpv_casa:.1f}</span><br><small>{nome_casa}</small></div>", unsafe_allow_html=True)
+        with col_mpv2:
+            card_class = "card-winner" if nome_fora == winner_mpv else "card-loser"
+            st.markdown(f"<div class='{card_class}'><span class='big-number'>{mpv_fora:.1f}</span><br><small>{nome_fora}</small></div>", unsafe_allow_html=True)
+
+        st.markdown(gerar_analise_descritiva(res))
+
+        if res.get('benchmarks'):
+            st.markdown("### 📊 Comparativo com a Liga")
+            bm = res['benchmarks']
+            stats_casa = res.get('stats_casa', {})
+            stats_fora = res.get('stats_fora', {})
+            col_comp1, col_comp2 = st.columns(2)
+            with col_comp1:
+                st.write(f"**{nome_casa}**")
+                st.write(f"Gols Marcados: {stats_casa.get('gols_media', 0):.1f} (Liga: {bm.get('gols_media', {}).get('mean', 0):.1f})")
+                st.write(f"Gols Sofridos: {stats_casa.get('gols_sofridos_media', 0):.1f} (Liga: {bm.get('gols_sofridos_media', {}).get('mean', 0):.1f})")
+                st.write(f"Posse: {stats_casa.get('posse_media', 0):.1f}% (Liga: {bm.get('posse_media', {}).get('mean', 50):.0f}%)")
+            with col_comp2:
+                st.write(f"**{nome_fora}**")
+                st.write(f"Gols Marcados: {stats_fora.get('gols_media', 0):.1f} (Liga: {bm.get('gols_media', {}).get('mean', 0):.1f})")
+                st.write(f"Gols Sofridos: {stats_fora.get('gols_sofridos_media', 0):.1f} (Liga: {bm.get('gols_sofridos_media', {}).get('mean', 0):.1f})")
+                st.write(f"Posse: {stats_fora.get('posse_media', 0):.1f}% (Liga: {bm.get('posse_media', {}).get('mean', 50):.0f}%)")
+
+    # ====================== ABA 4: MERCADOS ======================
+    with tabs[3]:
         st.markdown("## 🎯 Probabilidades de Mercado")
         st.caption("Média entre modelo original e avançado")
 
@@ -384,33 +415,3 @@ def show_results_manual(res):
                     {edge_html}
                 </div>
                 """, unsafe_allow_html=True)
-
-    # ====================== ABA 4: RESUMO & ANÁLISE ======================
-    with tabs[3]:
-        st.markdown(f"<h1 style='text-align:center;'>{nome_casa} vs {nome_fora}</h1>", unsafe_allow_html=True)
-        mpv_casa, mpv_fora = res['mpv_casa'], res['mpv_fora']
-        winner_mpv = nome_casa if mpv_casa >= mpv_fora else nome_fora
-        col_mpv1, col_mpv2 = st.columns(2)
-        with col_mpv1:
-            card_class = "card-winner" if nome_casa == winner_mpv else "card-loser"
-            st.markdown(f"<div class='{card_class}'><span class='big-number'>{mpv_casa:.1f}</span><br><small>{nome_casa}</small></div>", unsafe_allow_html=True)
-        with col_mpv2:
-            card_class = "card-winner" if nome_fora == winner_mpv else "card-loser"
-            st.markdown(f"<div class='{card_class}'><span class='big-number'>{mpv_fora:.1f}</span><br><small>{nome_fora}</small></div>", unsafe_allow_html=True)
-
-        st.markdown(gerar_analise_descritiva(res))
-
-        if res.get('benchmarks'):
-            st.markdown("### 📊 Comparativo com a Liga")
-            bm = res['benchmarks']
-            col_comp1, col_comp2 = st.columns(2)
-            with col_comp1:
-                st.write(f"**{nome_casa}**")
-                st.write(f"Gols Marcados: {res.get('ovrall_casa', 0):.1f} (Liga: {bm.get('gols_media', {}).get('mean', 0):.1f})")
-                st.write(f"Gols Sofridos: {res.get('ovrall_casa', 0):.1f} (Liga: {bm.get('gols_sofridos_media', {}).get('mean', 0):.1f})")
-                st.write(f"Posse: {res.get('ovrall_casa', 0):.1f}% (Liga: {bm.get('posse_media', {}).get('mean', 50):.0f}%)")
-            with col_comp2:
-                st.write(f"**{nome_fora}**")
-                st.write(f"Gols Marcados: {res.get('ovrall_fora', 0):.1f} (Liga: {bm.get('gols_media', {}).get('mean', 0):.1f})")
-                st.write(f"Gols Sofridos: {res.get('ovrall_fora', 0):.1f} (Liga: {bm.get('gols_sofridos_media', {}).get('mean', 0):.1f})")
-                st.write(f"Posse: {res.get('ovrall_fora', 0):.1f}% (Liga: {bm.get('posse_media', {}).get('mean', 50):.0f}%)")
