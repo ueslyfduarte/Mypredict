@@ -1,5 +1,6 @@
 import pickle
 import numpy as np
+import streamlit as st
 from core.ratings import (
     calcular_ima, calcular_ovrall, calcular_ic, calcular_mpv,
     obter_prateleira, _percentil, calcular_pontuacao_jogo
@@ -37,8 +38,6 @@ def _build_stats_for_dimensions(ovrall_dict):
     }
 
 def aproveitamento_contra_prateleira(jogos, prateleira_alvo):
-    """Retorna aproveitamento (0-100) contra uma prateleira específica.
-       Se houver menos de 3 jogos contra ela, retorna o aproveitamento geral dos últimos 10."""
     if not jogos:
         return 50.0
     jogos_alvo = [j for j in jogos if j.get('prateleira_adv') == prateleira_alvo]
@@ -46,12 +45,22 @@ def aproveitamento_contra_prateleira(jogos, prateleira_alvo):
         pontos = sum(3 if j['resultado'] == 'V' else 1 if j['resultado'] == 'E' else 0 for j in jogos_alvo)
         return (pontos / (len(jogos_alvo) * 3)) * 100
     else:
-        # Média geral dos últimos 10 jogos (ou todos disponíveis)
         total = jogos[:10]
         pontos = sum(3 if j['resultado'] == 'V' else 1 if j['resultado'] == 'E' else 0 for j in total)
         return (pontos / (len(total) * 3)) * 100 if total else 50.0
 
 def executar_manual(dados, pkl_path='calibration_params.pkl'):
+    # --- Benchmarks (manuais ou do pkl) ---
+    if dados.get('benchmarks_usr'):
+        benchmarks = dados['benchmarks_usr']
+    else:
+        try:
+            with open(pkl_path, 'rb') as f:
+                calib = pickle.load(f)
+            benchmarks = calib['benchmarks']
+        except:
+            benchmarks = {}
+
     # --- Prateleiras ---
     prat_real_casa = obter_prateleira(dados['pos_casa'])
     prat_real_fora = obter_prateleira(dados['pos_fora'])
@@ -153,13 +162,11 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
             notas_fora[nome] = sum(x[2] for x in det_fora) / len(det_fora)
             detalhes_ovr[nome] = {'casa': det_casa, 'fora': det_fora}
 
-    # --- IC (com novo fator automático) ---
+    # --- IC ---
     ic_casa = dados.get('ic_casa', {})
     ic_fora = dados.get('ic_fora', {})
-    # Adiciona desempenho contra a prateleira do adversário automaticamente
     ic_casa['contra_escalao_adversario'] = aproveitamento_contra_prateleira(dados.get('jogos_casa', []), prat_real_fora) / 100.0
     ic_fora['contra_escalao_adversario'] = aproveitamento_contra_prateleira(dados.get('jogos_fora', []), prat_real_casa) / 100.0
-
     ic_val_casa = calcular_ic(ic_casa)
     ic_val_fora = calcular_ic(ic_fora)
 
@@ -184,7 +191,6 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
     elo_norm_casa = normalizar_elo(elo_casa, elos_liga)
     elo_norm_fora = normalizar_elo(elo_fora, elos_liga)
 
-    # MPV final (tradicional)
     mpv_casa = ELO_WEIGHT * elo_norm_casa + (1 - ELO_WEIGHT) * mpv_base_casa
     mpv_fora = ELO_WEIGHT * elo_norm_fora + (1 - ELO_WEIGHT) * mpv_base_fora
 
@@ -223,12 +229,14 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
     # MODELO CALIBRADO E DIMENSÕES TÁTICAS
     # ================================================================
     try:
-        with open(pkl_path, 'rb') as f:
-            calib = pickle.load(f)
-        benchmarks = calib['benchmarks']
-        dimension_weights = calib['dimension_weights']
+        if not dados.get('benchmarks_usr'):
+            with open(pkl_path, 'rb') as f:
+                calib = pickle.load(f)
+            benchmarks = calib.get('benchmarks', benchmarks)
+            dimension_weights = calib.get('dimension_weights', {})
+        else:
+            dimension_weights = {}
     except:
-        benchmarks = {}
         dimension_weights = {}
 
     stats_casa = _build_stats_for_dimensions(dados.get('ovrall_casa', {}))
@@ -307,7 +315,7 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
         heatmap_img = generate_heatmap(deltas)
 
     # ================================================================
-    # EDGE SCORE (comparação com odds de mercado)
+    # EDGE SCORE (odds de mercado)
     # ================================================================
     odds = dados.get('odds', {})
     edges = {}
@@ -323,6 +331,8 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
         edges['edge_over'] = over25 - (1 / odds['odd_over'])
     if odds.get('odd_btts'):
         edges['edge_btts'] = btts - (1 / odds['odd_btts'])
+    if odds.get('odd_ht'):
+        edges['edge_ht'] = gol_ht - (1 / odds['odd_ht'])
     if odds.get('odd_esc'):
         edges['edge_esc'] = esc - (1 / odds['odd_esc'])
 
@@ -361,5 +371,6 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
             'heatmap': heatmap_img,
         } if CONTRAST_AVAILABLE else None,
         'edges': edges,
+        'benchmarks': benchmarks,  # retornamos para exibir comparações
     }
     return res, None
