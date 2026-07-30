@@ -250,7 +250,7 @@ def render_manual():
             
             st.markdown("**Últimos 5 Jogos**")
             jogos_casa = []
-            for i in range(5):
+            for i in range(10):
                 c = st.columns([2, 3, 3, 1, 1])
                 res = c[0].selectbox("Res.", ['V', 'E', 'D'], key=f"c_res_{i}")
                 adv = c[1].text_input("Adversário", key=f"c_adv_{i}")
@@ -280,7 +280,7 @@ def render_manual():
             
             st.markdown("**Últimos 5 Jogos**")
             jogos_fora = []
-            for i in range(5):
+            for i in range(10):
                 c = st.columns([2, 3, 3, 1, 1])
                 res = c[0].selectbox("Res.", ['V', 'E', 'D'], key=f"f_res_{i}")
                 adv = c[1].text_input("Adversário", key=f"f_adv_{i}")
