@@ -73,7 +73,6 @@ def render_manual():
                 fin = c1.number_input("🎯 Fin. Alvo", 0.0, 15.0, 5.2, 0.5, key=f"{key_prefix}_fin")
                 xg = c2.number_input("📈 xG", 0.0, 4.0, 1.6, 0.1, key=f"{key_prefix}_xg")
                 esc = c3.number_input("🏁 Escanteios", 0.0, 15.0, 5.5, 0.5, key=f"{key_prefix}_esc")
-                # Novos campos
                 gols_ht = c1.number_input("⏱️ Gols HT", 0.0, 5.0, 0.8, 0.1, key=f"{key_prefix}_gols_ht")
                 btts_pct = c2.number_input("🤝 BTTS %", 0.0, 100.0, 50.0, 5.0, key=f"{key_prefix}_btts") / 100.0
 
@@ -156,6 +155,20 @@ def render_manual():
                     'fator_casa': st.slider("Aproveitamento como visitante (%)", 0, 100, 40, key="ic_fc_f") / 100,
                 }
 
+            st.markdown("**Odds de Mercado (opcional, apenas para Edge)**")
+            col_odds1, col_odds2, col_odds3 = st.columns(3)
+            odd_casa = col_odds1.number_input("Odd Casa (1X2)", 1.0, 50.0, 2.0, 0.01, key="odd_casa")
+            odd_empate = col_odds2.number_input("Odd Empate", 1.0, 50.0, 3.5, 0.01, key="odd_empate")
+            odd_fora = col_odds3.number_input("Odd Fora", 1.0, 50.0, 3.8, 0.01, key="odd_fora")
+            col_odds4, col_odds5, col_odds6 = st.columns(3)
+            odd_over = col_odds4.number_input("Odd Over 2.5", 1.0, 50.0, 1.9, 0.01, key="odd_over")
+            odd_btts = col_odds5.number_input("Odd BTTS", 1.0, 50.0, 1.8, 0.01, key="odd_btts")
+            odd_esc = col_odds6.number_input("Odd Over 8.5 Esc.", 1.0, 50.0, 2.0, 0.01, key="odd_esc")
+            odds_dict = {
+                'odd_casa': odd_casa, 'odd_empate': odd_empate, 'odd_fora': odd_fora,
+                'odd_over': odd_over, 'odd_btts': odd_btts, 'odd_esc': odd_esc,
+            }
+
         if st.button("⚡ Calcular Análise Completa", use_container_width=True, type="primary"):
             dados = {
                 'time_casa': dados_casa['nome'], 'time_fora': dados_fora['nome'],
@@ -164,6 +177,7 @@ def render_manual():
                 'ovrall_casa': dados_casa['stats'], 'ovrall_fora': dados_fora['stats'],
                 'jogos_casa': jogos_casa_list, 'jogos_fora': jogos_fora_list,
                 'ic_casa': ic_casa, 'ic_fora': ic_fora,
+                'odds': odds_dict,
                 'media_gols_casa': st.session_state.get('media_gols_casa_liga', MEDIA_GOLS_CASA_LIGA),
                 'media_gols_fora': st.session_state.get('media_gols_fora_liga', MEDIA_GOLS_FORA_LIGA),
                 'media_ht_casa': 0.75, 'media_ht_fora': 0.65,
