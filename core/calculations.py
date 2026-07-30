@@ -23,7 +23,6 @@ except ImportError:
     CONTRAST_AVAILABLE = False
 
 def _build_stats_for_dimensions(ovrall_dict):
-    """Converte o dicionário do time para valores simples (usados pelas dimensões táticas)."""
     return {
         'gols_media': ovrall_dict.get('gols_media', 1.4),
         'gols_sofridos_media': ovrall_dict.get('gols_sofridos_media', 1.4),
@@ -50,7 +49,7 @@ def aproveitamento_contra_prateleira(jogos, prateleira_alvo):
         return (pontos / (len(total) * 3)) * 100 if total else 50.0
 
 def executar_manual(dados, pkl_path='calibration_params.pkl'):
-    # --- Benchmarks (manuais ou do pkl) ---
+    # --- Benchmarks ---
     if dados.get('benchmarks_usr'):
         benchmarks = dados['benchmarks_usr']
     else:
@@ -315,7 +314,7 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
         heatmap_img = generate_heatmap(deltas)
 
     # ================================================================
-    # EDGE SCORE (odds de mercado)
+    # EDGE SCORE
     # ================================================================
     odds = dados.get('odds', {})
     edges = {}
@@ -372,5 +371,7 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
         } if CONTRAST_AVAILABLE else None,
         'edges': edges,
         'benchmarks': benchmarks,
+        'stats_casa': dados.get('ovrall_casa', {}),
+        'stats_fora': dados.get('ovrall_fora', {}),
     }
     return res, None
