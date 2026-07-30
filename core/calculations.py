@@ -23,17 +23,18 @@ except ImportError:
     CONTRAST_AVAILABLE = False
 
 def _build_stats_for_dimensions(ovrall_dict):
-    """Converte o dicionário do time para o formato esperado pelas dimensões táticas."""
+    """Converte o dicionário do time para valores simples (usados pelas dimensões táticas)."""
     return {
-        'gols_media': {'mean': ovrall_dict.get('gols_media', 1.4), 'std': 0.5, 'lower_better': False},
-        'gols_sofridos_media': {'mean': ovrall_dict.get('gols_sofridos_media', 1.4), 'std': 0.5, 'lower_better': True},
-        'chutes_alvo_media': {'mean': ovrall_dict.get('finalizacoes_alvo_media', 4.5), 'std': 1.5, 'lower_better': False},
-        'chutes_alvo_sofridos_media': {'mean': ovrall_dict.get('finalizacoes_alvo_sofridas_media', 4.5), 'std': 1.5, 'lower_better': True},
-        'escanteios_media': {'mean': ovrall_dict.get('escanteios_media', 5.0), 'std': 1.5, 'lower_better': False},
-        'posse_media': {'mean': ovrall_dict.get('posse_media', 50.0), 'std': 10.0, 'lower_better': False},
-        'conversao': {'mean': ovrall_dict.get('conversao', 0.25), 'std': 0.1, 'lower_better': False},
-        'gols_escanteio': {'mean': ovrall_dict.get('gols_escanteio', 0.36), 'std': 0.2, 'lower_better': False},
-        'gols_sofridos_escanteio': {'mean': ovrall_dict.get('gols_sofridos_escanteio', 0.21), 'std': 0.2, 'lower_better': True},
+        'gols_media': ovrall_dict.get('gols_media', 1.4),
+        'gols_sofridos_media': ovrall_dict.get('gols_sofridos_media', 1.4),
+        'chutes_media': ovrall_dict.get('chutes_media', 12),
+        'chutes_alvo_media': ovrall_dict.get('finalizacoes_alvo_media', 4.5),
+        'chutes_alvo_sofridos_media': ovrall_dict.get('finalizacoes_alvo_sofridas_media', 4.5),
+        'escanteios_media': ovrall_dict.get('escanteios_media', 5.0),
+        'posse_media': ovrall_dict.get('posse_media', 50.0),
+        'conversao': ovrall_dict.get('conversao', 0.25),
+        'gols_escanteio': ovrall_dict.get('gols_escanteio', 0.36),
+        'gols_sofridos_escanteio': ovrall_dict.get('gols_sofridos_escanteio', 0.21),
     }
 
 def aproveitamento_contra_prateleira(jogos, prateleira_alvo):
