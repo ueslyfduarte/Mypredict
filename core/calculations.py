@@ -36,6 +36,21 @@ def _build_stats_for_dimensions(ovrall_dict):
         'gols_sofridos_escanteio': ovrall_dict.get('gols_sofridos_escanteio', 0.21),
     }
 
+def aproveitamento_contra_prateleira(jogos, prateleira_alvo):
+    """Retorna aproveitamento (0-100) contra uma prateleira específica.
+       Se houver menos de 3 jogos contra ela, retorna o aproveitamento geral dos últimos 10."""
+    if not jogos:
+        return 50.0
+    jogos_alvo = [j for j in jogos if j.get('prateleira_adv') == prateleira_alvo]
+    if len(jogos_alvo) >= 3:
+        pontos = sum(3 if j['resultado'] == 'V' else 1 if j['resultado'] == 'E' else 0 for j in jogos_alvo)
+        return (pontos / (len(jogos_alvo) * 3)) * 100
+    else:
+        # Média geral dos últimos 10 jogos (ou todos disponíveis)
+        total = jogos[:10]
+        pontos = sum(3 if j['resultado'] == 'V' else 1 if j['resultado'] == 'E' else 0 for j in total)
+        return (pontos / (len(total) * 3)) * 100 if total else 50.0
+
 def executar_manual(dados, pkl_path='calibration_params.pkl'):
     # --- Prateleiras ---
     prat_real_casa = obter_prateleira(dados['pos_casa'])
@@ -138,9 +153,15 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
             notas_fora[nome] = sum(x[2] for x in det_fora) / len(det_fora)
             detalhes_ovr[nome] = {'casa': det_casa, 'fora': det_fora}
 
-    # --- IC ---
-    ic_val_casa = calcular_ic(dados.get('ic_casa', {}))
-    ic_val_fora = calcular_ic(dados.get('ic_fora', {}))
+    # --- IC (com novo fator automático) ---
+    ic_casa = dados.get('ic_casa', {})
+    ic_fora = dados.get('ic_fora', {})
+    # Adiciona desempenho contra a prateleira do adversário automaticamente
+    ic_casa['contra_escalao_adversario'] = aproveitamento_contra_prateleira(dados.get('jogos_casa', []), prat_real_fora) / 100.0
+    ic_fora['contra_escalao_adversario'] = aproveitamento_contra_prateleira(dados.get('jogos_fora', []), prat_real_casa) / 100.0
+
+    ic_val_casa = calcular_ic(ic_casa)
+    ic_val_fora = calcular_ic(ic_fora)
 
     # --- MPV base ---
     mpv_base_casa = calcular_mpv(ima_casa, ovrall_val_casa, ic_val_casa)
@@ -260,11 +281,10 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
                               dados.get('ovrall_fora', {}).get('escanteios_sofridos_media', 5.0) or 5.0)
 
     # ================================================================
-    # PROBABILIDADES MÉDIAS (MÉDIA ENTRE ORIGINAL E AVANÇADO)
+    # PROBABILIDADES MÉDIAS
     # ================================================================
     def media_prob(orig, adv):
-        if adv is None:
-            return orig
+        if adv is None: return orig
         return (orig + adv) / 2.0
 
     p1 = media_prob(p1_orig, adv_probs_1x2['casa'])
@@ -287,22 +307,38 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
         heatmap_img = generate_heatmap(deltas)
 
     # ================================================================
+    # EDGE SCORE (comparação com odds de mercado)
+    # ================================================================
+    odds = dados.get('odds', {})
+    edges = {}
+    if odds.get('odd_casa') and odds.get('odd_empate') and odds.get('odd_fora'):
+        impl_c = 1 / odds['odd_casa']
+        impl_e = 1 / odds['odd_empate']
+        impl_f = 1 / odds['odd_fora']
+        total_impl = impl_c + impl_e + impl_f
+        edges['edge_casa'] = p1 - (impl_c / total_impl)
+        edges['edge_empate'] = pX - (impl_e / total_impl)
+        edges['edge_fora'] = p2 - (impl_f / total_impl)
+    if odds.get('odd_over'):
+        edges['edge_over'] = over25 - (1 / odds['odd_over'])
+    if odds.get('odd_btts'):
+        edges['edge_btts'] = btts - (1 / odds['odd_btts'])
+    if odds.get('odd_esc'):
+        edges['edge_esc'] = esc - (1 / odds['odd_esc'])
+
+    # ================================================================
     # RESULTADO
     # ================================================================
     res = {
         'time_casa': dados['time_casa'], 'time_fora': dados['time_fora'],
-        # Probabilidades médias (principais)
         'p1': p1, 'pX': pX, 'p2': p2,
         'over25': over25, 'btts': btts, 'gol_ht': gol_ht, 'esc': esc,
-        # Valores originais (para referência)
         'p1_orig': p1_orig, 'pX_orig': pX_orig, 'p2_orig': p2_orig,
         'over25_orig': over25_orig, 'btts_orig': btts_orig,
         'gol_ht_orig': gol_ht_orig, 'esc_orig': esc_orig,
-        # Avançados (para referência)
         'p1_adv': adv_probs_1x2['casa'], 'pX_adv': adv_probs_1x2['empate'], 'p2_adv': adv_probs_1x2['fora'],
         'over25_adv': adv_over25, 'btts_adv': adv_btts,
         'gol_ht_adv': adv_ht, 'esc_adv': adv_esc,
-        # Métricas
         'ima_casa': ima_casa, 'ima_fora': ima_fora,
         'mpv_casa': mpv_casa, 'mpv_fora': mpv_fora,
         'ovrall_casa': ovrall_val_casa, 'ovrall_fora': ovrall_val_fora,
@@ -324,5 +360,6 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
             'critical_routes': routes,
             'heatmap': heatmap_img,
         } if CONTRAST_AVAILABLE else None,
+        'edges': edges,
     }
     return res, None
