@@ -39,42 +39,37 @@ def radar_chart(casa_scores, fora_scores):
     buf.seek(0)
     return base64.b64encode(buf.read()).decode()
 
-def field_heatmap_annotated(deltas, critical_routes=None):
+def field_heatmap_annotated(dimensions_casa, dimensions_fora, deltas):
     fig, ax = plt.subplots(figsize=(10, 7))
     ax.set_xlim(0, 100)
     ax.set_ylim(0, 68)
     ax.set_facecolor('#1a472a')
-    # Linhas do campo
-    ax.plot([0,0,100,100,0], [0,68,68,0,0], color='white', lw=2)
-    ax.plot([50,50], [0,68], color='white', lw=1.5)
-    ax.plot([0,16.5],[13.84,13.84], color='white'); ax.plot([16.5,16.5],[13.84,54.16], color='white')
-    ax.plot([0,16.5],[54.16,54.16], color='white')
-    ax.plot([83.5,100],[13.84,13.84], color='white'); ax.plot([83.5,83.5],[13.84,54.16], color='white')
-    ax.plot([83.5,100],[54.16,54.16], color='white')
-    ax.add_patch(plt.Circle((50,34), 9.15, fill=False, color='white'))
+
     zones = {
-        'ataque_posicional': (70,20,30,28, "Ataque\nPosicional"),
-        'ataque_transicao': (40,15,30,38, "Transição"),
-        'defesa_organizada': (0,20,30,28, "Defesa\nOrganizada"),
-        'bola_parada_ofensiva': (85,0,15,68, "Bola\nParada"),
-        'controle_meio_campo': (30,15,40,38, "Meio-Campo"),
-        'pressao_alta': (60,0,40,68, "Pressão\nAlta"),
-        'resistencia_pressao': (0,0,30,68, "Resist.\nPressão"),
+        'ataque_posicional': (70, 20, 30, 28, "Ataque\nPosicional", 'ataque_posicional'),
+        'ataque_transicao': (40, 15, 30, 38, "Transição", 'ataque_transicao'),
+        'defesa_organizada': (0, 20, 30, 28, "Defesa\nOrganizada", 'defesa_organizada'),
+        'bola_parada_ofensiva': (85, 0, 15, 68, "Bola\nParada", 'bola_parada_ofensiva'),
+        'controle_meio_campo': (30, 15, 40, 38, "Meio-Campo", 'controle_meio_campo'),
     }
-    for dim, delta in deltas.items():
-        if dim in zones:
-            x,y,w,h,label = zones[dim]
-            intensity = min(abs(delta)/30, 1.0)
-            color = 'blue' if delta>0 else 'red'
-            rect = plt.Rectangle((x,y), w, h, color=color, alpha=intensity*0.5)
-            ax.add_patch(rect)
-            ax.text(x+w/2, y+h/2, f"{label}\n{delta:+.1f}", ha='center', va='center', fontsize=6, color='white', fontweight='bold')
-    if critical_routes:
-        for i, (dim, delta, _) in enumerate(critical_routes[:3]):
-            if dim in zones:
-                x,y,w,h,_ = zones[dim]
-                ax.annotate('', xy=(x+w/2, y+h/2), xytext=(50,34),
-                            arrowprops=dict(arrowstyle='->', color='yellow', lw=2))
+
+    for dim_name, (x, y, w, h, label, dim_key) in zones.items():
+        delta = deltas.get(dim_key, 0)
+        intensity = min(abs(delta) / 30, 1.0) if delta else 0.2
+        color = 'blue' if delta > 0 else 'red' if delta < 0 else 'gray'
+        rect = plt.Rectangle((x, y), w, h, color=color, alpha=intensity * 0.4)
+        ax.add_patch(rect)
+        ax.text(x + w/2, y + h/2, f"{label}\n{delta:+.1f}", ha='center', va='center', fontsize=7, color='white', fontweight='bold')
+
+    # Linhas do campo por cima
+    for line in [
+        [(0,0),(0,68)], [(0,68),(100,68)], [(100,68),(100,0)], [(100,0),(0,0)],
+        [(50,0),(50,68)], [(0,16.5),(16.5,16.5)], [(16.5,16.5),(16.5,51.5)], [(0,51.5),(16.5,51.5)],
+        [(83.5,16.5),(100,16.5)], [(83.5,16.5),(83.5,51.5)], [(83.5,51.5),(100,51.5)]
+    ]:
+        ax.plot([p[0] for p in line], [p[1] for p in line], color='white', lw=1.5, zorder=10)
+    ax.add_patch(plt.Circle((50, 34), 9.15, fill=False, color='white', lw=1.5, zorder=10))
+
     ax.axis('off')
     buf = BytesIO()
     plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', transparent=True)
@@ -150,7 +145,6 @@ def show_results_manual(res):
     nome_casa = res['time_casa']
     nome_fora = res['time_fora']
 
-    # CSS com classes condicionais
     st.markdown("""
     <style>
         .stApp { background-color: #0E1117; color: #FFFFFF; }
@@ -167,14 +161,12 @@ def show_results_manual(res):
     </style>
     """, unsafe_allow_html=True)
 
-    # Abas (Resumo no final)
     tabs = st.tabs(["🔬 Pilares", "🧪 Contraste Tático", "🎯 Mercados", "📋 Resumo & Análise"])
 
     # ====================== ABA 1: PILARES ======================
     with tabs[0]:
         st.markdown("## 🔬 Pilares do MyPredict")
 
-        # IMA
         st.markdown("### ⚡ IMA – Índice de Momentum Atual")
         col_ima1, col_ima2 = st.columns(2)
         winner_ima = nome_casa if res['ima_casa'] >= res['ima_fora'] else nome_fora
@@ -199,7 +191,6 @@ def show_results_manual(res):
             else:
                 st.info("Menos de 5 jogos; IMA assume 50.0.")
 
-        # OVRall
         st.markdown("### 📈 OVRall – Desempenho Estrutural")
         col_ovr1, col_ovr2 = st.columns(2)
         winner_ovr = nome_casa if res['ovrall_casa'] >= res['ovrall_fora'] else nome_fora
@@ -233,7 +224,6 @@ def show_results_manual(res):
             else:
                 st.info("Detalhamento OVRall indisponível.")
 
-        # IC (engordado)
         st.markdown("### 🧠 IC – Índice de Contexto")
         col_ic1, col_ic2 = st.columns(2)
         winner_ic = nome_casa if res['ic_casa'] >= res['ic_fora'] else nome_fora
@@ -246,10 +236,9 @@ def show_results_manual(res):
             st.markdown(f"<div class='{card_class}'><span class='big-number'>{res['ic_fora']:.1f}</span><br><small>{nome_fora}</small></div>", unsafe_allow_html=True)
             st.progress(res['ic_fora'] / 100)
         with st.expander("🧠 Detalhamento do IC"):
-            st.write("Fatores: confronto direto, fator casa/visitante, odds.")
+            st.write("Fatores: confronto direto (manual), desempenho contra a prateleira do adversário (automático), fator casa/visitante (manual).")
             st.write(f"{nome_casa}: {res['ic_casa']:.1f} | {nome_fora}: {res['ic_fora']:.1f}")
 
-        # Superação
         sup_casa = res.get('superacao_casa', 0)
         sup_fora = res.get('superacao_fora', 0)
         st.markdown(f"""
@@ -273,7 +262,7 @@ def show_results_manual(res):
                     st.image(f"data:image/png;base64,{radar_img}", use_container_width=True)
             with col_mapa:
                 st.markdown("### 🗺️ Mapa de Calor")
-                heat_img = field_heatmap_annotated(tac['deltas'], tac.get('critical_routes'))
+                heat_img = field_heatmap_annotated(tac['dimensions_casa'], tac['dimensions_fora'], tac['deltas'])
                 if heat_img:
                     st.image(f"data:image/png;base64,{heat_img}", use_container_width=True, caption="Azul: vantagem casa, Vermelho: vantagem fora")
 
@@ -319,38 +308,52 @@ def show_results_manual(res):
         st.markdown("## 🎯 Probabilidades de Mercado")
         st.caption("Média entre modelo original e avançado")
 
-        # 1X2 com destaque condicional
         probs_1x2 = {'Casa': res['p1'], 'Empate': res['pX'], 'Fora': res['p2']}
         max_key = max(probs_1x2, key=probs_1x2.get)
         cols_1x2 = st.columns(3)
+        edges = res.get('edges', {})
         for i, (key, prob) in enumerate(probs_1x2.items()):
             card_class = "card-winner" if key == max_key else "card-loser"
             emoji = {"Casa":"🏠", "Empate":"🤝", "Fora":"🏟️"}[key]
+            edge_val = edges.get(f"edge_{key.lower()}", None)
+            edge_html = ""
+            if edge_val is not None:
+                if edge_val > 0.05:
+                    edge_html = f"<div class='selo-badge' style='background:#FFD700; color:#000;'>🟢 MyPredict Edge ({edge_val:+.1%})</div>"
+                elif edge_val > 0:
+                    edge_html = f"<div class='selo-badge' style='background:#00FF7F; color:#000;'>🟢 Value ({edge_val:+.1%})</div>"
+                else:
+                    edge_html = f"<div class='selo-badge' style='background:#aaa; color:#000;'>{edge_val:+.1%}</div>"
             with cols_1x2[i]:
                 st.markdown(f"""
                 <div class="{card_class}">
                     <div style="font-size:1.2rem;">{emoji} {key}</div>
                     <div class="big-number">{prob:.1%}</div>
+                    {edge_html}
                 </div>
                 """, unsafe_allow_html=True)
 
-        # Mercados especiais
         st.markdown("### 🎲 Mercados Especiais")
         mercados = [
-            ("Over 2.5 Gols", res['over25']),
-            ("Ambas Marcam", res['btts']),
-            ("Gol 1º Tempo", res['gol_ht']),
-            ("Over 8.5 Escanteios", res['esc']),
+            ("Over 2.5 Gols", res['over25'], edges.get('edge_over')),
+            ("Ambas Marcam", res['btts'], edges.get('edge_btts')),
+            ("Gol 1º Tempo", res['gol_ht'], None),
+            ("Over 8.5 Escanteios", res['esc'], edges.get('edge_esc')),
         ]
         cols_m = st.columns(4)
-        for i, (nome, prob) in enumerate(mercados):
+        max_prob = max([m[1] for m in mercados])
+        for i, (nome, prob, edge_val) in enumerate(mercados):
             selo = ""
             if prob >= 0.70: selo = "🥇 GOLD"
             elif prob >= 0.60: selo = "✅ Value"
             elif prob >= 0.50: selo = "🔵 Favorito"
             bg = "#FFD700" if "GOLD" in selo else "#4CAF50" if "Value" in selo else "#2196F3" if "Favorito" in selo else "#555"
-            # Define winner/loser para mercados (maior prob ganha destaque)
-            max_prob = max([m[1] for m in mercados])
+            edge_html = ""
+            if edge_val is not None:
+                if edge_val > 0.05:
+                    edge_html = f"<div class='selo-badge' style='background:#FFD700; color:#000;'>🟢 MyPredict Edge ({edge_val:+.1%})</div>"
+                elif edge_val > 0:
+                    edge_html = f"<div class='selo-badge' style='background:#00FF7F; color:#000;'>🟢 Value ({edge_val:+.1%})</div>"
             card_class = "card-winner" if prob == max_prob else "card-loser"
             with cols_m[i]:
                 st.markdown(f"""
@@ -358,10 +361,11 @@ def show_results_manual(res):
                     <div style="font-size:0.9rem;">{nome}</div>
                     <div class="big-number">{prob:.1%}</div>
                     <div class="selo-badge" style="background:{bg}; color:#000;">{selo if selo else '⚪'}</div>
+                    {edge_html}
                 </div>
                 """, unsafe_allow_html=True)
 
-    # ====================== ABA 4: RESUMO & ANÁLISE (FINAL) ======================
+    # ====================== ABA 4: RESUMO & ANÁLISE ======================
     with tabs[3]:
         st.markdown(f"<h1 style='text-align:center;'>{nome_casa} vs {nome_fora}</h1>", unsafe_allow_html=True)
         mpv_casa, mpv_fora = res['mpv_casa'], res['mpv_fora']
