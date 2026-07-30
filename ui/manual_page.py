@@ -51,11 +51,11 @@ def render_manual():
         st.session_state.modo_livre = st.checkbox(
             "🔓 Modo Livre (ignorar modelo calibrado, usar apenas dados manuais)",
             value=st.session_state.get('modo_livre', False),
-            help="Quando ativado, as probabilidades são calculadas somente com as fórmulas originais, sem influência do modelo da Premier League."
+            help="Quando ativado, as probabilidades são calculadas somente com as fórmulas originais."
         )
 
         with st.expander("📊 Parâmetros da Liga (personalize)", expanded=False):
-            st.caption("Defina os valores de referência da competição. Eles serão usados nos cálculos de OVRall e dimensões táticas.")
+            st.caption("Defina os valores de referência da competição.")
             col_bench1, col_bench2, col_bench3 = st.columns(3)
             bench_gols_casa = col_bench1.number_input("Média Gols Casa", 0.0, 5.0, MEDIA_GOLS_CASA_LIGA, key="bench_gols_casa")
             bench_gols_fora = col_bench2.number_input("Média Gols Fora", 0.0, 5.0, MEDIA_GOLS_FORA_LIGA, key="bench_gols_fora")
@@ -99,16 +99,37 @@ def render_manual():
                 gols_ht = c1.number_input("⏱️ Gols HT", 0.0, 5.0, 0.8, 0.1, key=f"{key_prefix}_gols_ht")
                 btts_pct = c2.number_input("🤝 BTTS %", 0.0, 100.0, 50.0, 5.0, key=f"{key_prefix}_btts") / 100.0
 
+                # Estatísticas avançadas
+                stats = {
+                    'gols_media': gols, 'gols_sofridos_media': gols_s,
+                    'posse_media': posse, 'finalizacoes_alvo_media': fin,
+                    'xg_media': xg, 'escanteios_media': esc,
+                    'gols_ht_media': gols_ht, 'btts_pct': btts_pct,
+                }
+                with st.expander("📊 Estatísticas Avançadas (opcional)", expanded=False):
+                    st.caption("Preencha com os dados reais do time. Se deixar em branco, serão usados valores padrão da liga.")
+                    adv1, adv2, adv3 = st.columns(3)
+                    stats['desarmes_intercep_media'] = adv1.number_input("Desarmes/Intercep. (média)", 0.0, 50.0, 15.0, 0.5, key=f"{key_prefix}_desarmes")
+                    stats['passes_certos_pct'] = adv2.number_input("Passes Certos (%)", 0.0, 100.0, 78.0, 1.0, key=f"{key_prefix}_passes_certos")
+                    stats['passes_chave_media'] = adv3.number_input("Passes Chave (média)", 0.0, 20.0, 2.0, 0.5, key=f"{key_prefix}_passes_chave")
+                    stats['assistencias_media'] = adv1.number_input("Assistências (média)", 0.0, 10.0, 1.2, 0.1, key=f"{key_prefix}_assistencias")
+                    stats['chutes_media'] = adv2.number_input("Chutes Totais (média)", 0.0, 30.0, 12.0, 0.5, key=f"{key_prefix}_chutes")
+                    stats['xga_media'] = adv3.number_input("xGA (média)", 0.0, 5.0, 1.2, 0.1, key=f"{key_prefix}_xga")
+                    stats['finalizacoes_alvo_sofridas_media'] = adv1.number_input("Finalizações Alvo Sofridas (média)", 0.0, 20.0, 4.0, 0.5, key=f"{key_prefix}_fin_alvo_sofridas")
+                    stats['desvio_pontos'] = adv2.number_input("Desvio Padrão de Pontos", 0.0, 3.0, 0.5, 0.1, key=f"{key_prefix}_desvio_pontos")
+                    stats['desvio_gols_pro'] = adv3.number_input("Desvio Padrão Gols Pró", 0.0, 3.0, 0.4, 0.1, key=f"{key_prefix}_desvio_gols_pro")
+                    stats['desvio_gols_sofridos'] = adv1.number_input("Desvio Padrão Gols Sofridos", 0.0, 3.0, 0.4, 0.1, key=f"{key_prefix}_desvio_gols_sofridos")
+                    stats['clean_sheets_pct'] = adv2.number_input("Clean Sheets (%)", 0.0, 100.0, 30.0, 1.0, key=f"{key_prefix}_clean_sheets")
+                    stats['pontos_pos_desvantagem_media'] = adv3.number_input("Pontos após Desvantagem (média)", 0.0, 3.0, 1.0, 0.1, key=f"{key_prefix}_pontos_pos_desvantagem")
+                    stats['gols_ultimos_15min_media'] = adv1.number_input("Gols Últimos 15min (média)", 0.0, 3.0, 0.3, 0.1, key=f"{key_prefix}_gols_15min")
+                    stats['pontos_apos_derrota_media'] = adv2.number_input("Pontos após Derrota (média)", 0.0, 3.0, 1.0, 0.1, key=f"{key_prefix}_pontos_apos_derrota")
+                    stats['diff_aprov_casa_fora'] = adv3.number_input("Dif. Aprov. Casa vs Fora (%)", 0.0, 100.0, 5.0, 1.0, key=f"{key_prefix}_diff_aprov")
+                    stats['aprov_viradas_favor'] = adv1.number_input("Viradas a Favor (%)", 0.0, 100.0, 30.0, 1.0, key=f"{key_prefix}_viradas_favor")
+                    stats['aprov_viradas_contra'] = adv2.number_input("Viradas Contra (%)", 0.0, 100.0, 30.0, 1.0, key=f"{key_prefix}_viradas_contra")
+
                 return {
                     'nome': nome, 'pos': pos, 'prat_proj': prat_proj,
-                    'stats': {
-                        'gols_media': gols, 'gols_sofridos_media': gols_s,
-                        'posse_media': posse, 'finalizacoes_alvo_media': fin,
-                        'xg_media': xg, 'escanteios_media': esc,
-                        'gols_ht_media': gols_ht, 'btts_pct': btts_pct,
-                        'conversao': 0.25, 'desvio_pontos': 0.5,
-                        'pontos_pos_desvantagem_media': 1.0,
-                    }
+                    'stats': stats,
                 }
 
         with col_casa:
@@ -180,7 +201,7 @@ def render_manual():
                     'fator_casa': st.slider("Aproveitamento como visitante (%)", 0, 100, 40, key="ic_fc_f") / 100,
                 }
 
-            st.markdown("**Odds de Mercado (opcional, apenas para Edge)**")
+            st.markdown("**Odds de Mercado (opcional)**")
             col_odds1, col_odds2, col_odds3 = st.columns(3)
             odd_casa = col_odds1.number_input("Odd Casa (1X2)", 1.0, 50.0, 2.0, 0.01, key="odd_casa")
             odd_empate = col_odds2.number_input("Odd Empate", 1.0, 50.0, 3.5, 0.01, key="odd_empate")
