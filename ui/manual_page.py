@@ -115,7 +115,7 @@ def render_manual():
             dados_casa = form_time('casa', 'c')
             st.markdown("**📋 Últimos 10 Jogos**")
             default_jogos = pd.DataFrame([
-                {"Res.": "V", "Adversário": "", "Prat. Adv.": "Media", "GP": 0, "GC": 0}
+                {"Res.": "V", "Adversário": "", "Prat. Adv.": "Media", "GP": 0, "GC": 0, "Mandante": True}
                 for _ in range(10)
             ])
             jogos_casa_df = st.data_editor(
@@ -123,6 +123,7 @@ def render_manual():
                 column_config={
                     "Res.": st.column_config.SelectboxColumn(options=["V", "E", "D"]),
                     "Prat. Adv.": st.column_config.SelectboxColumn(options=["Elite", "Alta", "Media", "Baixa", "Critica"]),
+                    "Mandante": st.column_config.CheckboxColumn("Casa?", default=True),
                 },
                 num_rows="fixed",
                 key="casa_jogos",
@@ -135,13 +136,13 @@ def render_manual():
                 j['prateleira_adv'] = j.pop('Prat. Adv.')
                 j['gols_pro'] = j.pop('GP')
                 j['gols_contra'] = j.pop('GC')
-                j['mandante'] = True
+                j['mandante'] = j.pop('Mandante')
 
         with col_fora:
             dados_fora = form_time('fora', 'f')
             st.markdown("**📋 Últimos 10 Jogos**")
             default_jogos_f = pd.DataFrame([
-                {"Res.": "V", "Adversário": "", "Prat. Adv.": "Media", "GP": 0, "GC": 0}
+                {"Res.": "V", "Adversário": "", "Prat. Adv.": "Media", "GP": 0, "GC": 0, "Mandante": False}
                 for _ in range(10)
             ])
             jogos_fora_df = st.data_editor(
@@ -149,6 +150,7 @@ def render_manual():
                 column_config={
                     "Res.": st.column_config.SelectboxColumn(options=["V", "E", "D"]),
                     "Prat. Adv.": st.column_config.SelectboxColumn(options=["Elite", "Alta", "Media", "Baixa", "Critica"]),
+                    "Mandante": st.column_config.CheckboxColumn("Casa?", default=False),
                 },
                 num_rows="fixed",
                 key="fora_jogos",
@@ -161,7 +163,7 @@ def render_manual():
                 j['prateleira_adv'] = j.pop('Prat. Adv.')
                 j['gols_pro'] = j.pop('GP')
                 j['gols_contra'] = j.pop('GC')
-                j['mandante'] = False
+                j['mandante'] = j.pop('Mandante')
 
         with st.expander("🧠 Ajustes de Contexto (opcional)"):
             col_ic1, col_ic2 = st.columns(2)
