@@ -1,8 +1,7 @@
-# ui/manual_page.py — Modo Manual escalável com Central de Times e Ligas
-st.write("✅ Manual page carregada com sucesso!")
 import streamlit as st
 import pandas as pd
 import os
+import random
 from ui.styles import injetar_css
 from ui.components import show_results_manual
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA
@@ -10,7 +9,7 @@ from core.calculations import executar_manual
 from core.ratings import obter_prateleira
 
 # ============================================================
-# FRASES INSPIRADORAS (para cabeçalho e resultados)
+# FRASES INSPIRADORAS
 # ============================================================
 FRASES_CABECALHO = [
     "Futebol é a arte do imprevisível. Mas o imprevisível também tem padrões.",
@@ -27,36 +26,22 @@ FRASES_RESULTADOS = [
 ]
 
 # ============================================================
-# MAPA DE LIGAS → ARQUIVO .PKL (adicione novas ligas aqui)
+# MAPA DE LIGAS → ARQUIVO .PKL
 # ============================================================
 LIGAS_DISPONIVEIS = {
     "Premier League": "calibration_premier.pkl",
     "La Liga": "calibration_laliga.pkl",
     "Brasileirão": "calibration_brasileirao.pkl",
-    # Outras ligas podem ser adicionadas conforme gerar os .pkl
 }
-
-# ============================================================
-# FUNÇÕES AUXILIARES
-# ============================================================
-def gerar_linha_tempo(jogos):
-    """Retorna string de bolinhas coloridas para os últimos 10 jogos."""
-    if not jogos:
-        return ""
-    return ' '.join(['🟢' if j['resultado']=='V' else ('🟡' if j['resultado']=='E' else '🔴') for j in jogos[:10]])
-
-def pegar_valor(dic, chave, padrao):
-    v = dic.get(chave)
-    return v if v is not None else padrao
 
 # ============================================================
 # INTERFACE PRINCIPAL
 # ============================================================
 def render_manual():
-    injetar_css()
+    # Por enquanto, vamos desabilitar o CSS customizado para garantir que a tela não fique preta.
+    # injetar_css()
     
     # Cabeçalho inspirador
-    import random
     frase = random.choice(FRASES_CABECALHO)
     st.markdown(f"""
     <div style="text-align:center; padding: 20px 0 10px 0;">
@@ -83,7 +68,7 @@ def render_manual():
                 st.session_state.pkl_path = pkl_file
                 st.success(f"Liga '{liga_nome}' carregada com sucesso! Modelo pronto para uso.")
             else:
-                st.warning(f"Arquivo '{pkl_file}' não encontrado. O modelo padrão será usado.")
+                st.warning(f"Arquivo '{pkl_file}' não encontrado. Usando modelo padrão.")
                 st.session_state.liga_ativa = liga_nome
                 st.session_state.pkl_path = 'calibration_params.pkl'  # fallback
         
@@ -103,7 +88,6 @@ def render_manual():
             prat_proj = st.selectbox("Prateleira Projetada", ["Elite", "Alta", "Media", "Baixa", "Critica"],
                                      help="Expectativa antes da temporada (usada apenas para o fator de superação).")
             
-            # Estatísticas OVRall
             st.markdown("**📊 Estatísticas do Time (médias por jogo)**")
             col1, col2, col3 = st.columns(3)
             gols_media = col1.number_input("⚽ Gols Marcados", 0.0, 5.0, 1.4, 0.1, key="ed_gols")
@@ -113,7 +97,6 @@ def render_manual():
             xg = col2.number_input("📈 xG", 0.0, 4.0, 1.2, 0.1, key="ed_xg")
             escanteios = col3.number_input("🏁 Escanteios", 0.0, 15.0, 5.0, 0.5, key="ed_esc")
             
-            # Últimos jogos (tabela dinâmica)
             st.markdown("**📋 Últimos 10 Jogos**")
             st.caption("Prateleira do adversário: REAL (posição na tabela no momento do jogo).")
             num_jogos = st.slider("Quantos jogos adicionar?", 3, 10, 5, key="ed_num_jogos")
@@ -131,7 +114,7 @@ def render_manual():
                     'prateleira_adv': prat_adv,
                     'gols_pro': gols_pro,
                     'gols_contra': gols_contra,
-                    'mandante': True  # simplificação: assumimos que o time é mandante nos jogos em casa
+                    'mandante': True
                 })
             
             if st.button("Salvar Time", use_container_width=True):
@@ -147,25 +130,24 @@ def render_manual():
                             'finalizacoes_alvo_media': finalizacoes,
                             'xg_media': xg,
                             'escanteios_media': escanteios,
-                            'conversao': 0.25,  # pode ser calculado
-                            'desvio_pontos': 0.5, # placeholder
+                            'conversao': 0.25,
+                            'desvio_pontos': 0.5,
                             'pontos_pos_desvantagem_media': 1.0,
                         },
                         'jogos_casa': jogos_list,
-                        'jogos_fora': jogos_list,  # mesma lista para simplificar
+                        'jogos_fora': jogos_list,
                     }
                     st.success(f"Time '{nome_time}' salvo!")
                 else:
                     st.error("Informe o nome do time.")
         
-        # Lista de times cadastrados
         st.markdown("---")
         st.markdown("### Times Cadastrados")
         if st.session_state.times:
             for nome, data in st.session_state.times.items():
                 st.write(f"**{nome}** | Posição: {data['pos_casa']} | Projetada: {data['prat_casa']}")
         else:
-            st.info("Nenhum time cadastrado ainda. Use o formulário acima.")
+            st.info("Nenhum time cadastrado ainda.")
     
     # ================================================================
     # ABA 3: ANALISAR JOGO
@@ -186,11 +168,9 @@ def render_manual():
             st.error("Selecione times diferentes.")
             return
         
-        # Dados dos times
         dados_casa = st.session_state.times[time_casa_nome]
         dados_fora = st.session_state.times[time_fora_nome]
         
-        # Ajustes de contexto (IC)
         with st.expander("🧠 Ajustes de Contexto (opcional)"):
             st.markdown("Preencha para melhorar a precisão do Índice de Contexto.")
             ic_casa = {}
@@ -199,9 +179,7 @@ def render_manual():
             ic_fora['confronto_direto'] = 1.0 - ic_casa['confronto_direto']
             ic_casa['fator_casa'] = st.slider(f"Aproveitamento como mandante (%)", 0, 100, 60) / 100
             ic_fora['fator_casa'] = st.slider(f"Aproveitamento como visitante (%)", 0, 100, 40) / 100
-            # Outros fatores podem ser adicionados aqui
         
-        # Montar dicionário para executar_manual
         dados = {
             'time_casa': time_casa_nome,
             'time_fora': time_fora_nome,
@@ -231,5 +209,4 @@ def render_manual():
                 st.error(err)
             else:
                 show_results_manual(res)
-                # Frase aleatória de resultado
                 st.info(random.choice(FRASES_RESULTADOS))
