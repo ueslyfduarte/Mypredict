@@ -10,7 +10,7 @@ import altair as alt
 from config import THRESHOLD_GOLD, THRESHOLD_VALUE, THRESHOLD_FAVORITO
 
 # ------------------------------------------------------------
-# GRÁFICOS (mantidos)
+# GRÁFICOS
 # ------------------------------------------------------------
 def radar_chart(casa_scores, fora_scores):
     labels = [dim for dim in casa_scores.keys() if dim in fora_scores.keys()]
@@ -77,7 +77,7 @@ def field_heatmap_annotated(dimensions_casa, dimensions_fora, deltas):
     return base64.b64encode(buf.read()).decode()
 
 # ------------------------------------------------------------
-# ANÁLISE DESCRITIVA AUTOMÁTICA
+# ANÁLISE DESCRITIVA AUTOMÁTICA (corrigida)
 # ------------------------------------------------------------
 def gerar_analise_descritiva(res):
     nome_casa = res['time_casa']
@@ -130,8 +130,10 @@ def gerar_analise_descritiva(res):
     if res.get('tactical') and res['tactical']['critical_routes']:
         texto += f"\n**🧪 Contraste Tático:** "
         for dim, delta, _ in res['tactical']['critical_routes'][:2]:
-            if delta > 0: texto += f"O {nome_casa} leva vantagem em {dim} (+{delta:.1f}). "
-            else: texto += f"O {nome_fora} leva vantagem em {dim} ({delta:.1f}). "
+            if delta > 0:
+                texto += f"O {nome_casa} leva vantagem em {dim} (+{delta:.1f}). "
+            else:
+                texto += f"O {nome_fora} leva vantagem em {dim} ({delta:.1f}). "
 
     texto += f"\n**🎯 Probabilidades:** O modelo estima {res['p1']:.1%} de vitória do {nome_casa}, {res['pX']:.1%} de empate e {res['p2']:.1%} de vitória do {nome_fora}. "
     texto += f"No mercado de gols, Over 2.5 tem {res['over25']:.1%} de chance; BTTS, {res['btts']:.1%}. "
@@ -157,6 +159,7 @@ def show_results_manual(res):
         .card-loser .big-number, .card-loser div { color: #FFD700 !important; }
         .card-loser small { color: #aaa !important; }
         .selo-badge { display: inline-block; padding: 8px 20px; border-radius: 25px; font-weight: bold; font-size: 1.1rem; margin-top:8px; }
+        .edge-badge { display: inline-block; padding: 6px 15px; border-radius: 20px; font-weight: bold; font-size: 0.9rem; margin-top:5px; border: 1px solid #000; }
         hr { border-color: #333; }
     </style>
     """, unsafe_allow_html=True)
@@ -247,6 +250,7 @@ def show_results_manual(res):
             <span style="color:{'#00FF7F' if sup_casa >= 0 else '#FF4D4D'};">{nome_casa} {sup_casa:+.1f} pts</span> |
             <span style="color:{'#00FF7F' if sup_fora >= 0 else '#FF4D4D'};">{nome_fora} {sup_fora:+.1f} pts</span>
         </div>
+        <div style="text-align:center; font-size:0.8rem; color:#aaa;">Superação: diferença entre a posição real e a projetada.</div>
         """, unsafe_allow_html=True)
 
     # ====================== ABA 2: CONTRASTE TÁTICO ======================
@@ -308,21 +312,30 @@ def show_results_manual(res):
                 """, unsafe_allow_html=True)
 
             st.markdown("### 🎯 Rotas Críticas")
-            for dim, delta, interp in tac.get('critical_routes', []):
-                if delta > 0:
-                    color = '#FFD700'; icon = '⚔️'; vant = f"Vantagem {nome_casa}"
-                else:
-                    color = '#FF4D4D'; icon = '🛡️'; vant = f"Vantagem {nome_fora}"
-                st.markdown(f"""
-                <div class="card" style="border-left: 5px solid {color}; padding:10px; margin:10px 0; text-align:left;">
-                    <span style="font-size:1.2rem;">{icon} {interp}</span><br>
-                    <small style="color:#aaa;">{vant}</small>
-                </div>
-                """, unsafe_allow_html=True)
+            if tac.get('critical_routes'):
+                pontos_casa = []
+                pontos_fora = []
+                for dim, delta, _ in tac['critical_routes']:
+                    if delta > 0:
+                        pontos_casa.append(f"⚔️ {dim}: +{delta:.1f}")
+                    else:
+                        pontos_fora.append(f"🛡️ {dim}: {delta:.1f}")
+                if pontos_casa:
+                    st.markdown(f"**Pontos fortes do {nome_casa}:**")
+                    for p in pontos_casa:
+                        st.success(p)
+                if pontos_fora:
+                    st.markdown(f"**Pontos fortes do {nome_fora}:**")
+                    for p in pontos_fora:
+                        st.error(p)
+                if not pontos_casa and not pontos_fora:
+                    st.info("Nenhuma rota crítica com diferença significativa.")
+            else:
+                st.info("Nenhuma rota crítica com diferença significativa.")
         else:
             st.info("Dados táticos indisponíveis. Verifique o modelo calibrado.")
 
-    # ====================== ABA 3: CENÁRIOS & ESTILOS (COM IMPACTO QUANTITATIVO) ======================
+    # ====================== ABA 3: CENÁRIOS & ESTILOS ======================
     with tabs[2]:
         st.markdown("## 🔮 Cenários & Estilos de Jogo")
         if res.get('estilo_casa') and res.get('estilo_fora'):
@@ -332,33 +345,17 @@ def show_results_manual(res):
             with col_estilo1:
                 st.markdown(f"### 🏠 {nome_casa}")
                 st.markdown(f"**Estilo:** {estilo_casa['estilo']}")
-                st.markdown(f"- Posse Efetiva: {estilo_casa['posse_efetiva']:.2f} gols/%posse")
-                st.markdown(f"- Eficiência de Finalização: {estilo_casa['eficiencia_finalizacao']:.2f}")
-                st.markdown(f"- Vulnerabilidade em Transição: {estilo_casa['vulnerabilidade_transicao']:.2f}")
-                st.markdown(f"- Dependência de Bola Parada: {estilo_casa['dependencia_bola_parada']:.2%}")
-                conf = res.get('confianca_casa', 50)
-                st.markdown(f"**🔒 Confiança do Modelo:** {conf:.0f}/100")
-                st.progress(conf / 100)
-                if res.get('curva_casa'):
-                    st.markdown("**📈 Evolução do IMA (últimos recortes)**")
-                    curva = res['curva_casa']
-                    df_curva = pd.DataFrame({'Recorte': ['10J', '5J', '3J'], 'Pontuação': curva})
-                    st.line_chart(df_curva.set_index('Recorte'), use_container_width=True)
+                st.markdown(f"- Posse Efetiva: {estilo_casa['posse_efetiva']:.2f} (gols/%posse)")
+                st.markdown(f"- Eficiência de Finalização: {estilo_casa['eficiencia_finalizacao']:.2f} (gols/finalizações alvo)")
+                st.markdown(f"- Vulnerabilidade em Transição: {estilo_casa['vulnerabilidade_transicao']:.2f} (gols sofridos/% sem posse)")
+                st.markdown(f"- Dependência de Bola Parada: {estilo_casa['dependencia_bola_parada']:.2%} (gols de escanteio/total de gols)")
             with col_estilo2:
                 st.markdown(f"### 🏟️ {nome_fora}")
                 st.markdown(f"**Estilo:** {estilo_fora['estilo']}")
-                st.markdown(f"- Posse Efetiva: {estilo_fora['posse_efetiva']:.2f} gols/%posse")
+                st.markdown(f"- Posse Efetiva: {estilo_fora['posse_efetiva']:.2f}")
                 st.markdown(f"- Eficiência de Finalização: {estilo_fora['eficiencia_finalizacao']:.2f}")
                 st.markdown(f"- Vulnerabilidade em Transição: {estilo_fora['vulnerabilidade_transicao']:.2f}")
                 st.markdown(f"- Dependência de Bola Parada: {estilo_fora['dependencia_bola_parada']:.2%}")
-                conf = res.get('confianca_fora', 50)
-                st.markdown(f"**🔒 Confiança do Modelo:** {conf:.0f}/100")
-                st.progress(conf / 100)
-                if res.get('curva_fora'):
-                    st.markdown("**📈 Evolução do IMA (últimos recortes)**")
-                    curva = res['curva_fora']
-                    df_curva = pd.DataFrame({'Recorte': ['10J', '5J', '3J'], 'Pontuação': curva})
-                    st.line_chart(df_curva.set_index('Recorte'), use_container_width=True)
 
             st.markdown("---")
             st.markdown("### 📊 Impacto dos Estilos nos Mercados")
@@ -413,7 +410,7 @@ def show_results_manual(res):
                 st.write(f"Gols Sofridos: {stats_fora.get('gols_sofridos_media', 0):.1f} (Liga: {bm.get('gols_sofridos_media', {}).get('mean', 0):.1f})")
                 st.write(f"Posse: {stats_fora.get('posse_media', 0):.1f}% (Liga: {bm.get('posse_media', {}).get('mean', 50):.0f}%)")
 
-    # ====================== ABA 5: MERCADOS (COM PROBABILIDADES AJUSTADAS) ======================
+    # ====================== ABA 5: MERCADOS ======================
     with tabs[4]:
         st.markdown("## 🎯 Probabilidades de Mercado")
         st.caption("Média entre modelo original e avançado | (↑↓) impacto do estilo")
@@ -429,11 +426,11 @@ def show_results_manual(res):
             edge_html = ""
             if edge_val is not None:
                 if edge_val > 0.05:
-                    edge_html = f"<div class='selo-badge' style='background:#FFD700; color:#000;'>🟢 MyPredict Edge ({edge_val:+.1%})</div>"
+                    edge_html = f"<div class='edge-badge' style='background:#000; color:#FFD700;'>🟢 MyPredict Edge ({edge_val:+.1%})</div>"
                 elif edge_val > 0:
-                    edge_html = f"<div class='selo-badge' style='background:#00FF7F; color:#000;'>🟢 Value ({edge_val:+.1%})</div>"
+                    edge_html = f"<div class='edge-badge' style='background:#000; color:#00FF7F;'>🟢 Value ({edge_val:+.1%})</div>"
                 else:
-                    edge_html = f"<div class='selo-badge' style='background:#aaa; color:#000;'>{edge_val:+.1%}</div>"
+                    edge_html = f"<div class='edge-badge' style='background:#000; color:#aaa;'>{edge_val:+.1%}</div>"
             with cols_1x2[i]:
                 st.markdown(f"""
                 <div class="{card_class}">
@@ -461,9 +458,9 @@ def show_results_manual(res):
             edge_html = ""
             if edge_val is not None:
                 if edge_val > 0.05:
-                    edge_html = f"<div class='selo-badge' style='background:#FFD700; color:#000;'>🟢 MyPredict Edge ({edge_val:+.1%})</div>"
+                    edge_html = f"<div class='edge-badge' style='background:#000; color:#FFD700;'>🟢 MyPredict Edge ({edge_val:+.1%})</div>"
                 elif edge_val > 0:
-                    edge_html = f"<div class='selo-badge' style='background:#00FF7F; color:#000;'>🟢 Value ({edge_val:+.1%})</div>"
+                    edge_html = f"<div class='edge-badge' style='background:#000; color:#00FF7F;'>🟢 Value ({edge_val:+.1%})</div>"
             # Indicador de ajuste de estilo
             if impacto > 0:
                 estilo_badge = f" <span style='color:#00FF7F;'>↑{impacto*100:+.0f}%</span>"
