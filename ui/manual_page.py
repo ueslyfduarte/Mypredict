@@ -22,7 +22,6 @@ LIGAS_DISPONIVEIS = {
 def render_manual():
     injetar_css()
 
-    # Cabeçalho
     frase = random.choice(FRASES_CABECALHO)
     st.markdown(f"""
     <div style="text-align:center; padding: 30px 0 10px 0;">
@@ -60,7 +59,6 @@ def render_manual():
         st.subheader("🎮 Analisar Confronto")
         col_casa, col_fora = st.columns(2)
 
-        # Função auxiliar para criar os campos do time
         def form_time(tipo, key_prefix):
             with st.container():
                 st.markdown(f"### {'🏠 Time Casa' if tipo == 'casa' else '🏟️ Time Fora'}")
@@ -75,6 +73,9 @@ def render_manual():
                 fin = c1.number_input("🎯 Fin. Alvo", 0.0, 15.0, 5.2, 0.5, key=f"{key_prefix}_fin")
                 xg = c2.number_input("📈 xG", 0.0, 4.0, 1.6, 0.1, key=f"{key_prefix}_xg")
                 esc = c3.number_input("🏁 Escanteios", 0.0, 15.0, 5.5, 0.5, key=f"{key_prefix}_esc")
+                # Novos campos
+                gols_ht = c1.number_input("⏱️ Gols HT", 0.0, 5.0, 0.8, 0.1, key=f"{key_prefix}_gols_ht")
+                btts_pct = c2.number_input("🤝 BTTS %", 0.0, 100.0, 50.0, 5.0, key=f"{key_prefix}_btts") / 100.0
 
                 return {
                     'nome': nome, 'pos': pos, 'prat_proj': prat_proj,
@@ -82,6 +83,7 @@ def render_manual():
                         'gols_media': gols, 'gols_sofridos_media': gols_s,
                         'posse_media': posse, 'finalizacoes_alvo_media': fin,
                         'xg_media': xg, 'escanteios_media': esc,
+                        'gols_ht_media': gols_ht, 'btts_pct': btts_pct,
                         'conversao': 0.25, 'desvio_pontos': 0.5,
                         'pontos_pos_desvantagem_media': 1.0,
                     }
@@ -89,7 +91,6 @@ def render_manual():
 
         with col_casa:
             dados_casa = form_time('casa', 'c')
-            # Histórico de jogos em tabela editável
             st.markdown("**📋 Últimos 10 Jogos**")
             default_jogos = pd.DataFrame([
                 {"Res.": "V", "Adversário": "", "Prat. Adv.": "Media", "GP": 0, "GC": 0}
@@ -140,7 +141,6 @@ def render_manual():
                 j['gols_contra'] = j.pop('GC')
                 j['mandante'] = False
 
-        # Fatores de contexto
         with st.expander("🧠 Ajustes de Contexto (opcional)"):
             col_ic1, col_ic2 = st.columns(2)
             with col_ic1:
@@ -157,7 +157,6 @@ def render_manual():
                 }
 
         if st.button("⚡ Calcular Análise Completa", use_container_width=True, type="primary"):
-            # Montar dicionário para cálculo
             dados = {
                 'time_casa': dados_casa['nome'], 'time_fora': dados_fora['nome'],
                 'pos_casa': dados_casa['pos'], 'pos_fora': dados_fora['pos'],
