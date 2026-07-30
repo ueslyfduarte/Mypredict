@@ -1,1 +1,1 @@
-calibration_params.pkl
+https://github.com/ueslyfduarte/Mypredict/blob/dc7cc73b695faed3019a607aede9e0fcc7656dab/calibration_params.pkl
