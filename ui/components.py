@@ -77,7 +77,7 @@ def field_heatmap_annotated(dimensions_casa, dimensions_fora, deltas):
     return base64.b64encode(buf.read()).decode()
 
 # ------------------------------------------------------------
-# ANÁLISE DESCRITIVA AUTOMÁTICA (corrigida)
+# ANÁLISE DESCRITIVA AUTOMÁTICA
 # ------------------------------------------------------------
 def gerar_analise_descritiva(res):
     nome_casa = res['time_casa']
@@ -250,7 +250,6 @@ def show_results_manual(res):
             <span style="color:{'#00FF7F' if sup_casa >= 0 else '#FF4D4D'};">{nome_casa} {sup_casa:+.1f} pts</span> |
             <span style="color:{'#00FF7F' if sup_fora >= 0 else '#FF4D4D'};">{nome_fora} {sup_fora:+.1f} pts</span>
         </div>
-        <div style="text-align:center; font-size:0.8rem; color:#aaa;">Superação: diferença entre a posição real e a projetada.</div>
         """, unsafe_allow_html=True)
 
     # ====================== ABA 2: CONTRASTE TÁTICO ======================
