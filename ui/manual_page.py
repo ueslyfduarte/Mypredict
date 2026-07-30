@@ -29,7 +29,7 @@ FRASES_RESULTADOS = [
 # MAPA DE LIGAS → ARQUIVO .PKL
 # ============================================================
 LIGAS_DISPONIVEIS = {
-    "Premier League": "calibration_premier.pkl",
+    "Premier League": "calibration_params.pkl",
     "La Liga": "calibration_params.pkl",
     "Brasileirão": "calibration_brasileirao.pkl",
 }
