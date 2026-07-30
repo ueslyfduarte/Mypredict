@@ -48,6 +48,118 @@ def aproveitamento_contra_prateleira(jogos, prateleira_alvo):
         pontos = sum(3 if j['resultado'] == 'V' else 1 if j['resultado'] == 'E' else 0 for j in total)
         return (pontos / (len(total) * 3)) * 100 if total else 50.0
 
+# ================================================================
+# NOVAS FUNÇÕES: CLASSIFICAÇÃO DE ESTILO E SIMULAÇÃO DE CENÁRIO
+# ================================================================
+def classificar_estilo(stats, benchmarks):
+    """
+    Classifica o estilo de jogo de um time com base em suas estatísticas.
+    Retorna um dicionário com o estilo principal, os indicadores derivados e a confiança.
+    """
+    posse = stats.get('posse_media', 50)
+    gols = stats.get('gols_media', 1.4)
+    gols_sofridos = stats.get('gols_sofridos_media', 1.4)
+    finalizacoes = stats.get('finalizacoes_alvo_media', 4.5)
+    escanteios = stats.get('escanteios_media', 5.0)
+    gols_esc = stats.get('gols_escanteio', 0.36)
+    conversao = stats.get('conversao', 0.25)
+
+    # Indicadores derivados
+    posse_efetiva = (gols / posse) * 100 if posse > 0 else 0
+    eficiencia = gols / finalizacoes if finalizacoes > 0 else 0
+    vulnerabilidade = (gols_sofridos / (100 - posse)) * 100 if (100 - posse) > 0 else 0
+    dependencia_bp = gols_esc / gols if gols > 0 else 0
+
+    # Classificação
+    estilo = "Equilibrado"
+    if posse > 55 and finalizacoes > 5:
+        estilo = "Posse & Pressão"
+    elif posse < 45 and posse_efetiva > 0.06:
+        estilo = "Contra‑Ataque"
+    elif dependencia_bp > 0.2:
+        estilo = "Aéreo / Bola Parada"
+    elif 45 <= posse <= 55 and eficiencia > 0.4:
+        estilo = "Transição Rápida"
+    elif posse < 40 and gols_sofridos < 1.0:
+        estilo = "Defensivo / Reativo"
+
+    return {
+        'estilo': estilo,
+        'posse_efetiva': round(posse_efetiva, 2),
+        'eficiencia_finalizacao': round(eficiencia, 2),
+        'vulnerabilidade_transicao': round(vulnerabilidade, 2),
+        'dependencia_bola_parada': round(dependencia_bp, 2),
+    }
+
+def gerar_cenario(estilo_casa, estilo_fora, res_mercados):
+    """
+    Gera um texto narrativo sobre o confronto baseado nos estilos e nas probabilidades.
+    """
+    nome_casa = res_mercados['time_casa']
+    nome_fora = res_mercados['time_fora']
+    over = res_mercados['over25']
+    btts = res_mercados['btts']
+    gol_ht = res_mercados['gol_ht']
+    esc = res_mercados['esc']
+    p1 = res_mercados['p1']
+    p2 = res_mercados['p2']
+
+    texto = f"**🔮 Cenário Tático:** {nome_casa} ({estilo_casa}) vs {nome_fora} ({estilo_fora})\n\n"
+
+    # Combinações de estilos
+    if estilo_casa == "Posse & Pressão" and estilo_fora == "Contra‑Ataque":
+        texto += (f"⚽ O {nome_casa} deve controlar a posse e pressionar, enquanto o {nome_fora} "
+                  f"apostará em transições rápidas. Espere um jogo de ataque contra defesa, com "
+                  f"chances para ambos os lados. ")
+        if btts >= 0.55:
+            texto += "O mercado de **Ambas Marcam** é favorecido, assim como **Over 2.5 Gols** "
+        else:
+            texto += "O **Over 2.5 Gols** pode ter valor, especialmente se o {nome_casa} converter sua pressão. "
+    elif estilo_casa == "Contra‑Ataque" and estilo_fora == "Posse & Pressão":
+        texto += (f"🔄 Situação inversa: o {nome_fora} terá a posse, mas o {nome_casa} "
+                  f"será perigoso nos contra‑ataques. ")
+        if over >= 0.60:
+            texto += "O **Over 2.5 Gols** surge como boa opção. "
+        if gol_ht >= 0.50:
+            texto += "O **Gol no 1º Tempo** também merece atenção, pois transições rápidas podem gerar gols cedo. "
+    elif estilo_casa == "Posse & Pressão" and estilo_fora == "Posse & Pressão":
+        texto += (f"🔥 Ambos os times gostam de ter a bola. O meio‑campo será muito disputado, "
+                  f"com muitos escanteios. ")
+        if esc >= 0.55:
+            texto += f"O **Over 8.5 Escanteios** é uma opção interessante. "
+        if over < 0.50:
+            texto += "Como as defesas tendem a se anular, o **Under 2.5 Gols** pode ter valor. "
+    elif estilo_casa == "Contra‑Ataque" and estilo_fora == "Contra‑Ataque":
+        texto += (f"⚡ Jogo de transições rápidas! Ambos os times cedem a posse e apostam na velocidade. "
+                  f"O número de finalizações pode ser alto. ")
+        if over >= 0.60 and btts >= 0.60:
+            texto += "**Over 2.5 Gols** e **BTTS** são fortemente favorecidos. "
+        else:
+            texto += "A eficiência decidirá: **Over 2.5 Gols** ou **Ambas Marcam** podem ser boas opções. "
+    elif estilo_casa == "Aéreo / Bola Parada" or estilo_fora == "Aéreo / Bola Parada":
+        texto += (f"🎯 Pelo menos um dos times depende de jogadas aéreas. ")
+        if esc >= 0.55:
+            texto += f"O mercado de **Over 8.5 Escanteios** ganha destaque. "
+        if btts >= 0.50:
+            texto += "Como bolas paradas são uma arma, **Ambas Marcam** também pode acontecer. "
+    else:
+        texto += (f"⚖️ Confronto equilibrado, com estilos complementares ou similares. "
+                  f"As probabilidades calculadas refletem o equilíbrio: "
+                  f"🏠 {p1:.1%}, 🤝 {res_mercados['pX']:.1%}, 🏟️ {p2:.1%}. ")
+
+    # Adiciona resumo dos indicadores derivados
+    texto += "\n\n**📊 Indicadores Derivados:**\n"
+    texto += f"- {nome_casa}: Posse Efetiva {res_mercados.get('estilo_casa', {}).get('posse_efetiva', '?')}, "
+    texto += f"Eficiência de Finalização {res_mercados.get('estilo_casa', {}).get('eficiencia_finalizacao', '?')}, "
+    texto += f"Vulnerabilidade em Transição {res_mercados.get('estilo_casa', {}).get('vulnerabilidade_transicao', '?')}, "
+    texto += f"Dependência de Bola Parada {res_mercados.get('estilo_casa', {}).get('dependencia_bola_parada', '?')}\n"
+    texto += f"- {nome_fora}: Posse Efetiva {res_mercados.get('estilo_fora', {}).get('posse_efetiva', '?')}, "
+    texto += f"Eficiência de Finalização {res_mercados.get('estilo_fora', {}).get('eficiencia_finalizacao', '?')}, "
+    texto += f"Vulnerabilidade em Transição {res_mercados.get('estilo_fora', {}).get('vulnerabilidade_transicao', '?')}, "
+    texto += f"Dependência de Bola Parada {res_mercados.get('estilo_fora', {}).get('dependencia_bola_parada', '?')}"
+
+    return texto
+
 def executar_manual(dados, pkl_path='calibration_params.pkl'):
     # --- Benchmarks ---
     if dados.get('benchmarks_usr'):
@@ -336,6 +448,28 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
         edges['edge_esc'] = esc - (1 / odds['odd_esc'])
 
     # ================================================================
+    # CLASSIFICAÇÃO DE ESTILOS E CENÁRIO
+    # ================================================================
+    estilo_casa = classificar_estilo(dados.get('ovrall_casa', {}), benchmarks)
+    estilo_fora = classificar_estilo(dados.get('ovrall_fora', {}), benchmarks)
+
+    # Prepara dados para o cenário
+    dados_cenario = {
+        'time_casa': dados['time_casa'],
+        'time_fora': dados['time_fora'],
+        'over25': over25,
+        'btts': btts,
+        'gol_ht': gol_ht,
+        'esc': esc,
+        'p1': p1,
+        'pX': pX,
+        'p2': p2,
+        'estilo_casa': estilo_casa,
+        'estilo_fora': estilo_fora,
+    }
+    texto_cenario = gerar_cenario(estilo_casa['estilo'], estilo_fora['estilo'], dados_cenario)
+
+    # ================================================================
     # RESULTADO
     # ================================================================
     res = {
@@ -373,5 +507,8 @@ def executar_manual(dados, pkl_path='calibration_params.pkl'):
         'benchmarks': benchmarks,
         'stats_casa': dados.get('ovrall_casa', {}),
         'stats_fora': dados.get('ovrall_fora', {}),
+        'estilo_casa': estilo_casa,
+        'estilo_fora': estilo_fora,
+        'cenario': texto_cenario,
     }
     return res, None
