@@ -59,15 +59,16 @@ def render_manual():
             bench_ht = col_bench1.number_input("Média Gols HT", 0.0, 5.0, 0.7, key="bench_ht")
             bench_btts = col_bench2.number_input("BTTS Médio (%)", 0.0, 100.0, 48.0, key="bench_btts")
 
+            # Salva no session_state com estrutura de dicionário
             st.session_state.benchmarks_usr = {
-                'gols_media': bench_gols_casa,
-                'gols_sofridos_media': bench_gols_fora,
-                'posse_media': bench_posse,
-                'finalizacoes_alvo_media': bench_fin_alvo,
-                'xg_media': bench_xg,
-                'escanteios_media': bench_esc,
-                'gols_ht_media': bench_ht,
-                'btts_pct': bench_btts / 100.0,
+                'gols_media': {'mean': bench_gols_casa, 'std': 0.5, 'lower_better': False},
+                'gols_sofridos_media': {'mean': bench_gols_fora, 'std': 0.5, 'lower_better': True},
+                'posse_media': {'mean': bench_posse, 'std': 10.0, 'lower_better': False},
+                'finalizacoes_alvo_media': {'mean': bench_fin_alvo, 'std': 1.5, 'lower_better': False},
+                'xg_media': {'mean': bench_xg, 'std': 0.3, 'lower_better': False},
+                'escanteios_media': {'mean': bench_esc, 'std': 1.5, 'lower_better': False},
+                'gols_ht_media': {'mean': bench_ht, 'std': 0.3, 'lower_better': False},
+                'btts_pct': {'mean': bench_btts / 100.0, 'std': 0.1, 'lower_better': False},
             }
 
     # ---------- Aba ANALISAR ----------
