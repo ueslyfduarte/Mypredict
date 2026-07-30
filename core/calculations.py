@@ -13,7 +13,7 @@ from core.market_engine_v2 import (
 )
 from core.markets import (
     prob_over_2_5, prob_ambas_marcam, prob_gol_ht, prob_over_escanteios,
-    calcular_bonus_casa, _gols_esperados
+    _gols_esperados
 )
 
 try:
@@ -332,26 +332,37 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
     mpv_fora = ELO_WEIGHT * elo_norm_fora + (1 - ELO_WEIGHT) * mpv_base_fora
 
     # ================================================================
-    # PROBABILIDADES 1X2 (CORRIGIDAS)
+    # PROBABILIDADES 1X2 (CORRIGIDAS – EQUILÍBRIO GARANTIDO)
     # ================================================================
-    # Bônus de casa limitado a ±5%
-    bonus_casa = max(-0.05, min(0.05, calcular_bonus_casa(ovr_casa.get('diff_aprov_casa_fora', 0)) / 100.0))
-    # Usa MPV final (com ELO) para a sigmoide
-    delta = mpv_casa - mpv_fora
-    # Coeficiente 0.15 para maior sensibilidade
-    p_casa = 1.0 / (1.0 + np.exp(-0.15 * delta))
-    # Aplica bônus de casa
-    p_casa += bonus_casa
-    # Estima empate baseado na diferença absoluta
-    p_empate = 0.28 * np.exp(- (abs(delta) / 15.0) ** 2)
-    # Ajusta para que a soma seja 1
-    p_fora = 1.0 - p_casa - p_empate
-    # Garante limites
-    p1_orig = max(0.01, min(0.99, p_casa))
-    pX_orig = max(0.01, min(0.99, p_empate))
-    p2_orig = max(0.01, min(0.99, p_fora))
+    # Bônus de casa baseado na diferença de aproveitamento casa/fora
+    diff_aprov = ovr_casa.get('diff_aprov_casa_fora', 0)
+    bonus_casa = 0.0
+    if abs(mpv_casa - mpv_fora) < 10 and diff_aprov > 5:
+        bonus_casa = min(0.05, diff_aprov / 200.0)  # máximo 5%
 
-    # --- Demais probabilidades originais ---
+    delta_mpv = mpv_casa - mpv_fora
+    # Probabilidade base linear (evita distorção da sigmoide)
+    if delta_mpv == 0:
+        p_casa = 0.5
+    else:
+        # Mapeamento linear: diferença de 50 pontos -> 80% de chance
+        p_casa = 0.5 + (delta_mpv / 50.0) * 0.3
+        p_casa = max(0.1, min(0.9, p_casa))
+
+    # Aplica bônus de casa (redistribuído)
+    p_casa += bonus_casa
+    p_fora = 1.0 - p_casa
+
+    # Empate baseado na diferença absoluta
+    p_empate = 0.28 * np.exp(- (abs(delta_mpv) / 15.0) ** 2)
+
+    # Ajusta para que a soma seja 1 (reduz proporcionalmente casa e fora)
+    total = p_casa + p_empate + p_fora
+    p1_orig = p_casa / total
+    pX_orig = p_empate / total
+    p2_orig = p_fora / total
+
+    # --- Demais probabilidades originais (mantidas) ---
     gols_media_casa = ovr_casa.get('gols_media', 1.5)
     gols_media_fora = ovr_fora.get('gols_media', 1.2)
     gols_sofridos_casa = ovr_casa.get('gols_sofridos_media', 1.2)
@@ -373,7 +384,7 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
         ovr_casa.get('escanteios_sofridos_media', 5.0) or 5.0, ovr_fora.get('escanteios_sofridos_media', 5.0) or 5.0
     )
 
-    # --- Dimensões táticas ---
+    # --- Dimensões táticas (mantido) ---
     dimension_weights = {}
     if not modo_livre and not dados.get('benchmarks_usr'):
         try:
