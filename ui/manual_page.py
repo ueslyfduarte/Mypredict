@@ -186,6 +186,10 @@ def render_manual():
                 j['gols_contra'] = j.pop('GC')
                 j['mandante'] = j.pop('Mandante')
 
+        # Controle de número de jogos para o IMA
+        n_jogos_ima = st.slider("Nº de jogos para o IMA", 0, 10, 5, key="n_jogos_ima",
+                                 help="Quantos jogos recentes considerar no momento. 0 = usar apenas as odds atuais.")
+
         with st.expander("🧠 Ajustes de Contexto (opcional)"):
             col_ic1, col_ic2 = st.columns(2)
             with col_ic1:
@@ -225,6 +229,7 @@ def render_manual():
                 'jogos_casa': jogos_casa_list, 'jogos_fora': jogos_fora_list,
                 'ic_casa': ic_casa, 'ic_fora': ic_fora,
                 'odds': odds_dict,
+                'n_jogos_ima': n_jogos_ima,
                 'media_gols_casa': st.session_state.get('media_gols_casa_liga', MEDIA_GOLS_CASA_LIGA),
                 'media_gols_fora': st.session_state.get('media_gols_fora_liga', MEDIA_GOLS_FORA_LIGA),
                 'media_ht_casa': 0.75, 'media_ht_fora': 0.65,
