@@ -1,6 +1,6 @@
 # core/ratings.py — Cálculos de IMA, OVRall, IC e MPV
 from config import (
-    PESOS_OVRALL, PESOS_MPV, PESOS_IC, JOGOS_CONFRONTO_DIRETO
+    PESOS_OVRALL, PESOS_MPV, PESOS_IC
 )
 
 def _percentil(valor, lista, menor_melhor=False):
