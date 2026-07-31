@@ -181,18 +181,20 @@ def show_results_manual(res):
             st.markdown(f"<div class='{card_class}'><span class='big-number'>{res['ima_fora']:.1f}</span><br><small>{nome_fora}</small></div>", unsafe_allow_html=True)
 
         with st.expander("⚡ Detalhamento do IMA"):
-            if res.get('detalhes_ima'):
-                det1, det2 = st.columns(2)
-                for time, key, col in [(nome_casa, 'casa', det1), (nome_fora, 'fora', det2)]:
-                    with col:
-                        for recorte, jogos in res['detalhes_ima'][key].items():
-                            if jogos:
-                                media = np.mean([j['pontos'] for j in jogos])
-                                st.write(f"**{recorte}**: {media:.2f}")
-                                for j in jogos:
-                                    st.caption(f"{j['jogo']} → {j['pontos']:.2f} pts")
+    if res.get('detalhes_ima'):
+        for lado, nome in [('casa', res['time_casa']), ('fora', res['time_fora'])]:
+            det = res['detalhes_ima'][lado]
+            st.write(f"**{nome}**")
+            st.write(f"Expectativa do mercado (E_atual): {det['E_atual']:.1%}")
+            if det['jogos_utilizados'] > 0:
+                st.write(f"Aproveitamento recente (A_real): {det['A_real']:.1%} ({det['jogos_utilizados']} jogos)")
+                st.write(f"Ajuste de momentum (Δ): {det['delta']:+.1%}")
             else:
-                st.info("Menos de 5 jogos; IMA assume 50.0.")
+                st.write("Nenhum jogo recente utilizado – IMA = expectativa pura.")
+            st.write(f"**IMA = {res['ima_casa'] if lado=='casa' else res['ima_fora']:.1f}**")
+            st.write("---")
+    else:
+        st.info("Detalhamento do IMA indisponível.")
 
         st.markdown("### 📈 OVRall – Desempenho Estrutural")
         col_ovr1, col_ovr2 = st.columns(2)
