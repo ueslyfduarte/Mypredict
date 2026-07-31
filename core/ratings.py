@@ -1,21 +1,11 @@
 # core/ratings.py — Cálculos de IMA, OVRall, IC e MPV
 from config import (
-    PRATELEIRAS, PONTOS_BASE,
-    BONUS_SIMETRICOS, BONUS_VITORIA_ASSIM, BONUS_DERROTA_ASSIM, BONUS_EMPATE,
-    PESOS_RECORTES, PISO_IMA, TETO_IMA,
     PESOS_OVRALL, PESOS_MPV, PESOS_IC, JOGOS_CONFRONTO_DIRETO
 )
-
-def obter_prateleira(posicao):
-    for nome, (inf, sup) in PRATELEIRAS.items():
-        if inf <= posicao <= sup:
-            return nome
-    return 'Critica'
 
 def _percentil(valor, lista, menor_melhor=False):
     if not lista:
         return 50.0
-    # Se todos os valores são iguais, retorna neutro (evita extremos artificiais)
     if len(set(lista)) == 1:
         return 50.0
     ordenado = sorted(lista)
@@ -24,42 +14,36 @@ def _percentil(valor, lista, menor_melhor=False):
     percentil = (pos / n) * 100
     return 100.0 - percentil if menor_melhor else percentil
 
-def calcular_pontuacao_jogo(resultado, prateleira_time, prateleira_adv):
-    pontos = PONTOS_BASE[resultado]
-    if resultado == 'V':
-        if (prateleira_time, prateleira_adv) in BONUS_VITORIA_ASSIM:
-            pontos += BONUS_VITORIA_ASSIM[(prateleira_time, prateleira_adv)]
-        elif (prateleira_time, prateleira_adv) in BONUS_SIMETRICOS:
-            pontos += BONUS_SIMETRICOS[(prateleira_time, prateleira_adv)][0]
-    elif resultado == 'D':
-        if (prateleira_time, prateleira_adv) in BONUS_DERROTA_ASSIM:
-            pontos += BONUS_DERROTA_ASSIM[(prateleira_time, prateleira_adv)]
-        elif (prateleira_time, prateleira_adv) in BONUS_SIMETRICOS:
-            pontos += BONUS_SIMETRICOS[(prateleira_time, prateleira_adv)][1]
-    elif resultado == 'E':
-        if (prateleira_time, prateleira_adv) in BONUS_EMPATE:
-            pontos += BONUS_EMPATE[(prateleira_time, prateleira_adv)]
-    return pontos
+def calcular_ima(odd_time, odd_empate, odd_adv, jogos_recentes):
+    """
+    Calcula o IMA baseado na odd atual + resultados recentes (com mando de campo).
 
-def calcular_ima(time, jogos_10G, jogos_5G, jogos_3G, jogos_5CF, jogos_3CF, prateleiras):
-    def media_recorte(jogos):
-        if not jogos:
-            return 0.0
-        pts = []
-        for j in jogos:
-            prat_time = prateleiras[time]
-            prat_adv = j.get('prateleira_adv', prateleiras.get(j['adversario'], 'Media'))
-            pts.append(calcular_pontuacao_jogo(j['resultado'], prat_time, prat_adv))
-        return sum(pts) / len(pts)
-    medias = {
-        '10G': media_recorte(jogos_10G),
-        '5G':  media_recorte(jogos_5G),
-        '3G':  media_recorte(jogos_3G),
-        '5CF': media_recorte(jogos_5CF),
-        '3CF': media_recorte(jogos_3CF),
-    }
-    ima_bruto = sum(medias[k] * PESOS_RECORTES[k] for k in PESOS_RECORTES)
-    ima = (ima_bruto - PISO_IMA) / (TETO_IMA - PISO_IMA) * 100
+    Parâmetros:
+    - odd_time: odd para vitória do time analisado no próximo jogo
+    - odd_empate, odd_adv: odds 1X2 do próximo jogo
+    - jogos_recentes: lista de dicionários com 'resultado' (V/E/D);
+                      se a lista estiver vazia, o IMA será apenas a expectativa.
+
+    Retorna: IMA (0-100)
+    """
+    # 1. Probabilidade implícita atual (sem margem)
+    inv_time = 1.0 / odd_time
+    inv_emp = 1.0 / odd_empate
+    inv_adv = 1.0 / odd_adv
+    soma = inv_time + inv_emp + inv_adv
+    E_atual = inv_time / soma   # escala 0-1
+
+    # 2. Aproveitamento real recente (se houver jogos)
+    if not jogos_recentes:
+        return max(0.0, min(100.0, E_atual * 100.0))
+
+    pontos = sum(3 if j['resultado'] == 'V' else 1 if j['resultado'] == 'E' else 0 for j in jogos_recentes)
+    max_pontos = len(jogos_recentes) * 3
+    A_real = pontos / max_pontos if max_pontos > 0 else 0.0
+
+    # 3. Delta e IMA
+    delta = A_real - E_atual
+    ima = (E_atual * 100.0) + (delta * 100.0)
     return max(0.0, min(100.0, ima))
 
 def calcular_ovrall(dados_time, dados_liga):
@@ -91,40 +75,6 @@ def calcular_ovrall(dados_time, dados_liga):
     ovrall = 45.0 + (ovrall_bruto * 0.55)
     return max(45.0, min(100.0, ovrall))
 
-def calcular_confronto_direto(time, adversario, jogos_historicos):
-    if not jogos_historicos:
-        return 50.0
-    jogos = jogos_historicos[-JOGOS_CONFRONTO_DIRETO:]
-    pontos = sum(PONTOS_BASE[j['resultado']] for j in jogos)
-    max_possivel = len(jogos) * 3
-    return (pontos / max_possivel) * 100 if max_possivel else 50.0
-
-def calcular_desempenho_contra_escalao(time, escalao_alvo, prateleiras, jogos_temporada):
-    jogos_filtrados = [j for j in jogos_temporada if prateleiras.get(j['adversario']) == escalao_alvo]
-    if not jogos_filtrados:
-        return 50.0
-    pontos = sum(PONTOS_BASE[j['resultado']] for j in jogos_filtrados)
-    return (pontos / (len(jogos_filtrados) * 3)) * 100
-
-def calcular_fator_casa(time, mandante, jogos_temporada):
-    jogos_filtrados = [j for j in jogos_temporada if j['mandante'] == mandante]
-    if not jogos_filtrados:
-        return 50.0
-    pontos = sum(PONTOS_BASE[j['resultado']] for j in jogos_filtrados)
-    return (pontos / (len(jogos_filtrados) * 3)) * 100
-
-def calcular_odds(odds_casa, odds_empate, odds_fora, mandante):
-    if None in (odds_casa, odds_empate, odds_fora):
-        return None
-    prob_casa = 1/odds_casa
-    prob_empate = 1/odds_empate
-    prob_fora = 1/odds_fora
-    total = prob_casa + prob_empate + prob_fora
-    prob_casa /= total
-    prob_empate /= total
-    prob_fora /= total
-    return (prob_casa * 100) if mandante else (prob_fora * 100)
-
 def calcular_ic(fatores, pesos=None):
     if pesos is None:
         pesos = PESOS_IC
@@ -141,8 +91,3 @@ def calcular_mpv(ima, ovrall, ic, pesos=None):
     if pesos is None:
         pesos = PESOS_MPV
     return pesos['IMA'] * ima + pesos['OVRall'] * ovrall + pesos['IC'] * ic
-
-def calcular_consistencia(desvio_pontos, volatilidade_ima=None):
-    if desvio_pontos is None:
-        return 0.5
-    return max(0.0, min(1.0, 1.0 - (desvio_pontos / 1.5)))
