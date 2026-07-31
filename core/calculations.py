@@ -197,22 +197,18 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
     for adv, prat in dados.get('prateleiras_extra', {}).items():
         if adv not in prateleiras: prateleiras[adv] = prat
 
-    # --- IMA (NOVA VERSÃO COM ODDS) ---
+    # --- IMA ---
     odds = dados.get('odds', {})
     odd_casa = odds.get('odd_casa', 2.0)
     odd_empate = odds.get('odd_empate', 3.5)
     odd_fora = odds.get('odd_fora', 3.8)
     n_jogos_ima = dados.get('n_jogos_ima', 5)
 
-    # Time da casa: últimos n jogos como mandante
     jogos_casa_mandante = [j for j in dados.get('jogos_casa', []) if j.get('mandante', True)]
     ima_casa = calcular_ima(odd_casa, odd_empate, odd_fora, jogos_casa_mandante[:n_jogos_ima])
-
-    # Time de fora: últimos n jogos como visitante
     jogos_fora_visitante = [j for j in dados.get('jogos_fora', []) if not j.get('mandante', False)]
     ima_fora = calcular_ima(odd_fora, odd_empate, odd_casa, jogos_fora_visitante[:n_jogos_ima])
 
-    # Detalhamento do IMA
     def detalhes_ima(odd_t, odd_e, odd_a, jogos, ima_val):
         inv_t = 1/odd_t; inv_e = 1/odd_e; inv_a = 1/odd_a
         soma = inv_t + inv_e + inv_a
@@ -228,64 +224,66 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
     ima_det_casa = detalhes_ima(odd_casa, odd_empate, odd_fora, jogos_casa_mandante[:n_jogos_ima], ima_casa)
     ima_det_fora = detalhes_ima(odd_fora, odd_empate, odd_casa, jogos_fora_visitante[:n_jogos_ima], ima_fora)
 
-    # --- OVRall ---
+    # --- OVRall (NOVA VERSÃO ABSOLUTA) ---
     ovr_casa = dados.get('ovrall_casa', {}).copy()
     ovr_fora = dados.get('ovrall_fora', {}).copy()
-    indicadores_ovr = [
-        ('gols_media', 1.4, False), ('xg_media', 1.3, False), ('finalizacoes_alvo_media', 4.0, False),
-        ('conversao', 0.25, False),
-        ('gols_sofridos_media', 1.4, True), ('xga_media', 1.2, True),
-        ('finalizacoes_alvo_sofridas_media', 4.0, True), ('desarmes_intercep_media', 15, False),
-        ('posse_media', 50, False), ('passes_certos_pct', 78, False), ('passes_chave_media', 2, False),
-        ('assistencias_media', 1.2, False), ('chutes_media', 12, False),
-        ('desvio_pontos', 0.5, True), ('desvio_gols_pro', 0.4, True), ('desvio_gols_sofridos', 0.4, True),
-        ('clean_sheets_pct', 30, False),
-        ('pontos_pos_desvantagem_media', 1.0, False), ('gols_ultimos_15min_media', 0.3, False),
-        ('pontos_apos_derrota_media', 1.0, False), ('diff_aprov_casa_fora', 5, True),
-        ('aprov_viradas_favor', 30, False), ('aprov_viradas_contra', 30, True),
-    ]
-    for key, val, _ in indicadores_ovr:
-        if key not in ovr_casa: ovr_casa[key] = val
-        if key not in ovr_fora: ovr_fora[key] = val
+    fator_liga = dados.get('fator_liga', 1.0)
 
-    dados_liga = {}
-    todas_chaves = set(ovr_casa.keys()) | set(ovr_fora.keys())
-    for k in todas_chaves:
-        vc = ovr_casa.get(k); vf = ovr_fora.get(k)
-        valores = []
-        if vc is not None: valores.append(vc)
-        if vf is not None: valores.append(vf)
-        if valores: dados_liga[k] = valores
-    ovrall_val_casa = calcular_ovrall(ovr_casa, dados_liga)
-    ovrall_val_fora = calcular_ovrall(ovr_fora, dados_liga)
+    # Garantir que benchmarks_liga tenha as chaves necessárias (fallback para defaults)
+    if not benchmarks:
+        benchmarks = {
+            'gols_media': {'mean': 1.4, 'std': 0.5, 'lower_better': False},
+            'xg_media': {'mean': 1.3, 'std': 0.3, 'lower_better': False},
+            'finalizacoes_alvo_media': {'mean': 4.0, 'std': 1.5, 'lower_better': False},
+            'gols_sofridos_media': {'mean': 1.4, 'std': 0.5, 'lower_better': True},
+            'xga_media': {'mean': 1.2, 'std': 0.3, 'lower_better': True},
+            'desarmes_intercep_media': {'mean': 15.0, 'std': 4.0, 'lower_better': False},
+            'posse_media': {'mean': 50.0, 'std': 10.0, 'lower_better': False},
+            'passes_certos_pct': {'mean': 78.0, 'std': 6.0, 'lower_better': False},
+            'passes_chave_media': {'mean': 2.0, 'std': 0.8, 'lower_better': False},
+            'desvio_pontos': {'mean': 0.5, 'std': 0.2, 'lower_better': True},
+            'clean_sheets_pct': {'mean': 30.0, 'std': 15.0, 'lower_better': False},
+            'pontos_pos_desvantagem_media': {'mean': 1.0, 'std': 0.5, 'lower_better': False},
+            'gols_ultimos_15min_media': {'mean': 0.3, 'std': 0.2, 'lower_better': False},
+        }
 
-    dims = {
-        'Ataque': [('gols_media', False), ('xg_media', False), ('finalizacoes_alvo_media', False), ('conversao', False)],
-        'Defesa': [('gols_sofridos_media', True), ('xga_media', True), ('finalizacoes_alvo_sofridas_media', True), ('desarmes_intercep_media', False)],
-        'MeioCampo': [('posse_media', False), ('passes_certos_pct', False), ('passes_chave_media', False), ('assistencias_media', False), ('chutes_media', False)],
-        'Consistencia': [('desvio_pontos', True), ('desvio_gols_pro', True), ('desvio_gols_sofridos', True), ('clean_sheets_pct', False)],
-        'Resiliencia': [('pontos_pos_desvantagem_media', False), ('gols_ultimos_15min_media', False), ('pontos_apos_derrota_media', False), ('diff_aprov_casa_fora', True), ('aprov_viradas_favor', False), ('aprov_viradas_contra', True)],
-    }
-    notas_casa = {}
-    notas_fora = {}
-    detalhes_ovr = {}
-    for nome, indicadores in dims.items():
-        det_casa = []; det_fora = []
-        for ind, menor in indicadores:
-            vc = ovr_casa.get(ind); vf = ovr_fora.get(ind)
-            if vc is not None and vf is not None and dados_liga.get(ind):
-                lista = dados_liga[ind]
-                perc_c = _percentil(vc, lista, menor)
-                perc_f = _percentil(vf, lista, menor)
-                det_casa.append((ind, vc, perc_c))
-                det_fora.append((ind, vf, perc_f))
-        if det_casa:
-            notas_casa[nome] = sum(x[2] for x in det_casa) / len(det_casa)
-            notas_fora[nome] = sum(x[2] for x in det_fora) / len(det_fora)
-            detalhes_ovr[nome] = {'casa': det_casa, 'fora': det_fora}
-    for dim_name in ['Ataque', 'Defesa', 'MeioCampo', 'Consistencia', 'Resiliencia']:
-        if dim_name not in notas_casa: notas_casa[dim_name] = 50.0
-        if dim_name not in notas_fora: notas_fora[dim_name] = 50.0
+    ovrall_val_casa = calcular_ovrall(ovr_casa, benchmarks, fator_liga)
+    ovrall_val_fora = calcular_ovrall(ovr_fora, benchmarks, fator_liga)
+
+    # Detalhamento do OVRall (notas individuais)
+    def detalhes_ovr_absoluto(dados_time, benchmarks_liga):
+        dims = {
+            'Ataque': [('gols_media', False), ('xg_media', False), ('finalizacoes_alvo_media', False)],
+            'Defesa': [('gols_sofridos_media', True), ('xga_media', True), ('desarmes_intercep_media', False)],
+            'MeioCampo': [('posse_media', False), ('passes_certos_pct', False), ('passes_chave_media', False)],
+            'Consistencia': [('desvio_pontos', True), ('clean_sheets_pct', False)],
+            'Resiliencia': [('pontos_pos_desvantagem_media', False), ('gols_ultimos_15min_media', False)],
+        }
+        detalhes = {}
+        for dim, indicadores in dims.items():
+            notas = []
+            for ind, menor_melhor in indicadores:
+                if ind in dados_time and ind in benchmarks_liga:
+                    val = dados_time[ind]
+                    b = benchmarks_liga[ind]
+                    if b['std'] > 0:
+                        z = (val - b['mean']) / b['std']
+                    else:
+                        z = 0.0
+                    if menor_melhor:
+                        z = -z
+                    nota = 100.0 / (1.0 + np.exp(-1.5 * z))
+                    notas.append((ind, val, nota))
+            if notas:
+                nota_dim = sum(n[2] for n in notas) / len(notas)
+                detalhes[dim] = {'indicadores': notas, 'nota_media': nota_dim}
+        return detalhes
+
+    detalhes_ovr_casa = detalhes_ovr_absoluto(ovr_casa, benchmarks)
+    detalhes_ovr_fora = detalhes_ovr_absoluto(ovr_fora, benchmarks)
+
+    notas_casa = {dim: d['nota_media'] for dim, d in detalhes_ovr_casa.items()}
+    notas_fora = {dim: d['nota_media'] for dim, d in detalhes_ovr_fora.items()}
 
     # --- IC ---
     ic_casa = dados.get('ic_casa', {})
@@ -319,7 +317,7 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
     mpv_casa = ELO_WEIGHT * elo_norm_casa + (1 - ELO_WEIGHT) * mpv_base_casa
     mpv_fora = ELO_WEIGHT * elo_norm_fora + (1 - ELO_WEIGHT) * mpv_base_fora
 
-    # --- Probabilidades 1X2 (equilíbrio) ---
+    # --- Probabilidades 1X2 ---
     diff_aprov = ovr_casa.get('diff_aprov_casa_fora', 0)
     bonus_casa = 0.0
     if abs(mpv_casa - mpv_fora) < 10 and diff_aprov > 5:
@@ -470,7 +468,7 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
         'ic_casa': ic_val_casa, 'ic_fora': ic_val_fora,
         'notas_casa': notas_casa, 'notas_fora': notas_fora,
         'detalhes_ima': {'casa': ima_det_casa, 'fora': ima_det_fora},
-        'detalhes_ovr': detalhes_ovr,
+        'detalhes_ovr': {'casa': detalhes_ovr_casa, 'fora': detalhes_ovr_fora},
         'prateleiras': prateleiras,
         'superacao_casa': superacao_casa, 'superacao_fora': superacao_fora,
         'prat_real_casa': prat_real_casa, 'prat_real_fora': prat_real_fora,
