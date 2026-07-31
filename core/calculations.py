@@ -1,9 +1,6 @@
 import pickle
 import numpy as np
-from core.ratings import (
-    calcular_ima, calcular_ovrall, calcular_ic, calcular_mpv,
-    obter_prateleira, _percentil, calcular_pontuacao_jogo
-)
+from core.ratings import calcular_ima, calcular_ovrall, calcular_ic, calcular_mpv, obter_prateleira, _percentil
 from core.elo import calcular_elo, normalizar_elo
 from config import MEDIA_GOLS_CASA_LIGA, MEDIA_GOLS_FORA_LIGA, FATOR_SUPERACAO, ELO_WEIGHT, ELO_K
 
@@ -187,7 +184,7 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
         else:
             benchmarks = {}
 
-    # --- Prateleiras (projetada para o time nos bônus do IMA) ---
+    # --- Prateleiras (para superação e IC) ---
     prat_proj_casa = dados.get('prat_casa', 'Media')
     prat_proj_fora = dados.get('prat_fora', 'Media')
     prat_real_casa = obter_prateleira(dados['pos_casa'])
@@ -200,47 +197,38 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
     for adv, prat in dados.get('prateleiras_extra', {}).items():
         if adv not in prateleiras: prateleiras[adv] = prat
 
-    # --- IMA (usando jogos separados por mandante) ---
-    if len(dados.get('jogos_casa', [])) >= 5 and len(dados.get('jogos_fora', [])) >= 5:
-        def separar_mandante(jogos):
-            mand = [j for j in jogos if j.get('mandante', True)]
-            visit = [j for j in jogos if not j.get('mandante', False)]
-            return mand, visit
-        mand_casa, visit_casa = separar_mandante(dados['jogos_casa'])
-        mand_fora, visit_fora = separar_mandante(dados['jogos_fora'])
-        rec_casa = {
-            '10G': dados['jogos_casa'][:10], '5G': dados['jogos_casa'][:5], '3G': dados['jogos_casa'][:3],
-            '5CF': mand_casa[:5], '3CF': mand_casa[:3],
-        }
-        rec_fora = {
-            '10G': dados['jogos_fora'][:10], '5G': dados['jogos_fora'][:5], '3G': dados['jogos_fora'][:3],
-            '5CF': visit_fora[:5], '3CF': visit_fora[:3],
-        }
-        ima_casa = calcular_ima(dados['time_casa'], rec_casa['10G'], rec_casa['5G'], rec_casa['3G'],
-                                rec_casa['5CF'], rec_casa['3CF'], prateleiras)
-        ima_fora = calcular_ima(dados['time_fora'], rec_fora['10G'], rec_fora['5G'], rec_fora['3G'],
-                                rec_fora['5CF'], rec_fora['3CF'], prateleiras)
+    # --- IMA (NOVA VERSÃO COM ODDS) ---
+    odds = dados.get('odds', {})
+    odd_casa = odds.get('odd_casa', 2.0)
+    odd_empate = odds.get('odd_empate', 3.5)
+    odd_fora = odds.get('odd_fora', 3.8)
+    n_jogos_ima = dados.get('n_jogos_ima', 5)
 
-        def detalhar_ima(time, recs):
-            detalhes = {}
-            for nome, jogos in recs.items():
-                if not jogos: detalhes[nome] = []; continue
-                pts = []
-                for j in jogos:
-                    prat_time = prateleiras[time]
-                    prat_adv = j.get('prateleira_adv', prateleiras.get(j['adversario'], 'Media'))
-                    pontos = calcular_pontuacao_jogo(j['resultado'], prat_time, prat_adv)
-                    pts.append({'jogo': f"{j['resultado']} vs {j.get('adversario', '?')}", 'pontos': pontos})
-                detalhes[nome] = pts
-            return detalhes
+    # Time da casa: últimos n jogos como mandante
+    jogos_casa_mandante = [j for j in dados.get('jogos_casa', []) if j.get('mandante', True)]
+    ima_casa = calcular_ima(odd_casa, odd_empate, odd_fora, jogos_casa_mandante[:n_jogos_ima])
 
-        ima_det_casa = detalhar_ima(dados['time_casa'], rec_casa)
-        ima_det_fora = detalhar_ima(dados['time_fora'], rec_fora)
-    else:
-        ima_casa = 50.0; ima_fora = 50.0
-        ima_det_casa = {}; ima_det_fora = {}
+    # Time de fora: últimos n jogos como visitante
+    jogos_fora_visitante = [j for j in dados.get('jogos_fora', []) if not j.get('mandante', False)]
+    ima_fora = calcular_ima(odd_fora, odd_empate, odd_casa, jogos_fora_visitante[:n_jogos_ima])
 
-    # --- OVRall (com todos os indicadores, via defaults ou fornecidos) ---
+    # Detalhamento do IMA
+    def detalhes_ima(odd_t, odd_e, odd_a, jogos, ima_val):
+        inv_t = 1/odd_t; inv_e = 1/odd_e; inv_a = 1/odd_a
+        soma = inv_t + inv_e + inv_a
+        E_atual = inv_t / soma
+        if jogos:
+            pts = sum(3 if j['resultado']=='V' else 1 if j['resultado']=='E' else 0 for j in jogos)
+            A_real = pts / (len(jogos)*3) if jogos else 0
+        else:
+            A_real = 0
+        delta = A_real - E_atual
+        return {'E_atual': E_atual, 'A_real': A_real, 'delta': delta, 'jogos_utilizados': len(jogos)}
+
+    ima_det_casa = detalhes_ima(odd_casa, odd_empate, odd_fora, jogos_casa_mandante[:n_jogos_ima], ima_casa)
+    ima_det_fora = detalhes_ima(odd_fora, odd_empate, odd_casa, jogos_fora_visitante[:n_jogos_ima], ima_fora)
+
+    # --- OVRall ---
     ovr_casa = dados.get('ovrall_casa', {}).copy()
     ovr_fora = dados.get('ovrall_fora', {}).copy()
     indicadores_ovr = [
@@ -331,38 +319,29 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
     mpv_casa = ELO_WEIGHT * elo_norm_casa + (1 - ELO_WEIGHT) * mpv_base_casa
     mpv_fora = ELO_WEIGHT * elo_norm_fora + (1 - ELO_WEIGHT) * mpv_base_fora
 
-    # ================================================================
-    # PROBABILIDADES 1X2 (CORRIGIDAS – EQUILÍBRIO GARANTIDO)
-    # ================================================================
-    # Bônus de casa baseado na diferença de aproveitamento casa/fora
+    # --- Probabilidades 1X2 (equilíbrio) ---
     diff_aprov = ovr_casa.get('diff_aprov_casa_fora', 0)
     bonus_casa = 0.0
     if abs(mpv_casa - mpv_fora) < 10 and diff_aprov > 5:
-        bonus_casa = min(0.05, diff_aprov / 200.0)  # máximo 5%
+        bonus_casa = min(0.05, diff_aprov / 200.0)
 
     delta_mpv = mpv_casa - mpv_fora
-    # Probabilidade base linear (evita distorção da sigmoide)
     if delta_mpv == 0:
         p_casa = 0.5
     else:
-        # Mapeamento linear: diferença de 50 pontos -> 80% de chance
         p_casa = 0.5 + (delta_mpv / 50.0) * 0.3
         p_casa = max(0.1, min(0.9, p_casa))
 
-    # Aplica bônus de casa (redistribuído)
     p_casa += bonus_casa
     p_fora = 1.0 - p_casa
-
-    # Empate baseado na diferença absoluta
     p_empate = 0.28 * np.exp(- (abs(delta_mpv) / 15.0) ** 2)
 
-    # Ajusta para que a soma seja 1 (reduz proporcionalmente casa e fora)
     total = p_casa + p_empate + p_fora
     p1_orig = p_casa / total
     pX_orig = p_empate / total
     p2_orig = p_fora / total
 
-    # --- Demais probabilidades originais (mantidas) ---
+    # --- Demais probabilidades originais ---
     gols_media_casa = ovr_casa.get('gols_media', 1.5)
     gols_media_fora = ovr_fora.get('gols_media', 1.2)
     gols_sofridos_casa = ovr_casa.get('gols_sofridos_media', 1.2)
@@ -384,7 +363,7 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
         ovr_casa.get('escanteios_sofridos_media', 5.0) or 5.0, ovr_fora.get('escanteios_sofridos_media', 5.0) or 5.0
     )
 
-    # --- Dimensões táticas (mantido) ---
+    # --- Dimensões táticas ---
     dimension_weights = {}
     if not modo_livre and not dados.get('benchmarks_usr'):
         try:
@@ -418,20 +397,16 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
     mpv_tactical_casa = compute_mpv(dims_casa_mod, dimension_weights) if dimension_weights else 50.0
     mpv_tactical_fora = compute_mpv(dims_fora_mod, dimension_weights) if dimension_weights else 50.0
 
-    # --- Modelo calibrado (se não modo livre) ---
+    # --- Modelo calibrado ---
     adv_probs_1x2 = None; adv_over25 = None; adv_btts = None; adv_ht = None; adv_esc = None
     if not modo_livre:
         adv_probs_1x2 = predict_1x2(mpv_tactical_casa, mpv_tactical_fora, ovrall_val_casa, ovrall_val_fora, ic_val_casa, ic_val_fora, elo_norm_casa, elo_norm_fora, superacao_casa, superacao_fora)
         adv_over25 = predict_over25(dims_casa_mod, dims_fora_mod, ovrall_val_casa, ovrall_val_fora, ic_val_casa, ic_val_fora, elo_norm_casa, elo_norm_fora, superacao_casa, superacao_fora, gols_media_casa, gols_media_fora, gols_sofridos_casa, gols_sofridos_fora, media_gols_casa_liga, media_gols_fora_liga)
         adv_btts = predict_btts(dims_casa_mod, dims_fora_mod, ovrall_val_casa, ovrall_val_fora, ic_val_casa, ic_val_fora, elo_norm_casa, elo_norm_fora, superacao_casa, superacao_fora, gols_media_casa, gols_media_fora, gols_sofridos_casa, gols_sofridos_fora, media_gols_casa_liga, media_gols_fora_liga)
-        adv_ht = predict_ht_goal(dims_casa_mod, dims_fora_mod, ovrall_val_casa, ovrall_val_fora, ic_val_casa, ic_val_fora, elo_norm_casa, elo_norm_fora, superacao_casa, superacao_fora,
-                                 ovr_casa.get('gols_ht_media', 0.5) or 0.5, ovr_fora.get('gols_ht_media', 0.5) or 0.5,
-                                 ovr_casa.get('gols_ht_sofridos_media', 0.5) or 0.5, ovr_fora.get('gols_ht_sofridos_media', 0.5) or 0.5)
-        adv_esc = predict_corners(dims_casa_mod, dims_fora_mod, ovrall_val_casa, ovrall_val_fora, ic_val_casa, ic_val_fora, elo_norm_casa, elo_norm_fora, superacao_casa, superacao_fora,
-                                  ovr_casa.get('escanteios_media', 5.0) or 5.0, ovr_fora.get('escanteios_media', 5.0) or 5.0,
-                                  ovr_casa.get('escanteios_sofridos_media', 5.0) or 5.0, ovr_fora.get('escanteios_sofridos_media', 5.0) or 5.0)
+        adv_ht = predict_ht_goal(dims_casa_mod, dims_fora_mod, ovrall_val_casa, ovrall_val_fora, ic_val_casa, ic_val_fora, elo_norm_casa, elo_norm_fora, superacao_casa, superacao_fora, ovr_casa.get('gols_ht_media', 0.5) or 0.5, ovr_fora.get('gols_ht_media', 0.5) or 0.5, ovr_casa.get('gols_ht_sofridos_media', 0.5) or 0.5, ovr_fora.get('gols_ht_sofridos_media', 0.5) or 0.5)
+        adv_esc = predict_corners(dims_casa_mod, dims_fora_mod, ovrall_val_casa, ovrall_val_fora, ic_val_casa, ic_val_fora, elo_norm_casa, elo_norm_fora, superacao_casa, superacao_fora, ovr_casa.get('escanteios_media', 5.0) or 5.0, ovr_fora.get('escanteios_media', 5.0) or 5.0, ovr_casa.get('escanteios_sofridos_media', 5.0) or 5.0, ovr_fora.get('escanteios_sofridos_media', 5.0) or 5.0)
 
-    # --- Probabilidades médias (ou originais) ---
+    # --- Probabilidades médias ---
     def media_prob(orig, adv):
         if modo_livre or adv is None: return orig
         return (orig + adv) / 2.0
@@ -452,10 +427,9 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
         heatmap_img = generate_heatmap(deltas)
 
     # --- Edge Score ---
-    odds = dados.get('odds', {})
     edges = {}
-    if odds.get('odd_casa') and odds.get('odd_empate') and odds.get('odd_fora'):
-        impl_c = 1 / odds['odd_casa']; impl_e = 1 / odds['odd_empate']; impl_f = 1 / odds['odd_fora']
+    if odd_casa and odd_empate and odd_fora:
+        impl_c = 1 / odd_casa; impl_e = 1 / odd_empate; impl_f = 1 / odd_fora
         total_impl = impl_c + impl_e + impl_f
         edges['edge_casa'] = p1 - (impl_c / total_impl)
         edges['edge_empate'] = pX - (impl_e / total_impl)
@@ -468,15 +442,7 @@ def executar_manual(dados, pkl_path='calibration_params.pkl', modo_livre=False):
     # --- Estilos e cenário ---
     estilo_casa = classificar_estilo(ovr_casa, benchmarks)
     estilo_fora = classificar_estilo(ovr_fora, benchmarks)
-
-    dados_cenario = {
-        'time_casa': dados['time_casa'], 'time_fora': dados['time_fora'],
-        'over25': over25, 'btts': btts, 'gol_ht': gol_ht, 'esc': esc,
-        'p1': p1, 'pX': pX, 'p2': p2,
-        'estilo_casa': estilo_casa, 'estilo_fora': estilo_fora,
-    }
-    texto_cenario = gerar_cenario(estilo_casa['estilo'], estilo_fora['estilo'], dados_cenario)
-
+    texto_cenario = gerar_cenario(estilo_casa['estilo'], estilo_fora['estilo'], {'time_casa': dados['time_casa'], 'time_fora': dados['time_fora'], 'over25': over25, 'btts': btts, 'gol_ht': gol_ht, 'esc': esc, 'p1': p1, 'pX': pX, 'p2': p2, 'estilo_casa': estilo_casa, 'estilo_fora': estilo_fora})
     style_impact, style_impact_text = compute_style_impact(estilo_casa['estilo'], estilo_fora['estilo'])
     adj_over25 = max(0, min(1, over25 + style_impact.get('over25', 0)))
     adj_btts = max(0, min(1, btts + style_impact.get('btts', 0)))
