@@ -66,6 +66,9 @@ def render_manual():
             bench_ht = col_bench1.number_input("Média Gols HT", 0.0, 5.0, 0.7, key="bench_ht")
             bench_btts = col_bench2.number_input("BTTS Médio (%)", 0.0, 100.0, 48.0, key="bench_btts")
 
+            fator_liga = st.slider("Fator Liga (força da competição)", 0.80, 1.20, 1.00, 0.01, key="fator_liga",
+                                   help="Multiplicador que ajusta o OVRall. >1 para ligas muito fortes, <1 para ligas mais fracas.")
+
             st.session_state.benchmarks_usr = {
                 'gols_media': {'mean': bench_gols_casa, 'std': 0.5, 'lower_better': False},
                 'gols_sofridos_media': {'mean': bench_gols_fora, 'std': 0.5, 'lower_better': True},
@@ -230,6 +233,7 @@ def render_manual():
                 'ic_casa': ic_casa, 'ic_fora': ic_fora,
                 'odds': odds_dict,
                 'n_jogos_ima': n_jogos_ima,
+                'fator_liga': fator_liga,
                 'media_gols_casa': st.session_state.get('media_gols_casa_liga', MEDIA_GOLS_CASA_LIGA),
                 'media_gols_fora': st.session_state.get('media_gols_fora_liga', MEDIA_GOLS_FORA_LIGA),
                 'media_ht_casa': 0.75, 'media_ht_fora': 0.65,
